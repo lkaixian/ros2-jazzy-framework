@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bt_orchestrator</name>
+  <version>0.1.0</version>
+  <description>Runs task -> llama.cpp -> SLM -> validator with feedback retries</description>
+  <maintainer email="lkaixian91@gmail.com">larm</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>bt_pipeline_msgs</exec_depend>
+  <exec_depend>object_detection_msgr</exec_depend>
+  <exec_depend>person_detection_msgr</exec_depend>
+  <exec_depend>face_recognition_msgr</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

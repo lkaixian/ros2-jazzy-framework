@@ -1,0 +1,5 @@
+extension: pid_extension
+nodes:
+  SetPidGains: {category: Action, required: [controller, kp], optional: [ki, kd], description: "Set PID gains"}
+  HoldHeading: {category: Action, required: [yaw], optional: [timeout_ms], description: "Hold a heading with PID"}
+  FollowTarget: {category: Action, required: [], optional: [track_id, distance, timeout_ms], description: "PID-follow a tracked target"}

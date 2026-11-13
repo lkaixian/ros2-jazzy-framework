@@ -1,0 +1,4 @@
+string xml
+---
+bool valid
+string[] errors

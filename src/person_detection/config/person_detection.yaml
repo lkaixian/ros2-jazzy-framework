@@ -1,0 +1,6 @@
+person_detection_node:
+  ros__parameters:
+    model: yolo11n-pose.pt   # or yolo11n.pt for boxes only
+    conf: 0.4
+    track: true
+    image_topic: ""

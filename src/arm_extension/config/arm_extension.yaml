@@ -1,0 +1,7 @@
+extension: arm_extension
+nodes:
+  MoveArmToPose: {category: Action, required: [x, y, z], optional: [frame, speed, roll, pitch, yaw], description: "Move end effector to a Cartesian pose"}
+  OpenGripper: {category: Action, required: [], optional: [width], description: "Open gripper"}
+  CloseGripper: {category: Action, required: [], optional: [force], description: "Close gripper"}
+  PickObject: {category: Action, required: [label], optional: [approach_height], description: "Pick a detected object"}
+  PlaceObject: {category: Action, required: [x, y, z], optional: [frame], description: "Place held object"}

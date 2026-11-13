@@ -1,0 +1,8 @@
+orchestrator_node:
+  ros__parameters:
+    max_attempts: 3
+    call_timeout_sec: 60.0
+scene_summarizer_node:
+  ros__parameters:
+    window_sec: 2.0
+    period_sec: 1.0

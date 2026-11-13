@@ -1,0 +1,18 @@
+# BehaviorTree.CPP v4 built-ins + perception condition nodes of this framework.
+nodes:
+  Sequence:             {category: Control}
+  ReactiveSequence:     {category: Control}
+  Fallback:             {category: Control}
+  ReactiveFallback:     {category: Control}
+  Parallel:             {category: Control, optional: [success_count, failure_count]}
+  RetryUntilSuccessful: {category: Decorator, required: [num_attempts]}
+  Timeout:              {category: Decorator, required: [msec]}
+  Inverter:             {category: Decorator}
+  ForceSuccess:         {category: Decorator}
+  ForceFailure:         {category: Decorator}
+  AlwaysSuccess:        {category: Action}
+  AlwaysFailure:        {category: Action}
+  Sleep:                {category: Action, required: [msec]}
+  DetectObject:         {category: Condition, required: [label], optional: [min_conf, out_bbox]}
+  DetectPerson:         {category: Condition, optional: [min_conf, out_track_id]}
+  RecognizeFace:        {category: Condition, optional: [identity, min_similarity]}

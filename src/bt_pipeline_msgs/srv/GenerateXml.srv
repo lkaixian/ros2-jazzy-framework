@@ -1,0 +1,7 @@
+string task_spec
+string previous_xml
+string[] previous_errors
+---
+bool ok
+string xml
+string error

@@ -1,0 +1,10 @@
+build/
+install/
+log/
+__pycache__/
+*.pyc
+*.pt
+*.onnx
+*.gguf
+*_openvino_model/
+faces/

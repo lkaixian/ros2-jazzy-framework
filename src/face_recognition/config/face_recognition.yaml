@@ -1,0 +1,7 @@
+face_recognition_node:
+  ros__parameters:
+    model: yolov11n-face.pt   # user-supplied YOLO11 face weights
+    embed_model: yolo11n-cls.pt
+    gallery_dir: faces
+    threshold: 0.6
+    image_topic: ""

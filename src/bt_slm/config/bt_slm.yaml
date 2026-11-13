@@ -1,0 +1,8 @@
+bt_slm_node:
+  ros__parameters:
+    # Directory of a fine-tuned causal LM (HF format, ~120M-320M params).
+    # Empty -> deterministic rule-based fallback (no model needed).
+    model_path: ""
+    device: cpu
+    max_new_tokens: 768
+    temperature: 0.0

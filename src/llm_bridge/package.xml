@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>llm_bridge</name>
+  <version>0.1.0</version>
+  <description>C++ client bridging ROS 2 to a llama.cpp server (2B-4B models)</description>
+  <maintainer email="lkaixian91@gmail.com">larm</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>bt_pipeline_msgs</depend>
+  <depend>libcurl-dev</depend>
+  <depend>nlohmann-json-dev</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

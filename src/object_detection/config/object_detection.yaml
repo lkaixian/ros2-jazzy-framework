@@ -1,0 +1,8 @@
+object_detection_node:
+  ros__parameters:
+    model: yolo11n.pt
+    openvino: false
+    conf: 0.4
+    image_topic: ""      # empty = webcam
+    camera_index: 0
+    show: false

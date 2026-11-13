@@ -1,0 +1,9 @@
+string system
+string prompt
+float32 temperature
+uint32 max_tokens
+bool json_mode
+---
+bool ok
+string text
+string error
