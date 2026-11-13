@@ -17,11 +17,9 @@ SPEC=$OUT/spec_$N.json python3 $TOOLS/fake_llama2.py > /dev/null 2>&1 &
 python3 $TOOLS/sim_robot.py $OUT/pose_$N.txt > $OUT/sim_$N.log 2>&1 &
 ros2 launch framework_bringup extensions.launch.py enable_arm:=false enable_pose:=false > $OUT/ext_$N.log 2>&1 &
 ros2 launch framework_bringup pipeline.launch.py dry_run:=$2 auto_run:=true > $OUT/pipe_$N.log 2>&1 &
-sleep 11
-(timeout 30 ros2 topic echo /bt/status --field data > $OUT/status_$N.txt 2>&1 &)
-sleep 3   # a cold `ros2 topic echo` needs a moment to subscribe, or it misses the first states
-ros2 topic pub --once /bt/task std_msgs/msg/String "{data: 'do it'}" > /dev/null 2>&1
-if [ "$4" != "none" ]; then sleep $4; ros2 service call /bt_executor/halt std_srvs/srv/Trigger > $OUT/halt_$N.txt 2>&1; fi
-sleep 9
+# one rclpy helper waits for the pipeline, sends the task, records bt/status and (optionally)
+# halts after $4 s; the CLI versions raced DDS discovery and lost the task on slow machines
+python3 $TOOLS/itest_task.py $OUT/status_$N.txt "$4"
+sleep 1
 echo "== $N (dry_run=$2)"; echo "status:"; grep -o '"state":"[a-z_]*","message":"[^"]*"' $OUT/status_$N.txt | tail -4
 echo "pose:   $(cat $OUT/pose_$N.txt)"
