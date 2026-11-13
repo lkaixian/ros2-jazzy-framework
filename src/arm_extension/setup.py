@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer='larm',
     maintainer_email='lkaixian91@gmail.com',
-    description='arm extension: BT node manifest and executor hook',
+    description='MoveIt-based arm BT nodes (model-agnostic: configure group/link)',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [

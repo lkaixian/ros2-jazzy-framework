@@ -1,0 +1,7 @@
+bt_executor_node:
+  ros__parameters:
+    dry_run: true            # true: extension nodes only log and succeed; nothing moves
+    auto_run: false          # false: a valid plan runs only after the bt_executor/run service
+    tick_hz: 20.0
+    max_runtime_sec: 300.0   # whole-tree watchdog; the tree is halted when exceeded
+    perception_max_age_sec: 1.0

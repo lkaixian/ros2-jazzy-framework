@@ -26,12 +26,16 @@ class ExtensionNode(Node):
                 id=nid, category=s['category'], required_ports=list(s.get('required', [])),
                 optional_ports=list(s.get('optional', [])),
                 description=s.get('description', '')))
-        self.pub = self.create_publisher(ExtensionManifest, 'extensions/manifest',
+        self._manifest_pub = self.create_publisher(ExtensionManifest, 'extensions/manifest',
                                          MANIFEST_QOS)
-        self.pub.publish(msg)
-        self.get_logger().info(
-            f"{msg.extension}: advertising {len(msg.nodes)} BT nodes "
-            '(interface only; executors are not implemented yet)')
+        self.manifest = msg
+        self.declare_parameter('republish_sec', 3.0)
+        self._manifest_pub.publish(msg)
+        # Latched delivery alone can lose the race with DDS discovery when many processes
+        # start together; consumers register idempotently, so periodic re-publish is safe.
+        self.create_timer(self.get_parameter('republish_sec').value,
+                          lambda: self._manifest_pub.publish(self.manifest))
+        self.get_logger().info(f'{msg.extension}: advertising {len(msg.nodes)} BT nodes')
 
 
 def run_extension(package, args=None):

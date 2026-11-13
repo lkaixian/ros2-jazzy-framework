@@ -22,6 +22,12 @@ def generate_launch_description():
                               description='fine-tuned SLM dir (base: LiquidAI/LFM2.5-230M-Base); '
                                               'empty = rule-based fallback'),
         DeclareLaunchArgument('max_attempts', default_value='3'),
+        DeclareLaunchArgument('dry_run', default_value='true',
+                              description='true: bt_executor only logs extension nodes; '
+                                          'set false to command hardware'),
+        DeclareLaunchArgument('auto_run', default_value='false',
+                              description='run each valid plan immediately (otherwise call '
+                                          '/bt_executor/run)'),
 
         ExecuteProcess(
             cmd=['llama-server', '-m', LC('llama_model'), '--port', LC('llama_port')],
@@ -37,4 +43,8 @@ def generate_launch_description():
         Node(package='bt_orchestrator', executable='orchestrator_node', output='screen',
              parameters=[{'max_attempts': ParameterValue(LC('max_attempts'), value_type=int)}]),
         Node(package='bt_orchestrator', executable='scene_summarizer_node', output='screen'),
+        Node(package='bt_executor', executable='bt_executor_node', output='screen',
+             parameters=[os.path.join(share('bt_executor'), 'config', 'bt_executor.yaml'),
+                         {'dry_run': ParameterValue(LC('dry_run'), value_type=bool),
+                          'auto_run': ParameterValue(LC('auto_run'), value_type=bool)}]),
     ])

@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer='larm',
     maintainer_email='lkaixian91@gmail.com',
-    description='pid extension: BT node manifest and executor hook',
+    description='PID BT nodes: heading hold and person following',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [

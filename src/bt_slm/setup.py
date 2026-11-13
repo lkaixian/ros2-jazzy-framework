@@ -19,6 +19,8 @@ setup(
     entry_points={
         'console_scripts': [
             'bt_slm_node = bt_slm.slm_node:main',
+    'make_bt_dataset = bt_slm.dataset:main',
+    'finetune_bt_slm = bt_slm.finetune:main',
         ],
     },
 )

@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer='larm',
     maintainer_email='lkaixian91@gmail.com',
-    description='pose extension: BT node manifest and executor hook',
+    description='Pose/gesture BT conditions from YOLO11 pose keypoints',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [

@@ -3,6 +3,12 @@
 END = '</root>'
 
 
+def normalize_spec(task_spec):
+    """Canonical compact JSON: the exact text the SLM sees in training and at inference."""
+    import json
+    return json.dumps(json.loads(task_spec), separators=(',', ':'))
+
+
 def build_prompt(task_spec, catalog_listing, previous_xml='', errors=()):
     p = f'### NODES\n{catalog_listing}\n### TASK_SPEC\n{task_spec}\n'
     if errors:

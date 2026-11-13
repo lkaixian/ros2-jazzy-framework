@@ -1,0 +1,8 @@
+string node_id
+string[] port_names
+string[] port_values
+---
+bool success
+string message
+---
+string status

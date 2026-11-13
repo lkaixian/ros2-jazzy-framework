@@ -8,7 +8,7 @@ from bt_pipeline_msgs.srv import GenerateXml
 from rclpy.node import Node
 
 from bt_slm.fallback import build_xml
-from bt_slm.prompt import build_prompt, extract_xml
+from bt_slm.prompt import build_prompt, extract_xml, normalize_spec
 
 
 class SlmNode(Node):

@@ -26,7 +26,12 @@ orchestrator -> bt_slm (fine-tuned ~230M SLM, e.g. LFM2.5-230M) -> bt_validator
 | `bt_slm` | ament_python | SLM XML generator (HF transformers) + rule-based fallback |
 | `bt_validator` | ament_python | structural/port/cycle/limit checks on BT XML |
 | `bt_orchestrator` | ament_python | generate -> validate -> retry loop; scene summarizer |
-| `arm_extension`, `pose_extension`, `odom_extension`, `pid_extension` | ament_python | advertise BT nodes (interface only; executors not implemented yet) |
+| `bt_executor` | **ament_cmake (C++)** | runs validated `bt/plan` with BehaviorTree.CPP; **`dry_run:=true` and `auto_run:=false` by default**; `bt_executor/run`, `bt_executor/halt`, `bt/status` |
+| `odom_extension` | ament_python | NavigateTo, DriveDistance, RotateBy, IsAtGoal (odometry frame only) |
+| `pid_extension` | ament_python | HoldHeading, FollowTarget (bbox-based, no depth), SetPidGains |
+| `pose_extension` | ament_python | GetPersonPose, IsPersonWaving, IsPersonPointing from YOLO11-pose keypoints |
+| `arm_extension` | ament_python | MoveArmToPose / OpenGripper / CloseGripper through MoveIt `MoveGroup` + `GripperCommand`; arm model is a parameter set |
+| `bt_common` also ships | | `cmd_vel_mux_node`: priority + 0.5 s watchdog + hard clamps in front of the robot's `cmd_vel` |
 | `audio_msgr` | ament_cmake | AudioChunk, Transcript, TtsStatus, Speak service |
 | `audio_capture` | ament_python | microphone (`arecord`) or WAV file -> `audio/raw` |
 | `stt_pipeline` | ament_python | energy VAD -> STT engine (faster-whisper / Vosk) -> `stt/transcript`; `transcript_to_task` (optional wake word) -> `bt/task`; mutes while the robot speaks |
@@ -51,12 +56,25 @@ Python edits need `colcon build` again: in this setup `--symlink-install` copies
 
 ## Models
 * LLM: Gemma 4 E4B via `llama-server -hf ggml-org/gemma-4-E4B-it-GGUF` (needs a llama.cpp build with Gemma 4 support).
-* SLM: fine-tune `LiquidAI/LFM2.5-230M-Base` on (task_spec -> BT XML) pairs using the prompt format in `bt_slm/prompt.py`. Until `slm_model_path` is set, a deterministic rule-based generator is used. **Fine-tuning data/script are not included yet.**
+* SLM: `LiquidAI/LFM2.5-230M-Base`, fine-tuned on synthetic pairs labelled by the validator:
+  ```
+  ros2 run bt_slm make_bt_dataset --out-dir bt_dataset --n 30000        # generate + repair rows
+  pip install transformers
+  ros2 run bt_slm finetune_bt_slm --data-dir bt_dataset --out bt_slm_model
+  ros2 launch framework_bringup framework.launch.py slm_model_path:=$PWD/bt_slm_model
+  ```
+  Until `slm_model_path` is set, a deterministic rule-based generator (the dataset's ground truth) is used. The spec grammar is sequence/fallback groups with retries; richer structure (Parallel, SubTree) needs grammar and data extensions.
 * YOLO11 weights (`yolo11n.pt`, `yolo11n-pose.pt`) download on first use; face weights must be supplied (`yolov11n-face.pt`).
+
+## Executing plans (safety)
+`framework.launch.py` starts `bt_executor` in **dry-run**: extension nodes are only logged and succeed, nothing moves. To command hardware you must pass `dry_run:=false`, and by default a plan still waits for `ros2 service call /bt_executor/run std_srvs/srv/Trigger` (`auto_run:=true` runs each valid plan immediately). `ros2 service call /bt_executor/halt ...` stops the tree and cancels the running extension goal.
+All motion goes through `cmd_vel_mux_node` (clamps `max_linear`/`max_angular`; zero Twist if no input for `timeout_sec`=0.5 s, so a crashed extension coasts at most ~0.5 s at its last command). The mux is a software watchdog, **not** an e-stop: keep a hardware stop within reach.
+Arm: pass `arm_group:=... arm_ee_link:=... arm_base_frame:=... gripper_action:=...` once the arm is chosen; with those empty `arm_extension` refuses to move. Velocity scale is capped at 0.1 by default.
 
 ## Audio engines
 STT: `faster_whisper` or `vosk` (neither is installed by default; the node refuses to start without it). `mock` only tests the plumbing.
 TTS: `espeak` works out of the box; `piper` needs `pip install piper-tts` plus a voice `.onnx`; `kokoro` needs `pip install kokoro-onnx` plus the model and voices files.
 
 ## Status
-Verified: workspace builds; validator/SLM-fallback unit tests and C++ gtest pass; the pipeline ran end-to-end against a stub llama server (including a rejected-then-repaired attempt). Audio plumbing was verified with a synthesized WAV and mock engines (VAD -> transcript -> `bt/task`; TTS status). Not verified: the YOLO nodes on a camera, a real llama-server, a real fine-tuned SLM, real STT recognition (faster-whisper/Vosk), Piper and Kokoro playback, live microphone capture.
+Verified: workspace builds; validator/SLM-fallback unit tests and C++ gtest pass; the pipeline ran end-to-end against a stub llama server (including a rejected-then-repaired attempt). Audio plumbing was verified with a synthesized WAV and mock engines (VAD -> transcript -> `bt/task`; TTS status).
+Execution was verified in a **simulated** robot (a node integrating `cmd_vel` into `odom`): task -> stub llama -> SLM fallback -> validator -> `bt_executor` -> `odom_extension` -> mux -> robot, covering a live drive+turn (0.29 m / 0.47 rad requested 0.30 / 0.50), dry-run (no motion), halt mid-drive, and SIGKILL of the extension (mux stops the robot within its timeout). Controllers and PID have closed-loop unit tests; gesture rules are tested on synthetic skeletons only. Not verified: any real robot, MoveIt/arm execution (only goal construction is tested), gesture accuracy on real video, SLM fine-tuning (dataset generator is tested, `finetune_bt_slm` has only unit tests of its masking/collation and has never been run), the YOLO nodes on a camera, a real llama-server, a real fine-tuned SLM, real STT recognition (faster-whisper/Vosk), Piper and Kokoro playback, live microphone capture.

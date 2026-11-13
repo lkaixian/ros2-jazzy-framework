@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bt_executor</name>
+  <version>0.1.0</version>
+  <description>C++ BehaviorTree.CPP runner for validated plans (dry-run by default)</description>
+  <maintainer email="lkaixian91@gmail.com">larm</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>behaviortree_cpp</depend>
+  <depend>bt_pipeline_msgs</depend>
+  <depend>object_detection_msgr</depend>
+  <depend>person_detection_msgr</depend>
+  <depend>face_recognition_msgr</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -1,6 +1,6 @@
-from yolo11_common.base_node import Yolo11Node, run
-
 from object_detection_msgr.msg import Object, ObjectArray
+
+from yolo11_common.base_node import run, Yolo11Node
 
 
 class ObjectDetectionNode(Yolo11Node):

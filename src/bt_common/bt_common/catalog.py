@@ -26,6 +26,15 @@ def _from_dict(d):
     return out
 
 
+def format_listing(specs):
+    """Compact one-line-per-node listing used identically in prompts and training data."""
+    lines = []
+    for n in specs:
+        ports = ','.join(n.required + [p + '?' for p in n.optional])
+        lines.append(f'{n.id}[{n.category}]({ports})')
+    return '\n'.join(lines)
+
+
 class Catalog:
     def __init__(self, core_file=None):
         core_file = core_file or os.path.join(

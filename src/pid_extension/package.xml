@@ -2,13 +2,16 @@
 <package format="3">
   <name>pid_extension</name>
   <version>0.1.0</version>
-  <description>pid extension: BT node manifest and executor hook</description>
+  <description>PID BT nodes: heading hold and person following</description>
   <maintainer email="lkaixian91@gmail.com">larm</maintainer>
   <license>Apache-2.0</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>bt_common</exec_depend>
   <exec_depend>bt_pipeline_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>person_detection_msgr</exec_depend>
   <test_depend>python3-pytest</test_depend>
   <export>
     <build_type>ament_python</build_type>

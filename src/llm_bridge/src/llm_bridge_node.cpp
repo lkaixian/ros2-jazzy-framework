@@ -17,9 +17,11 @@ namespace
 {
 const char * kDefaultSystem =
   "You convert a robot task into a JSON task spec. Output ONLY a JSON object: "
-  "{\"goal\": string, \"retry\": optional int, \"steps\": [{\"node\": <id>, "
-  "\"ports\": {<port>: <string>}}]}. Use ONLY the node ids below with their ports "
-  "(a trailing ? marks an optional port). Do not invent nodes.\n";
+  "{\"goal\": string, \"retry\": optional int, \"steps\": [STEP,...]} where STEP is "
+  "{\"node\": <id>, \"ports\": {<port>: <string>}} or a nested group "
+  "{\"group\": \"Sequence|Fallback|ReactiveSequence|ReactiveFallback\", \"retry\": optional int, "
+  "\"steps\": [STEP,...]}. Use Fallback for 'try A, otherwise B'. Use ONLY the node ids below "
+  "with their ports (a trailing ? marks an optional port). Do not invent nodes.\n";
 }
 
 class LlmBridgeNode : public rclcpp::Node

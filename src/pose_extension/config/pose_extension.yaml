@@ -1,5 +1,5 @@
 extension: pose_extension
 nodes:
-  GetPersonPose: {category: Condition, required: [], optional: [track_id, out_keypoints], description: "Person has a valid pose"}
-  IsPersonWaving: {category: Condition, required: [], optional: [track_id], description: "Detect a wave gesture"}
-  IsPersonPointing: {category: Condition, required: [], optional: [track_id, out_direction], description: "Detect a pointing gesture"}
+  GetPersonPose: {category: Condition, required: [], optional: [track_id, min_conf], description: "A person with a usable pose skeleton is visible"}
+  IsPersonWaving: {category: Condition, required: [], optional: [track_id, min_conf], description: "A person is waving"}
+  IsPersonPointing: {category: Condition, required: [], optional: [track_id, direction, min_conf], description: "A person is pointing (direction: left|right in image coordinates)"}

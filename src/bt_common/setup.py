@@ -1,5 +1,6 @@
 from glob import glob
 from setuptools import find_packages, setup
+
 setup(
     name='bt_common',
     version='0.1.0',
@@ -13,10 +14,11 @@ setup(
     zip_safe=True,
     maintainer='larm',
     maintainer_email='lkaixian91@gmail.com',
-    description='BT node catalog and extension base class',
+    description='BT node catalog, extension executor base and cmd_vel mux',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
+            'cmd_vel_mux_node = bt_common.cmd_vel_mux:main',
         ],
     },
 )

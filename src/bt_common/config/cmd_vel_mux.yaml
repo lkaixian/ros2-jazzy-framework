@@ -1,0 +1,8 @@
+cmd_vel_mux_node:
+  ros__parameters:
+    inputs: [odom_extension/cmd_vel, pid_extension/cmd_vel]   # highest priority first
+    output: cmd_vel
+    stamped: false
+    timeout_sec: 0.5       # watchdog: no fresh input -> zero Twist, then silence
+    max_linear: 0.3        # hard clamp, m/s
+    max_angular: 0.8       # hard clamp, rad/s

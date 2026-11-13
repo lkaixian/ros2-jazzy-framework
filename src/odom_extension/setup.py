@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer='larm',
     maintainer_email='lkaixian91@gmail.com',
-    description='odom extension: BT node manifest and executor hook',
+    description='Odometry-based motion BT nodes (NavigateTo, DriveDistance, RotateBy)',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
