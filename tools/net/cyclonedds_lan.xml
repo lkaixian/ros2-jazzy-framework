@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Cyclone DDS without multicast: discovery only with the machines you list.
+     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+     export CYCLONEDDS_URI=file://$PWD/tools/net/cyclonedds_lan.xml
+     export ROBOCUP_PEER=192.168.1.50          # the other PC's address (one peer is enough, both
+                                                 # sides list each other); default: this machine
+     This stops strangers on the subnet from DISCOVERING the robot; it is not authentication (any
+     host that knows the address and domain can still talk): SROS2 is the real fix (T-03). -->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain id="any">
+    <General>
+      <AllowMulticast>false</AllowMulticast>
+    </General>
+    <Discovery>
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>40</MaxAutoParticipantIndex>
+      <Peers>
+        <Peer address="${ROBOCUP_PEER:-localhost}"/>
+      </Peers>
+    </Discovery>
+  </Domain>
+</CycloneDDS>

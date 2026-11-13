@@ -124,6 +124,16 @@ jobs:
           source install/setup.bash
           python3 tools/integration/cluster_llm_test.py
 
+      - name: Sim - LLM link over TCP (connection reuse, API key accepted and refused)
+        timeout-minutes: 5
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          python3 tools/integration/transport_test.py
+          TRANSPORT_REQUIRE_KEY=1 python3 tools/integration/transport_test.py
+          TRANSPORT_REQUIRE_KEY=1 TRANSPORT_NO_BRIDGE_KEY=1 python3 tools/integration/transport_test.py
+
       - name: Sim - what the planning LLM receives (prompt contents)
         timeout-minutes: 3
         run: |

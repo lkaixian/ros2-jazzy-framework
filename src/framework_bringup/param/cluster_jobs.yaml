@@ -73,7 +73,10 @@ jobs:
   # Strong PC (launch its agent with tags:=gpu,llm_big): Gemma E4B. Not movable to another host:
   # nothing else can run it, so when that PC dies the bridge simply drops the endpoint.
   # llama-server binds 127.0.0.1 by default; --host 0.0.0.0 makes it reachable from other PCs
-  # (unauthenticated: only on your own router, see technical_debt T-03).
+  # Protect it: start the agent on that machine with LLAMA_API_KEY=<key> exported (jobs inherit the
+  # agent's environment, so the key never appears on a command line) and the bridge's machine with
+  # LLM_API_KEY=<same key>. llama-server reading LLAMA_API_KEY / --api-key is UNVERIFIED here
+  # (llama.cpp is not installed on this machine); the bridge side is tested against a fake server.
   llm_big:
     cmd: [llama-server, -hf, "ggml-org/gemma-4-E4B-it-GGUF:Q4_0", --host, 0.0.0.0, --port, "8080", -c, "8192"]
     tags: [llm_big]

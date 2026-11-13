@@ -28,6 +28,7 @@ llm_bridge_node:
     static_priority_base: 100  # static urls sort after advertised ones (priority < 100)
     use_static_urls: true      # false (cluster jobs): rely only on advertised endpoints
     knowledge_file: ""         # "" = framework_bringup/param/llm_knowledge.md (robot limits, places, rules)
+    api_key_env: LLM_API_KEY   # NAME of the env var holding the llama-server key (not the key)
     task_system_prompt: ""  # "" = built-in prompt
 
 bt_slm_node:

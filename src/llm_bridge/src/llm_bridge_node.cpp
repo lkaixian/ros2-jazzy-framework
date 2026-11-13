@@ -69,6 +69,9 @@ public:
     // Robot facts the node catalog cannot say (limits, places, house rules), appended to the
     // planning prompt. "" = framework_bringup/param/llm_knowledge.md if installed.
     declare_parameter("knowledge_file", "");
+    // Name of the ENVIRONMENT VARIABLE that holds the llama-server API key (never put the key
+    // itself in a YAML file or on a command line). Unset/empty variable = unauthenticated.
+    declare_parameter("api_key_env", "LLM_API_KEY");
     declare_parameter("model", "default");
     declare_parameter("temperature", 0.1);
     declare_parameter("max_tokens", 512);
@@ -94,6 +97,18 @@ public:
           std::chrono::steady_clock::now().time_since_epoch()).count();
       });
     started_ = now();
+    {
+      const char * k = std::getenv(get_parameter("api_key_env").as_string().c_str());
+      api_key_ = k ? k : "";
+      if (api_key_.empty()) {
+        RCLCPP_WARN(get_logger(), "no API key in $%s: requests to the LLM servers are "
+          "unauthenticated (set it, and start llama-server with the same key)",
+          get_parameter("api_key_env").as_string().c_str());
+      } else {
+        RCLCPP_INFO(get_logger(), "LLM requests carry an API key from $%s",
+          get_parameter("api_key_env").as_string().c_str());
+      }
+    }
     knowledge_ = load_knowledge();
     refresh_endpoints();
 
@@ -284,7 +299,7 @@ private:
     if (!c) {
       c = std::make_unique<llm_bridge::LlamaClient>(
         url, get_parameter("timeout_sec").as_double(),
-        get_parameter("connect_timeout_sec").as_double());
+        get_parameter("connect_timeout_sec").as_double(), api_key_);
     }
     return *c;
   }
@@ -429,6 +444,7 @@ private:
   std::unique_ptr<llm_bridge::FailoverClient> failover_;
   std::vector<std::string> static_urls_;
   std::string knowledge_;
+  std::string api_key_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr halt_client_;
   rclcpp::TimerBase::SharedPtr probe_timer_;

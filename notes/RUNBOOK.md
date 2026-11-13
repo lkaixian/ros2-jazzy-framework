@@ -25,6 +25,18 @@ ros2 run framework_bringup check_params          # starts each node on domain 97
 ```
 Run pytest from the workspace root with the workspace sourced (tests import installed packages).
 
+## Secure the LLM link and discovery
+```
+export LLM_API_KEY=...        # bridge machine: sent as `Authorization: Bearer` (name set by api_key_env)
+export LLAMA_API_KEY=...      # llama-server machine, same value (jobs inherit the agent's env)
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI=file://$PWD/tools/net/cyclonedds_lan.xml
+export ROBOCUP_PEER=<other PC's address>    # discovery without multicast, only that peer
+python3 tools/integration/transport_test.py                          # TCP reuse
+TRANSPORT_REQUIRE_KEY=1 python3 tools/integration/transport_test.py  # key accepted
+```
+The bridge->llama-server link is HTTP over TCP with one reused, keep-alive connection. DDS (node to
+node) is UDP; the unicast config only hides the robot from strangers, SROS2 is the authentication.
+
 ## See what is running (terminal dashboard)
 ```
 ros2 run framework_bringup dash              # 1 Hz table: LLM endpoints, cluster jobs, every node ONLINE/BUSY/ERROR/OFFLINE

@@ -58,18 +58,46 @@ ChatResult parse_response(const std::string & body)
   return r;
 }
 
-LlamaClient::LlamaClient(std::string base_url, double timeout_sec, double connect_timeout_sec)
+LlamaClient::LlamaClient(
+  std::string base_url, double timeout_sec, double connect_timeout_sec, std::string api_key)
 : base_url_(std::move(base_url)), timeout_sec_(timeout_sec),
-  connect_timeout_sec_(connect_timeout_sec)
+  connect_timeout_sec_(connect_timeout_sec), api_key_(std::move(api_key))
 {
   while (!base_url_.empty() && base_url_.back() == '/') {base_url_.pop_back();}
   curl_init_once();
 }
 
+LlamaClient::~LlamaClient()
+{
+  if (chat_h_) {curl_easy_cleanup(static_cast<CURL *>(chat_h_));}
+  if (health_h_) {curl_easy_cleanup(static_cast<CURL *>(health_h_));}
+}
+
+namespace
+{
+// Reuse the handle (its live TCP connection survives curl_easy_reset) and keep the socket alive,
+// so an idle link that silently died is noticed instead of hanging until the request timeout.
+CURL * prepare(void *& slot)
+{
+  if (!slot) {slot = curl_easy_init();}
+  CURL * c = static_cast<CURL *>(slot);
+  if (c) {
+    curl_easy_reset(c);
+    curl_easy_setopt(c, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(c, CURLOPT_TCP_NODELAY, 1L);
+    curl_easy_setopt(c, CURLOPT_TCP_KEEPALIVE, 1L);
+    curl_easy_setopt(c, CURLOPT_TCP_KEEPIDLE, 30L);
+    curl_easy_setopt(c, CURLOPT_TCP_KEEPINTVL, 10L);
+  }
+  return c;
+}
+}  // namespace
+
 ChatResult LlamaClient::chat(const ChatRequest & req) const
 {
   ChatResult r;
-  CURL * curl = curl_easy_init();
+  std::lock_guard<std::mutex> lk(chat_mu_);
+  CURL * curl = prepare(chat_h_);
   if (!curl) {
     r.error = "curl_easy_init failed";
     return r;
@@ -78,6 +106,10 @@ ChatResult LlamaClient::chat(const ChatRequest & req) const
   const std::string body = build_body(req);
   std::string response;
   curl_slist * headers = curl_slist_append(nullptr, "Content-Type: application/json");
+  if (!api_key_.empty()) {
+    const std::string auth = "Authorization: Bearer " + api_key_;
+    headers = curl_slist_append(headers, auth.c_str());   // never logged
+  }
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
   curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
@@ -85,7 +117,6 @@ ChatResult LlamaClient::chat(const ChatRequest & req) const
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
   curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeout_sec_ * 1000));
-  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
   if (connect_timeout_sec_ > 0) {
     curl_easy_setopt(
       curl, CURLOPT_CONNECTTIMEOUT_MS, static_cast<long>(connect_timeout_sec_ * 1000));
@@ -94,7 +125,6 @@ ChatResult LlamaClient::chat(const ChatRequest & req) const
   long status = 0;
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
   curl_slist_free_all(headers);
-  curl_easy_cleanup(curl);
   if (rc != CURLE_OK) {
     r.error = std::string("llama-server request failed: ") + curl_easy_strerror(rc) +
       " (" + url + ")";
@@ -107,19 +137,25 @@ ChatResult LlamaClient::chat(const ChatRequest & req) const
 
 bool LlamaClient::healthy(double timeout_sec) const
 {
-  CURL * curl = curl_easy_init();
+  std::lock_guard<std::mutex> lk(health_mu_);
+  CURL * curl = prepare(health_h_);
   if (!curl) {return false;}
   const std::string url = base_url_ + "/health";
   std::string sink;
+  curl_slist * headers = nullptr;
+  if (!api_key_.empty()) {
+    const std::string auth = "Authorization: Bearer " + api_key_;
+    headers = curl_slist_append(headers, auth.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  }
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &sink);
   curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeout_sec * 1000));
-  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
   long status = 0;
   const CURLcode rc = curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
-  curl_easy_cleanup(curl);
+  curl_slist_free_all(headers);
   if (rc != CURLE_OK) {return false;}
   // 200 = ready. 503 = llama-server still loading its model. 404/405/501 = reachable but the
   // server has no /health (other OpenAI-compatible servers, test doubles): do not call it down.
