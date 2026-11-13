@@ -9,6 +9,7 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>bt_pipeline_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
   <exec_depend>object_detection_msgr</exec_depend>
   <exec_depend>person_detection_msgr</exec_depend>
   <exec_depend>face_recognition_msgr</exec_depend>

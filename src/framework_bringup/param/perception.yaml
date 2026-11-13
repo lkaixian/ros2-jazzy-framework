@@ -1,0 +1,49 @@
+# Central parameters. Precedence (low -> high): package defaults < this file < launch argument.
+# Edit freely; framework_bringup is installed with symlinks, so no rebuild is needed.
+# Use another folder with:  params_dir:=/path/to/my_param
+# Keys must match a declared parameter of the node (check with: ros2 run framework_bringup check_params).
+
+object_detection_node:
+  ros__parameters:
+    model: yolo11n.pt
+    openvino: false
+    conf: 0.4
+    device: ""              # "" = auto, "cpu", "0" (GPU)
+    image_topic: ""         # "" = open the webcam
+    camera_index: 0
+    rate_hz: 30.0
+    show: false
+    publish_image: true
+    frame_id: camera
+
+person_detection_node:
+  ros__parameters:
+    model: yolo11n-pose.pt  # yolo11n.pt for boxes only
+    openvino: false
+    conf: 0.4
+    device: ""
+    image_topic: ""
+    camera_index: 0
+    rate_hz: 30.0
+    show: false
+    publish_image: true
+    frame_id: camera
+    track: true
+
+face_recognition_node:
+  ros__parameters:
+    model: yolov11n-face.pt # user-supplied YOLO11 face weights
+    openvino: false
+    conf: 0.4
+    device: ""
+    image_topic: ""
+    camera_index: 0
+    rate_hz: 30.0
+    show: false
+    publish_image: true
+    frame_id: camera
+    embed_model: yolo11n-cls.pt
+    gallery_dir: faces      # one <name>.npy per identity
+    threshold: 0.6          # cosine similarity needed to name a face
+    publish_embedding: true # required by the BT node ExtractFaceFeature
+    enroll_max_age_sec: 2.0

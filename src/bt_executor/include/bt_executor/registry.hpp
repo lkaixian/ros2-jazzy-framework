@@ -35,6 +35,9 @@ public:
     int * track_out) const;
   bool face(const std::string & identity, double min_similarity, double max_age_sec,
     Clock::time_point now) const;
+  /// Largest face that has an embedding (a feature was extracted). Outputs may be null.
+  bool face_feature(double min_conf, double max_age_sec, Clock::time_point now,
+    std::string * identity, double * similarity) const;
 
 private:
   mutable std::mutex mu_;

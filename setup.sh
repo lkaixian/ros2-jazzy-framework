@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+# One-shot setup for ros2-jazzy-robocup-fw: system + ROS + Python packages, llama.cpp (LLM
+# runtime), the LLM (Gemma 4 E4B GGUF) and the SLM base (LFM2.5-230M-Base), then the build.
+#
+#   ./setup.sh                      # everything, asks before starting
+#   ./setup.sh --dry-run            # print every command, change nothing
+#   ./setup.sh --only build         # a single step
+#   ./setup.sh --skip models,llamacpp
+#   ./setup.sh --yes --backend cuda --minimal
+#
+# Steps (in order): apt rosdep python llamacpp models build   (optional, never default: slm)
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ALL_STEPS=(apt rosdep python llamacpp models build)
+DRY=0; YES=0; MINIMAL=0; BACKEND=auto
+ONLY=""; SKIP=""
+LLAMA_DIR="${LLAMA_DIR:-$HOME/llama.cpp}"
+LLM_REPO="${LLM_REPO:-ggml-org/gemma-4-E4B-it-GGUF}"
+SLM_BASE="${SLM_BASE:-LiquidAI/LFM2.5-230M-Base}"
+MIN_LLAMA_BUILD=8637          # first llama.cpp build with Gemma 4 support
+PY=/usr/bin/python3           # ROS uses the system Python; never a venv/conda one
+
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; cat <<EOF
+
+Options:
+  --dry-run          print commands only
+  --yes, -y          do not ask for confirmation
+  --only a,b         run just these steps
+  --skip a,b         skip these steps
+  --minimal          skip the optional heavy Python extras (STT/TTS engines)
+  --backend B        llama.cpp backend: auto|cpu|cuda|vulkan   (default auto: cuda if nvcc exists)
+  --llama-dir DIR    llama.cpp checkout/build dir (default $LLAMA_DIR)
+  --llm-repo REPO    GGUF repo for llama-server -hf (default $LLM_REPO)
+  --slm-base REPO    base model to fine-tune (default $SLM_BASE)
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY=1 ;;
+    --yes|-y) YES=1 ;;
+    --minimal) MINIMAL=1 ;;
+    --only) ONLY="$2"; shift ;;
+    --skip) SKIP="$2"; shift ;;
+    --backend) BACKEND="$2"; shift ;;
+    --llama-dir) LLAMA_DIR="$2"; shift ;;
+    --llm-repo) LLM_REPO="$2"; shift ;;
+    --slm-base) SLM_BASE="$2"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
+warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+# run CMD...: echo it, and execute unless --dry-run
+run()  { printf '  $ %s\n' "$*"; [[ $DRY -eq 1 ]] || "$@"; }
+
+in_list() { [[ ",$2," == *",$1,"* ]]; }
+wanted() {
+  local s="$1"
+  if [[ -n "$ONLY" ]]; then in_list "$s" "$ONLY"; return; fi
+  [[ "$s" == slm ]] && return 1                      # optional step: only via --only slm
+  ! in_list "$s" "$SKIP"
+}
+
+[[ -n "$ONLY" ]] && for s in ${ONLY//,/ }; do
+  [[ " ${ALL_STEPS[*]} slm " == *" $s "* ]] || die "unknown step '$s' (steps: ${ALL_STEPS[*]} slm)"
+done
+
+# ---------------------------------------------------------------- preflight
+preflight() {
+  log "Preflight"
+  [[ $EUID -ne 0 ]] || die "run as your normal user (sudo is used where needed)"
+  [[ -f /opt/ros/jazzy/setup.bash ]] || die "ROS 2 Jazzy not found at /opt/ros/jazzy"
+  [[ -x $PY ]] || die "$PY not found"
+  . /etc/os-release
+  [[ "${VERSION_ID:-}" == "24.04" ]] || warn "tested on Ubuntu 24.04 (this is ${PRETTY_NAME:-unknown})"
+  if [[ "$(command -v python3)" != "$PY" ]]; then
+    warn "'python3' on PATH is $(command -v python3), not $PY (a venv/~/pyvenv.cfg can hide system"
+    warn "packages from ROS). This script and env.sh always use $PY first."
+  fi
+  echo "  workspace: $ROOT"
+}
+
+confirm() {
+  [[ $YES -eq 1 || $DRY -eq 1 ]] && return
+  echo "About to run steps:"; for s in "${ALL_STEPS[@]}" slm; do wanted "$s" && echo "  - $s"; done
+  echo "This installs system packages (sudo), pip packages into ~/.local, may download several GB"
+  echo "of models, and builds llama.cpp and the ROS workspace."
+  read -r -p "Continue? [y/N] " a; [[ "$a" =~ ^[Yy]$ ]] || exit 1
+}
+
+# ---------------------------------------------------------------- steps
+step_apt() {
+  log "apt: build tools, audio, JSON/curl dev libraries, ROS helpers"
+  local pk=(build-essential cmake git curl ca-certificates libcurl4-openssl-dev nlohmann-json3-dev
+            alsa-utils espeak-ng python3-pip python3-yaml python3-numpy python3-opencv python3-pytest
+            python3-colcon-common-extensions python3-rosdep ros-jazzy-behaviortree-cpp)
+  run sudo apt-get update
+  run sudo apt-get install -y "${pk[@]}"
+}
+
+step_rosdep() {
+  log "rosdep: ROS dependencies of every package in src/"
+  if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then run sudo rosdep init; fi
+  run rosdep update
+  run rosdep install --from-paths "$ROOT/src" --ignore-src -r -y --rosdistro jazzy
+}
+
+step_python() {
+  log "python: ultralytics (YOLO11), transformers (SLM), huggingface_hub (+ STT/TTS extras)"
+  # Ubuntu 24.04 marks the system Python as externally managed; ROS nodes run on it, so the
+  # packages must live there. --user keeps them out of /usr.
+  local pip=("$PY" -m pip install --user --break-system-packages)
+  local core=(ultralytics transformers huggingface_hub)
+  local extras=(faster-whisper vosk piper-tts kokoro-onnx soundfile)
+  run "${pip[@]}" "${core[@]}"
+  if [[ $MINIMAL -eq 1 ]]; then
+    echo "  (--minimal: skipping ${extras[*]})"
+  else
+    run "${pip[@]}" "${extras[@]}"
+  fi
+}
+
+llama_build_number() { "$1" --version 2>&1 | sed -n 's/^version: \([0-9]\+\).*/\1/p' | head -1; }
+
+step_llamacpp() {
+  log "llama.cpp: llama-server (needs build >= $MIN_LLAMA_BUILD for Gemma 4)"
+  local be="$BACKEND" flags=(-DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON)
+  if [[ $be == auto ]]; then command -v nvcc >/dev/null && be=cuda || be=cpu; fi
+  case "$be" in
+    cpu) ;;
+    cuda) command -v nvcc >/dev/null || die "--backend cuda needs the CUDA toolkit (nvcc)"; flags+=(-DGGML_CUDA=ON) ;;
+    vulkan) flags+=(-DGGML_VULKAN=ON) ;;
+    *) die "unknown backend '$be'" ;;
+  esac
+  [[ $be == cpu ]] && warn "building CPU-only; for a GPU install the CUDA toolkit and use --backend cuda (or vulkan)"
+  if [[ -d "$LLAMA_DIR/.git" ]]; then run git -C "$LLAMA_DIR" pull --ff-only
+  else run git clone --depth 1 https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"; fi
+  run cmake -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" "${flags[@]}"
+  run cmake --build "$LLAMA_DIR/build" --config Release -j "$(nproc)" --target llama-server llama-cli
+  run mkdir -p "$HOME/.local/bin"
+  run ln -sf "$LLAMA_DIR/build/bin/llama-server" "$HOME/.local/bin/llama-server"
+  run ln -sf "$LLAMA_DIR/build/bin/llama-cli" "$HOME/.local/bin/llama-cli"
+  if [[ $DRY -eq 0 ]]; then
+    local n; n="$(llama_build_number "$LLAMA_DIR/build/bin/llama-server" || true)"
+    echo "  llama-server build: ${n:-unknown}"
+    [[ -n "$n" && "$n" -ge $MIN_LLAMA_BUILD ]] || warn "build ${n:-?} < $MIN_LLAMA_BUILD: Gemma 4 may fail to load"
+    case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "add ~/.local/bin to PATH (env.sh does this)" ;; esac
+  fi
+}
+
+step_models() {
+  log "models: LLM $LLM_REPO (via llama-server) and SLM base $SLM_BASE"
+  local srv="$HOME/.local/bin/llama-server"; command -v llama-server >/dev/null && srv="$(command -v llama-server)"
+  if [[ $DRY -eq 1 ]]; then
+    echo "  \$ $srv -hf $LLM_REPO --port 18080   # downloads to ~/.cache/llama.cpp, waits for /health"
+    echo "  \$ $PY -c 'snapshot_download(\"$SLM_BASE\", local_dir=\"$ROOT/models/slm-base\")'"
+    return
+  fi
+  [[ -x "$srv" ]] || die "llama-server not found; run the llamacpp step first"
+  # Using llama-server's own downloader fills the cache the runtime reads, and proves the model
+  # actually loads and serves with this build.
+  "$srv" -hf "$LLM_REPO" --port 18080 >"$ROOT/.llm_download.log" 2>&1 &
+  local pid=$! waited=0
+  trap 'kill $pid 2>/dev/null || true' EXIT
+  until curl -sf http://127.0.0.1:18080/health >/dev/null; do
+    kill -0 $pid 2>/dev/null || { tail -5 "$ROOT/.llm_download.log"; die "llama-server exited (gated repo? old build? see $ROOT/.llm_download.log)"; }
+    (( waited % 60 == 0 )) && echo "  ... waiting for $LLM_REPO ($((waited / 60)) min) $(tail -c 120 "$ROOT/.llm_download.log" | tr '\r\n' '  ')"
+    sleep 5; waited=$((waited + 5)); [[ $waited -lt 7200 ]] || die "timed out after 2 h"
+  done
+  echo "  LLM ready: llama-server served $LLM_REPO"
+  kill $pid; wait $pid 2>/dev/null || true; trap - EXIT; rm -f "$ROOT/.llm_download.log"
+
+  mkdir -p "$ROOT/models"
+  "$PY" - "$SLM_BASE" "$ROOT/models/slm-base" <<'PYEOF' || die "SLM download failed (see message above)"
+import sys
+from huggingface_hub import snapshot_download
+from huggingface_hub.errors import GatedRepoError, HfHubHTTPError
+repo, dest = sys.argv[1:3]
+try:
+    p = snapshot_download(repo, local_dir=dest)
+except GatedRepoError:
+    sys.exit(f"{repo} is gated: accept its license on huggingface.co, then `hf auth login`")
+except HfHubHTTPError as e:
+    sys.exit(f"download of {repo} failed: {e}")
+print("  SLM base saved to", p)
+PYEOF
+  warn "the SLM base is NOT usable for planning yet: fine-tune it first (./setup.sh --only slm)"
+}
+
+step_build() {
+  log "colcon build (system Python first on PATH)"
+  run bash -c "cd '$ROOT' && export PATH=/usr/bin:\$PATH && . /opt/ros/jazzy/setup.bash && colcon build --symlink-install"
+  if [[ $DRY -eq 0 ]]; then
+    cat >"$ROOT/env.sh" <<EOF
+# source this: system Python first, ROS, this workspace, and ~/.local/bin (llama-server)
+export PATH=/usr/bin:\$HOME/.local/bin:\$PATH
+. /opt/ros/jazzy/setup.bash
+. "$ROOT/install/setup.bash"
+EOF
+    echo "  wrote $ROOT/env.sh   ->  source it in every new terminal"
+  fi
+}
+
+step_slm() {
+  log "SLM: synthetic dataset + fine-tune $SLM_BASE (GPU strongly recommended)"
+  run bash -c ". '$ROOT/env.sh' && cd '$ROOT' && ros2 run bt_slm make_bt_dataset --out-dir bt_dataset --n 30000"
+  run bash -c ". '$ROOT/env.sh' && cd '$ROOT' && ros2 run bt_slm finetune_bt_slm --data-dir bt_dataset --base '$ROOT/models/slm-base' --out models/bt-slm"
+  echo "  then: ros2 launch framework_bringup framework.launch.py slm_model_path:=$ROOT/models/bt-slm"
+}
+
+# ---------------------------------------------------------------- main
+preflight
+confirm
+for s in "${ALL_STEPS[@]}" slm; do
+  if wanted "$s"; then "step_$s"; else echo "skip: $s"; fi
+done
+log "done"
+cat <<EOF
+Next:
+  source $ROOT/env.sh
+  ros2 run framework_bringup check_params          # param files vs real nodes
+  ros2 launch launch/framework.launch.py start_llama_server:=true
+LLM runs from llama.cpp's cache ($LLM_REPO); the SLM falls back to the rule-based generator until
+you fine-tune one (./setup.sh --only slm) and pass slm_model_path:=...
+EOF

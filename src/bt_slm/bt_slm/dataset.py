@@ -10,7 +10,7 @@ import os
 import random
 import re
 
-from bt_common.catalog import Catalog, format_listing
+from bt_common.catalog import Catalog, discover_catalog, format_listing  # noqa: F401
 from bt_validator.validate import validate_xml
 
 from bt_slm.fallback import build_xml
@@ -19,24 +19,8 @@ from bt_slm.prompt import build_prompt, normalize_spec
 LABELS = ['cup', 'bottle', 'person', 'chair', 'laptop', 'book', 'phone', 'backpack', 'apple']
 NAMES = ['alice', 'bob', 'carol', 'dave']
 WORDS = ['fetch', 'find', 'check', 'go', 'look', 'greet', 'inspect', 'follow', 'wait', 'turn']
-EXTENSION_PACKAGES = ['arm_extension', 'pose_extension', 'odom_extension', 'pid_extension']
-
-
-def discover_catalog(extra_configs=()):
-    """Core nodes plus every installed *_extension manifest (and any extra YAML files)."""
-    import yaml
-    from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
-    cat = Catalog()
-    paths = list(extra_configs)
-    for pkg in EXTENSION_PACKAGES:
-        try:
-            paths.append(os.path.join(get_package_share_directory(pkg), 'config', pkg + '.yaml'))
-        except PackageNotFoundError:
-            pass
-    for path in paths:
-        with open(path) as f:
-            cat.add_manifest_dict(yaml.safe_load(f))
-    return cat
+EXTENSION_PACKAGES = ['arm_extension', 'pose_extension', 'odom_extension', 'pid_extension',
+                      'social_extension']
 
 
 def value_for(node, port, rng):
@@ -44,6 +28,12 @@ def value_for(node, port, rng):
         return '{' + port[4:] + '}'
     if port in ('label',):
         return rng.choice(LABELS)
+    if port == 'text':
+        return rng.choice(['Hello {person}', 'Please look at the camera', 'I can see you', 'Done'])
+    if port == 'person':
+        return rng.choice(NAMES)
+    if port == 'wait':
+        return rng.choice(['true', 'false'])
     if port in ('identity',):
         return rng.choice(NAMES)
     if port == 'direction':

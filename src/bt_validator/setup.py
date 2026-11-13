@@ -19,6 +19,7 @@ setup(
     entry_points={
         'console_scripts': [
             'bt_validator_node = bt_validator.validator_node:main',
+            'validate_bt = bt_validator.cli:main',
         ],
     },
 )

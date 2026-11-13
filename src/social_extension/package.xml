@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>social_extension</name>
+  <version>0.1.0</version>
+  <description>Speak and face-enrol BT nodes (TTS + face gallery)</description>
+  <maintainer email="lkaixian91@gmail.com">larm</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>bt_common</exec_depend>
+  <exec_depend>bt_pipeline_msgs</exec_depend>
+  <exec_depend>audio_msgr</exec_depend>
+  <exec_depend>face_recognition</exec_depend>
+  <exec_depend>face_recognition_msgr</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,0 +1,75 @@
+# Central parameters. Precedence (low -> high): package defaults < this file < launch argument.
+# Edit freely; framework_bringup is installed with symlinks, so no rebuild is needed.
+# Use another folder with:  params_dir:=/path/to/my_param
+# Keys must match a declared parameter of the node (check with: ros2 run framework_bringup check_params).
+
+cmd_vel_mux_node:
+  ros__parameters:
+    inputs: [odom_extension/cmd_vel, pid_extension/cmd_vel]   # highest priority first
+    output: cmd_vel
+    stamped: false
+    timeout_sec: 0.5        # watchdog: no fresh input -> zero Twist
+    max_linear: 0.3         # hard clamp, m/s
+    max_angular: 0.8        # hard clamp, rad/s
+    rate_hz: 20.0
+
+odom_extension_node:
+  ros__parameters:
+    odom_topic: odom
+    cmd_vel_topic: odom_extension/cmd_vel
+    max_linear: 0.2
+    max_angular: 0.6
+    kv: 0.8
+    kw: 1.5
+    default_timeout_sec: 60.0
+    stale_sec: 0.5
+    rate_hz: 20.0
+    republish_sec: 3.0
+
+pid_extension_node:
+  ros__parameters:
+    odom_topic: odom
+    persons_topic: persons
+    cmd_vel_topic: pid_extension/cmd_vel
+    max_linear: 0.15
+    max_angular: 0.6
+    stale_sec: 0.5
+    lost_sec: 1.0
+    rate_hz: 20.0
+    republish_sec: 3.0
+
+pose_extension_node:
+  ros__parameters:
+    persons_topic: persons
+    window_sec: 1.5
+    max_age_sec: 0.7
+    republish_sec: 3.0
+
+arm_extension_node:         # arm model not fixed yet: group/ee_link/base_frame must be set first
+  ros__parameters:
+    move_group_action: move_action
+    group: ""
+    ee_link: ""
+    base_frame: ""
+    max_velocity_scale: 0.1
+    acceleration_scale: 0.1
+    planning_time: 5.0
+    execute_timeout_sec: 60.0
+    pos_tol: 0.005
+    ori_tol: 0.05
+    workspace_min: [-1.0, -1.0, 0.0]
+    workspace_max: [1.0, 1.0, 1.2]
+    gripper_action: ""      # control_msgs/GripperCommand action name
+    gripper_open: 0.08
+    gripper_closed: 0.0
+    gripper_max_effort: 20.0
+    republish_sec: 3.0
+
+social_extension_node:
+  ros__parameters:
+    speak_service: tts/speak
+    stop_service: tts/stop
+    enroll_service: face/enroll
+    speak_timeout_sec: 30.0
+    enroll_timeout_sec: 10.0
+    republish_sec: 3.0

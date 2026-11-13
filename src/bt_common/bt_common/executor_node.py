@@ -102,6 +102,28 @@ def call_action(client, goal, ctl, timeout_sec, server_wait=2.0):
     return box['res'].result, ''
 
 
+def call_service(client, request, ctl, timeout_sec, wait_sec=2.0):
+    """Call a service from a handler, honouring cancellation. Returns (response, error)."""
+    if not client.wait_for_service(timeout_sec=wait_sec):
+        return None, f'service {client.srv_name} unavailable'
+    done, box = threading.Event(), {}
+
+    def on_done(fut):
+        try:
+            box['r'] = fut.result()
+        except Exception as e:  # noqa: BLE001
+            box['e'] = f'{type(e).__name__}: {e}'
+        done.set()
+    client.call_async(request).add_done_callback(on_done)
+    end = time.monotonic() + timeout_sec
+    while not done.wait(0.02):
+        if ctl.cancelled:
+            return None, 'cancelled'
+        if time.monotonic() > end:
+            return None, 'timeout'
+    return box.get('r'), box.get('e', '')
+
+
 class ExtensionExecutor(ExtensionNode):
     """Subclasses fill self.handlers: {node_id: fn(ports: dict, ctl: Ctl) -> (ok, message)}.
 

@@ -94,6 +94,25 @@ bool PerceptionCache::face(
   return false;
 }
 
+bool PerceptionCache::face_feature(
+  double min_conf, double max_age_sec, Clock::time_point now, std::string * identity,
+  double * similarity) const
+{
+  std::lock_guard<std::mutex> lk(mu_);
+  if (!has_face_ || age(now, t_face_) > max_age_sec) {return false;}
+  const face_recognition_msgr::msg::Face * best = nullptr;
+  double best_area = -1.0;
+  for (const auto & f : faces_.faces) {
+    if (f.confidence < min_conf || f.embedding.empty()) {continue;}
+    const double area = static_cast<double>(f.x_max - f.x_min) * (f.y_max - f.y_min);
+    if (area > best_area) {best_area = area; best = &f;}
+  }
+  if (!best) {return false;}
+  if (identity) {*identity = best->identity;}
+  if (similarity) {*similarity = best->similarity;}
+  return true;
+}
+
 // ---------------- ExecContext ----------------
 rclcpp_action::Client<ExecuteNode>::SharedPtr ExecContext::client(const std::string & ext)
 {
@@ -138,6 +157,25 @@ void register_perception(
              Clock::now()) ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
     },
     {BT::InputPort<std::string>("identity"), BT::InputPort<std::string>("min_similarity")});
+
+  f.registerSimpleCondition(
+    "ExtractFaceFeature", [cache, max_age](BT::TreeNode & n) {
+      std::string who;
+      double sim = 0.0;
+      if (!cache->face_feature(to_double(n, "min_conf", 0.5), max_age, Clock::now(), &who, &sim)) {
+        return BT::NodeStatus::FAILURE;
+      }
+      if (port_in_xml(n, "out_identity")) {n.setOutput("out_identity", who);}
+      if (port_in_xml(n, "out_similarity")) {
+        std::ostringstream os;
+        os.precision(3);
+        os << sim;
+        n.setOutput("out_similarity", os.str());
+      }
+      return BT::NodeStatus::SUCCESS;
+    },
+    {BT::InputPort<std::string>("min_conf"), BT::OutputPort<std::string>("out_identity"),
+      BT::OutputPort<std::string>("out_similarity")});
 }
 
 // ---------------- extension nodes ----------------

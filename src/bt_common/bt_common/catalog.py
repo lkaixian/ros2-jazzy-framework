@@ -1,5 +1,6 @@
 """Catalog of allowed BT nodes: core built-ins plus extension manifests."""
 import os
+import re
 from dataclasses import dataclass, field
 from typing import List
 
@@ -18,12 +19,40 @@ class NodeSpec:
     description: str = ''
 
 
+RESERVED_PORTS = ('name', 'ID')
+_PORT_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_]*$')
+
+
+def check_port_names(nid, ports):
+    """BehaviorTree.CPP forbids `name`/`ID` and non-alphabetic starts as port names."""
+    for p in ports:
+        if p in RESERVED_PORTS or not _PORT_RE.match(p):
+            raise ValueError(f"node {nid}: port name {p!r} is not allowed by BehaviorTree.CPP "
+                             f"(reserved: {', '.join(RESERVED_PORTS)}; must start with a letter)")
+
+
 def _from_dict(d):
     out = {}
     for nid, s in (d.get('nodes') or {}).items():
+        check_port_names(nid, list(s.get('required', [])) + list(s.get('optional', [])))
         out[nid] = NodeSpec(nid, s['category'], list(s.get('required', [])),
                             list(s.get('optional', [])), s.get('description', ''))
     return out
+
+
+def discover_catalog(extra_configs=()):
+    """Core nodes plus every installed *_extension manifest (and any extra YAML files)."""
+    from ament_index_python.packages import get_packages_with_prefixes
+    cat = Catalog()
+    paths = list(extra_configs)
+    for pkg, prefix in sorted(get_packages_with_prefixes().items()):
+        cfg = os.path.join(prefix, 'share', pkg, 'config', pkg + '.yaml')
+        if pkg.endswith('_extension') and os.path.exists(cfg):
+            paths.append(cfg)
+    for path in paths:
+        with open(path) as f:
+            cat.add_manifest_dict(yaml.safe_load(f))
+    return cat
 
 
 def format_listing(specs):

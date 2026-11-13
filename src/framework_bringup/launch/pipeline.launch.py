@@ -1,50 +1,48 @@
-"""LLM (llama.cpp, C++) -> SLM -> validator pipeline."""
-import os
-
-from ament_index_python.packages import get_package_share_directory as share
+"""llama.cpp (C++ bridge) -> SLM -> validator -> bt_executor. Parameters: param/pipeline.yaml,
+param/llama_server.yaml. dry_run defaults to true (pipeline.yaml)."""
+from bt_common.launch_utils import (cast_like, declare_overrides, declare_params_dir, given,
+                                    load_yaml, make_node, param_path)
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess
-from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration as LC, PythonExpression
-from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
+from launch.actions import ExecuteProcess, OpaqueFunction
+
+ARGS = ('start_llama_server', 'llama_model', 'llama_hf_repo', 'llama_port', 'llama_url',
+        'slm_model_path', 'max_attempts', 'dry_run', 'auto_run')
+
+
+def _nodes(context):
+    srv = load_yaml(param_path(context, 'llama_server.yaml'))
+
+    def pick(arg, key):
+        v = given(context, arg)
+        return cast_like(v, srv.get(key)) if v is not None else srv.get(key)
+
+    port = pick('llama_port', 'port')
+    out = []
+    if pick('start_llama_server', 'start'):
+        model, repo = pick('llama_model', 'model'), pick('llama_hf_repo', 'hf_repo')
+        cmd = ['llama-server'] + (['-m', str(model)] if model else ['-hf', str(repo)])
+        cmd += ['--port', str(port)] + [str(a) for a in srv.get('extra_args', [])]
+        out.append(ExecuteProcess(cmd=cmd, output='screen'))
+
+    # a bare llama_port:= should also repoint the bridge, unless llama_url:= was given
+    derived = {}
+    if given(context, 'llama_url') is None and given(context, 'llama_port') is not None:
+        derived['server_url'] = f'http://127.0.0.1:{port}'
+    out.append(make_node(context, 'llm_bridge', 'llm_bridge_node', 'llm_bridge_node',
+                         'pipeline.yaml', {'llama_url': 'server_url'}, extra=derived))
+    P = 'pipeline.yaml'
+    out += [
+        make_node(context, 'bt_slm', 'bt_slm_node', 'bt_slm_node', P, {'slm_model_path': 'model_path'}),
+        make_node(context, 'bt_validator', 'bt_validator_node', 'bt_validator_node', P),
+        make_node(context, 'bt_orchestrator', 'orchestrator_node', 'orchestrator_node', P,
+                  {'max_attempts': 'max_attempts'}),
+        make_node(context, 'bt_orchestrator', 'scene_summarizer_node', 'scene_summarizer_node', P),
+        make_node(context, 'bt_executor', 'bt_executor_node', 'bt_executor_node', P,
+                  {'dry_run': 'dry_run', 'auto_run': 'auto_run'}),
+    ]
+    return out
 
 
 def generate_launch_description():
-    return LaunchDescription([
-        DeclareLaunchArgument('start_llama_server', default_value='false',
-                              description='spawn llama-server (needs llama.cpp on PATH)'),
-        DeclareLaunchArgument('llama_model', default_value='',
-                              description='path to 2B-4B GGUF for llama-server'),
-        DeclareLaunchArgument('llama_url', default_value='http://127.0.0.1:8080'),
-        DeclareLaunchArgument('llama_port', default_value='8080'),
-        DeclareLaunchArgument('slm_model_path', default_value='',
-                              description='fine-tuned SLM dir (base: LiquidAI/LFM2.5-230M-Base); '
-                                              'empty = rule-based fallback'),
-        DeclareLaunchArgument('max_attempts', default_value='3'),
-        DeclareLaunchArgument('dry_run', default_value='true',
-                              description='true: bt_executor only logs extension nodes; '
-                                          'set false to command hardware'),
-        DeclareLaunchArgument('auto_run', default_value='false',
-                              description='run each valid plan immediately (otherwise call '
-                                          '/bt_executor/run)'),
-
-        ExecuteProcess(
-            cmd=['llama-server', '-m', LC('llama_model'), '--port', LC('llama_port')],
-            condition=IfCondition(LC('start_llama_server')), output='screen'),
-
-        Node(package='llm_bridge', executable='llm_bridge_node', output='screen',
-             parameters=[os.path.join(share('llm_bridge'), 'config', 'llm_bridge.yaml'),
-                         {'server_url': LC('llama_url')}]),
-        Node(package='bt_slm', executable='bt_slm_node', output='screen',
-             parameters=[os.path.join(share('bt_slm'), 'config', 'bt_slm.yaml'),
-                         {'model_path': LC('slm_model_path')}]),
-        Node(package='bt_validator', executable='bt_validator_node', output='screen'),
-        Node(package='bt_orchestrator', executable='orchestrator_node', output='screen',
-             parameters=[{'max_attempts': ParameterValue(LC('max_attempts'), value_type=int)}]),
-        Node(package='bt_orchestrator', executable='scene_summarizer_node', output='screen'),
-        Node(package='bt_executor', executable='bt_executor_node', output='screen',
-             parameters=[os.path.join(share('bt_executor'), 'config', 'bt_executor.yaml'),
-                         {'dry_run': ParameterValue(LC('dry_run'), value_type=bool),
-                          'auto_run': ParameterValue(LC('auto_run'), value_type=bool)}]),
-    ])
+    return LaunchDescription([declare_params_dir(), *declare_overrides(*ARGS),
+                              OpaqueFunction(function=_nodes)])

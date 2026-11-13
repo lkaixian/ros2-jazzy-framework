@@ -121,6 +121,46 @@ TEST(Registry, FallbackRecoversFromFailedCondition)
   EXPECT_EQ(st, BT::NodeStatus::SUCCESS);
 }
 
+TEST(Registry, ExtractFaceFeaturePicksLargestFaceWithEmbeddingAndWiresOutputs)
+{
+  auto cache = std::make_shared<PerceptionCache>();
+  face_recognition_msgr::msg::FaceArray a;
+  auto mk = [](const char * id, float size, bool emb) {
+      face_recognition_msgr::msg::Face f;
+      f.identity = id; f.confidence = 0.9f; f.similarity = 0.8f;
+      f.x_max = size; f.y_max = size;
+      if (emb) {f.embedding = {0.1f, 0.2f};}
+      return f;
+    };
+  a.faces = {mk("bob", 10, true), mk("alice", 100, true), mk("carol", 500, false)};
+  cache->on_faces(a, Clock::now());
+  std::vector<std::string> logs;
+  EXPECT_EQ(
+    run(tree(R"(<ExtractFaceFeature out_identity="{who}"/><DriveDistance meters="{who}"/>)"),
+    cache, &logs), BT::NodeStatus::SUCCESS);
+  bool found = false;
+  for (const auto & l : logs) {found |= l.find("meters=alice") != std::string::npos;}
+  EXPECT_TRUE(found) << "largest face WITH an embedding (alice) must feed the next node";
+}
+
+TEST(Registry, ExtractFaceFeatureFailsWithoutEmbeddingOrConfidenceOrFreshness)
+{
+  auto cache = std::make_shared<PerceptionCache>();
+  EXPECT_EQ(run(tree("<ExtractFaceFeature/>"), cache), BT::NodeStatus::FAILURE);   // nothing yet
+  face_recognition_msgr::msg::FaceArray a;
+  face_recognition_msgr::msg::Face f;
+  f.identity = "alice"; f.confidence = 0.4f; f.x_max = 50; f.y_max = 50;
+  a.faces = {f};
+  cache->on_faces(a, Clock::now());
+  EXPECT_EQ(run(tree("<ExtractFaceFeature/>"), cache), BT::NodeStatus::FAILURE);   // no embedding
+  a.faces[0].embedding = {1.0f};
+  cache->on_faces(a, Clock::now());
+  EXPECT_EQ(run(tree("<ExtractFaceFeature/>"), cache), BT::NodeStatus::FAILURE);   // conf 0.4 < 0.5
+  EXPECT_EQ(run(tree(R"(<ExtractFaceFeature min_conf="0.3"/>)"), cache), BT::NodeStatus::SUCCESS);
+  cache->on_faces(a, Clock::now() - std::chrono::seconds(5));
+  EXPECT_EQ(run(tree(R"(<ExtractFaceFeature min_conf="0.3"/>)"), cache), BT::NodeStatus::FAILURE);
+}
+
 int main(int argc, char ** argv)
 {
   testing::InitGoogleTest(&argc, argv);

@@ -1,0 +1,10 @@
+# Central parameters. Precedence (low -> high): package defaults < this file < launch argument.
+# Edit freely; framework_bringup is installed with symlinks, so no rebuild is needed.
+# Use another folder with:  params_dir:=/path/to/my_param
+# Read by pipeline.launch.py only (not a ROS parameter file); keys: (check with: ros2 run framework_bringup check_params).
+
+start: false              # true: launch llama-server together with the pipeline
+model: ""                 # local GGUF path; if empty hf_repo is used
+hf_repo: ggml-org/gemma-4-E4B-it-GGUF
+port: 8080                # keep in step with llm_bridge_node.server_url (pipeline.yaml)
+extra_args: []            # e.g. ["-ngl", "99", "-c", "8192"]

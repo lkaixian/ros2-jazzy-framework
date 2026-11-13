@@ -23,7 +23,10 @@ def main():
         raise SystemExit(f'expected exactly 1 face, found {len(boxes)}')
     x1, y1, x2, y2 = (int(v) for v in boxes[0].xyxy[0])
     emb = YOLO(a.embed_model).embed(img[y1:y2, x1:x2], verbose=False)[0].cpu().numpy()
-    Gallery(a.gallery).add(a.name, emb)
+    try:
+        Gallery(a.gallery).add(a.name, emb)
+    except ValueError as e:
+        raise SystemExit(str(e))
     print(f'enrolled {a.name} -> {a.gallery}/{a.name}.npy')
 
 

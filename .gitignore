@@ -8,3 +8,8 @@ __pycache__/
 *.gguf
 *_openvino_model/
 faces/
+env.sh
+.llm_download.log
+models/
+bt_dataset/
+bt_slm_model/

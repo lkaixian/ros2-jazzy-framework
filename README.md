@@ -29,6 +29,7 @@ orchestrator -> bt_slm (fine-tuned ~230M SLM, e.g. LFM2.5-230M) -> bt_validator
 | `bt_executor` | **ament_cmake (C++)** | runs validated `bt/plan` with BehaviorTree.CPP; **`dry_run:=true` and `auto_run:=false` by default**; `bt_executor/run`, `bt_executor/halt`, `bt/status` |
 | `odom_extension` | ament_python | NavigateTo, DriveDistance, RotateBy, IsAtGoal (odometry frame only) |
 | `pid_extension` | ament_python | HoldHeading, FollowTarget (bbox-based, no depth), SetPidGains |
+| `social_extension` | ament_python | `Speak` (TTS, `{person}` placeholder) and `EnrollFace` (face gallery) |
 | `pose_extension` | ament_python | GetPersonPose, IsPersonWaving, IsPersonPointing from YOLO11-pose keypoints |
 | `arm_extension` | ament_python | MoveArmToPose / OpenGripper / CloseGripper through MoveIt `MoveGroup` + `GripperCommand`; arm model is a parameter set |
 | `bt_common` also ships | | `cmd_vel_mux_node`: priority + 0.5 s watchdog + hard clamps in front of the robot's `cmd_vel` |
@@ -37,6 +38,25 @@ orchestrator -> bt_slm (fine-tuned ~230M SLM, e.g. LFM2.5-230M) -> bt_validator
 | `stt_pipeline` | ament_python | energy VAD -> STT engine (faster-whisper / Vosk) -> `stt/transcript`; `transcript_to_task` (optional wake word) -> `bt/task`; mutes while the robot speaks |
 | `tts_pipeline` | ament_python | queued TTS (espeak / Piper / Kokoro-82M), `tts/say`, `tts/speak`, `tts/stop`, `tts/status`; `plan_announcer` speaks `bt/plan` results |
 | `framework_bringup` | ament_cmake | `launch/`: `framework`, `perception`, `pipeline`, `extensions`, `audio` |
+
+## Quick start
+```
+./setup.sh --dry-run        # see what it would do; then ./setup.sh   (apt, rosdep, pip, llama.cpp, LLM + SLM base, build)
+source env.sh               # system Python first, ROS, this workspace, ~/.local/bin
+ros2 run framework_bringup check_params     # param files vs the real nodes
+```
+`setup.sh` steps: `apt rosdep python llamacpp models build` (+ optional `slm` = dataset and fine-tune). Use `--only`, `--skip`, `--minimal`, `--backend cuda|vulkan|cpu`. The LLM is fetched by `llama-server -hf` (Gemma 4 E4B), the SLM base `LiquidAI/LFM2.5-230M-Base` goes to `models/slm-base` for fine-tuning only.
+
+## Parameters
+Everything tunable lives in `src/framework_bringup/param/*.yaml` (`perception`, `pipeline`, `llama_server`, `extensions`, `audio`). Precedence: package defaults < these files < launch arguments (only arguments you actually pass override). Edit and relaunch; no rebuild needed. Another folder: `params_dir:=/path`. `check_params` starts every node with these files and reports typo'd keys and wrong types, which ROS would otherwise ignore silently. Per-package `launch/<pkg>.launch.py` files use the package's own `config/` defaults, not `param/`.
+
+## Hand-written behaviour trees
+```
+ros2 run bt_validator validate_bt --list-nodes          # every node + ports you may use
+ros2 run bt_validator validate_bt my_tree.xml           # check offline, readable errors
+ros2 run bt_orchestrator submit_bt my_tree.xml --run    # validate -> bt_executor (dry-run unless dry_run:=false)
+```
+Examples in `framework_bringup/behavior_trees/`: `greet_person.xml` (detect person -> `ExtractFaceFeature` -> `Speak "Hello {person}"`) and `enroll_person.xml` (`EnrollFace`). Port names `name` and `ID` are reserved by BehaviorTree.CPP and are rejected. Speak needs `tts_node` (`audio.launch.py enable_stt:=false`), EnrollFace/ExtractFaceFeature need `face_recognition_node` (publishes embeddings).
 
 ## Launch files
 * `launch/` (workspace root): `framework`, `perception`, `pipeline`, `extensions`, `audio`; thin wrappers, e.g. `ros2 launch launch/framework.launch.py dry_run:=true`.
@@ -82,4 +102,5 @@ TTS: `espeak` works out of the box; `piper` needs `pip install piper-tts` plus a
 
 ## Status
 Verified: workspace builds; validator/SLM-fallback unit tests and C++ gtest pass; the pipeline ran end-to-end against a stub llama server (including a rejected-then-repaired attempt). Audio plumbing was verified with a synthesized WAV and mock engines (VAD -> transcript -> `bt/task`; TTS status).
-Execution was verified in a **simulated** robot (a node integrating `cmd_vel` into `odom`): task -> stub llama -> SLM fallback -> validator -> `bt_executor` -> `odom_extension` -> mux -> robot, covering a live drive+turn (0.29 m / 0.47 rad requested 0.30 / 0.50), dry-run (no motion), halt mid-drive, and SIGKILL of the extension (mux stops the robot within its timeout). Controllers and PID have closed-loop unit tests; gesture rules are tested on synthetic skeletons only. Not verified: any real robot, MoveIt/arm execution (only goal construction is tested), gesture accuracy on real video, SLM fine-tuning (dataset generator is tested, `finetune_bt_slm` has only unit tests of its masking/collation and has never been run), the YOLO nodes on a camera, a real llama-server, a real fine-tuned SLM, real STT recognition (faster-whisper/Vosk), Piper and Kokoro playback, live microphone capture.
+Execution was verified in a **simulated** robot (a node integrating `cmd_vel` into `odom`): task -> stub llama -> SLM fallback -> validator -> `bt_executor` -> `odom_extension` -> mux -> robot, covering a live drive+turn (0.29 m / 0.47 rad requested 0.30 / 0.50), dry-run (no motion), halt mid-drive, and SIGKILL of the extension (mux stops the robot within its timeout). Controllers and PID have closed-loop unit tests; gesture rules are tested on synthetic skeletons only.
+The greeting/enrolment trees were run through the real chain against a **fake perception node** and the mock TTS engine (spoke `Hello alice` / `Hello there`, enrolled via a stub service); the real YOLO face node, face embeddings and neural TTS were not exercised. Not verified: `setup.sh` apt/pip/llama.cpp/model steps (dry-run only; `--only build` was run), any real robot, MoveIt/arm execution (only goal construction is tested), gesture accuracy on real video, SLM fine-tuning (dataset generator is tested, `finetune_bt_slm` has only unit tests of its masking/collation and has never been run), the YOLO nodes on a camera, a real llama-server, a real fine-tuned SLM, real STT recognition (faster-whisper/Vosk), Piper and Kokoro playback, live microphone capture.

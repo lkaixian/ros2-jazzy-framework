@@ -1,0 +1,4 @@
+string name        # [A-Za-z0-9_-]{1,40}
+---
+bool ok
+string message

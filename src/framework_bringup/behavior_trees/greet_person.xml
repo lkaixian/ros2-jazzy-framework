@@ -1,0 +1,17 @@
+<!-- Detect a person, extract the face feature, greet them by name. Edit me: the BT is yours. -->
+<root BTCPP_format="4" main_tree_to_execute="GreetPerson">
+  <BehaviorTree ID="GreetPerson">
+    <RetryUntilSuccessful num_attempts="100">
+      <Fallback>
+        <Sequence>
+          <DetectPerson min_conf="0.5"/>
+          <ExtractFaceFeature min_conf="0.5" out_identity="{who}" out_similarity="{sim}"/>
+          <Speak text="Hello {person}" person="{who}"/>
+        </Sequence>
+        <ForceFailure>
+          <Sleep msec="200"/>
+        </ForceFailure>
+      </Fallback>
+    </RetryUntilSuccessful>
+  </BehaviorTree>
+</root>

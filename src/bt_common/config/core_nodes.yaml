@@ -16,3 +16,4 @@ nodes:
   DetectObject:         {category: Condition, required: [label], optional: [min_conf, out_bbox]}
   DetectPerson:         {category: Condition, optional: [min_conf, out_track_id]}
   RecognizeFace:        {category: Condition, optional: [identity, min_similarity]}
+  ExtractFaceFeature:   {category: Condition, optional: [min_conf, out_identity, out_similarity]}

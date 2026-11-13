@@ -1,0 +1,19 @@
+<!-- Ask the person to look at the camera, then store their face under a name. -->
+<root BTCPP_format="4" main_tree_to_execute="EnrollPerson">
+  <BehaviorTree ID="EnrollPerson">
+    <Sequence>
+      <Speak text="Please look at the camera."/>
+      <RetryUntilSuccessful num_attempts="50">
+        <Fallback>
+          <ExtractFaceFeature min_conf="0.6"/>
+          <ForceFailure>
+            <Sleep msec="200"/>
+          </ForceFailure>
+        </Fallback>
+      </RetryUntilSuccessful>
+      <Sleep msec="800"/>
+      <EnrollFace person="alice"/>
+      <Speak text="Nice to meet you, {person}." person="alice"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

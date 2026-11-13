@@ -4,4 +4,5 @@ face_recognition_node:
     embed_model: yolo11n-cls.pt
     gallery_dir: faces
     threshold: 0.6
+    publish_embedding: true   # needed by the BT node ExtractFaceFeature
     image_topic: ""

@@ -4,6 +4,7 @@ import os
 import rclpy
 import yaml
 from ament_index_python.packages import get_package_share_directory
+from bt_common.catalog import _from_dict
 from bt_pipeline_msgs.msg import BtNodeSpec, ExtensionManifest
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -20,6 +21,7 @@ class ExtensionNode(Node):
         self.declare_parameter('manifest_file', default)
         with open(self.get_parameter('manifest_file').value) as f:
             data = yaml.safe_load(f)
+        _from_dict(data)      # fail fast on port names BehaviorTree.CPP would reject
         msg = ExtensionManifest(extension=data['extension'])
         for nid, s in data['nodes'].items():
             msg.nodes.append(BtNodeSpec(
