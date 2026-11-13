@@ -6,6 +6,7 @@ setup(
     version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
+        ('share/odom_extension/launch', glob('launch/*.py')),
         ('share/ament_index/resource_index/packages', ['resource/odom_extension']),
         ('share/odom_extension', ['package.xml']),
         ('share/odom_extension/config', glob('config/*.yaml')),

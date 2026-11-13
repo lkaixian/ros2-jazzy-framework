@@ -38,6 +38,11 @@ orchestrator -> bt_slm (fine-tuned ~230M SLM, e.g. LFM2.5-230M) -> bt_validator
 | `tts_pipeline` | ament_python | queued TTS (espeak / Piper / Kokoro-82M), `tts/say`, `tts/speak`, `tts/stop`, `tts/status`; `plan_announcer` speaks `bt/plan` results |
 | `framework_bringup` | ament_cmake | `launch/`: `framework`, `perception`, `pipeline`, `extensions`, `audio` |
 
+## Launch files
+* `launch/` (workspace root): `framework`, `perception`, `pipeline`, `extensions`, `audio`; thin wrappers, e.g. `ros2 launch launch/framework.launch.py dry_run:=true`.
+* `src/framework_bringup/launch/`: the real entry points the wrappers include (all arguments are documented there).
+* Every runnable package has its own `launch/<package>.launch.py` to start it alone (`ros2 launch bt_validator bt_validator.launch.py`).
+
 ## Build / run
 Use the system Python first on PATH (a `~/pyvenv.cfg` can shadow it and break `empy`):
 ```

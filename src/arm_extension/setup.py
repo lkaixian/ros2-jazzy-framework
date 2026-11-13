@@ -6,6 +6,7 @@ setup(
     version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
+        ('share/arm_extension/launch', glob('launch/*.py')),
         ('share/ament_index/resource_index/packages', ['resource/arm_extension']),
         ('share/arm_extension', ['package.xml']),
         ('share/arm_extension/config', glob('config/*.yaml')),

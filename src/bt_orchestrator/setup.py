@@ -6,6 +6,7 @@ setup(
     version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
+        ('share/bt_orchestrator/launch', glob('launch/*.py')),
         ('share/ament_index/resource_index/packages', ['resource/bt_orchestrator']),
         ('share/bt_orchestrator', ['package.xml']),
         ('share/bt_orchestrator/config', glob('config/*.yaml')),

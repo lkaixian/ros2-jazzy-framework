@@ -6,6 +6,7 @@ setup(
     version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
+        ('share/bt_slm/launch', glob('launch/*.py')),
         ('share/ament_index/resource_index/packages', ['resource/bt_slm']),
         ('share/bt_slm', ['package.xml']),
         ('share/bt_slm/config', glob('config/*.yaml')),

@@ -6,6 +6,7 @@ setup(
     version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
+        ('share/pid_extension/launch', glob('launch/*.py')),
         ('share/ament_index/resource_index/packages', ['resource/pid_extension']),
         ('share/pid_extension', ['package.xml']),
         ('share/pid_extension/config', glob('config/*.yaml')),

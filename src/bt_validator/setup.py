@@ -6,6 +6,7 @@ setup(
     version='0.1.0',
     packages=find_packages(exclude=['test']),
     data_files=[
+        ('share/bt_validator/launch', glob('launch/*.py')),
         ('share/ament_index/resource_index/packages', ['resource/bt_validator']),
         ('share/bt_validator', ['package.xml']),
     ],
