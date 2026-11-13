@@ -7,6 +7,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(bt_pipeline_msgs REQUIRED)
@@ -22,7 +23,7 @@ target_link_libraries(llama_client PUBLIC CURL::libcurl nlohmann_json::nlohmann_
 
 add_executable(llm_bridge_node src/llm_bridge_node.cpp)
 target_link_libraries(llm_bridge_node llama_client)
-ament_target_dependencies(llm_bridge_node rclcpp std_msgs std_srvs bt_pipeline_msgs cluster_msgs)
+ament_target_dependencies(llm_bridge_node rclcpp ament_index_cpp std_msgs std_srvs bt_pipeline_msgs cluster_msgs)
 
 install(TARGETS llama_client llm_bridge_node
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION lib/${PROJECT_NAME})

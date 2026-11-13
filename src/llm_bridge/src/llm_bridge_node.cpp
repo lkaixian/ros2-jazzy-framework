@@ -1,5 +1,6 @@
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -7,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "bt_pipeline_msgs/msg/extension_manifest.hpp"
 #include "bt_pipeline_msgs/srv/get_catalog.hpp"
 #include "bt_pipeline_msgs/srv/llm_query.hpp"
@@ -64,6 +66,9 @@ public:
     declare_parameter("endpoint_ttl_sec", 4.0);   // < scheduler failover_after_sec (5 s)
     declare_parameter("static_priority_base", 100);
     declare_parameter("use_static_urls", true);   // false: only cluster-advertised endpoints
+    // Robot facts the node catalog cannot say (limits, places, house rules), appended to the
+    // planning prompt. "" = framework_bringup/param/llm_knowledge.md if installed.
+    declare_parameter("knowledge_file", "");
     declare_parameter("model", "default");
     declare_parameter("temperature", 0.1);
     declare_parameter("max_tokens", 512);
@@ -89,6 +94,7 @@ public:
           std::chrono::steady_clock::now().time_since_epoch()).count();
       });
     started_ = now();
+    knowledge_ = load_knowledge();
     refresh_endpoints();
 
     // Blocking HTTP calls live in their own group so manifests/scene keep flowing.
@@ -222,6 +228,7 @@ private:
         system += "Object labels the camera can detect: " + labels +
           ". For DetectObject use EXACTLY one of these labels; never invent one.\n";
       }
+      if (!knowledge_.empty()) {system += "Robot knowledge:\n" + knowledge_ + "\n";}
       scene = scene_;
     }
     auto cr = base_request();
@@ -239,6 +246,29 @@ private:
     std_msgs::msg::String out;
     out.data = r.chat.text;
     spec_pub_->publish(out);
+  }
+
+  std::string load_knowledge()
+  {
+    std::string path = get_parameter("knowledge_file").as_string();
+    if (path.empty()) {
+      try {
+        path = ament_index_cpp::get_package_share_directory("framework_bringup") +
+          "/param/llm_knowledge.md";
+      } catch (const std::exception &) {
+        RCLCPP_WARN(get_logger(), "framework_bringup not installed: planning without robot knowledge");
+        return "";
+      }
+    }
+    std::ifstream f(path);
+    if (!f) {
+      RCLCPP_WARN(get_logger(), "knowledge file %s not readable: planning without it", path.c_str());
+      return "";
+    }
+    std::ostringstream os;
+    os << f.rdbuf();
+    RCLCPP_INFO(get_logger(), "robot knowledge loaded from %s (%zu bytes)", path.c_str(), os.str().size());
+    return os.str();
   }
 
   double now() const
@@ -398,6 +428,7 @@ private:
   rclcpp::TimerBase::SharedPtr refresh_timer_;
   std::unique_ptr<llm_bridge::FailoverClient> failover_;
   std::vector<std::string> static_urls_;
+  std::string knowledge_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr halt_client_;
   rclcpp::TimerBase::SharedPtr probe_timer_;

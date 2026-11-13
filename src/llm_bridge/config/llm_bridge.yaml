@@ -22,4 +22,5 @@ llm_bridge_node:
     endpoint_ttl_sec: 4.0      # silent host leaves after this (< scheduler failover_after_sec)
     static_priority_base: 100  # static urls sort after advertised ones (priority < 100)
     use_static_urls: true      # false (cluster jobs): rely only on advertised endpoints
+    knowledge_file: ""         # "" = framework_bringup/param/llm_knowledge.md (robot limits, places, rules)
     task_system_prompt: ""                # empty -> built-in prompt
