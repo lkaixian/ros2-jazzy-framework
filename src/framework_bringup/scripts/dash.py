@@ -63,10 +63,12 @@ class Dash:
         self.err = {}          # node name -> (monotonic time, message)
         self.llm = {}
         self.bt = {}
+        self.task = {}
         self.cluster = None
         node.create_subscription(Log, '/rosout', self._log, 100)
         node.create_subscription(String, 'llm/status', lambda m: self._js('llm', m), TL)
         node.create_subscription(String, 'bt/status', lambda m: self._js('bt', m), 10)
+        node.create_subscription(String, 'task/state', lambda m: self._js('task', m), TL)
         node.create_subscription(ClusterStatus, 'cluster/status',
                                  lambda m: setattr(self, 'cluster', m), TL)
 
@@ -95,6 +97,14 @@ class Dash:
             out.append('   ' + paint('up  ' if e['available'] else 'DOWN',
                                      COL['ONLINE'] if e['available'] else COL['ERROR'], c) +
                        f"  {e['url']}")
+        # task lifecycle (orchestrator)
+        t = self.task
+        if t:
+            ts = t.get('state', '?')
+            out.append(paint(f'task {ts}', COL['ERROR'] if ts == 'failed' else
+                             COL['BUSY'] if ts in ('running', 'repairing') else COL['ONLINE'], c) +
+                       f"   repairs {t.get('repairs', 0)}/{t.get('max_repairs', 0)}  "
+                       f"{t.get('detail', '') or t.get('task', '')[:50]}")
         # cluster
         if self.cluster:
             cs = self.cluster

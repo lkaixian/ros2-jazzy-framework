@@ -124,6 +124,14 @@ jobs:
           source install/setup.bash
           python3 tools/integration/cluster_llm_test.py
 
+      - name: Sim - task lifecycle and repair loop
+        timeout-minutes: 5
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          python3 tools/integration/repair_test.py
+
       - name: Sim - task to simulated robot (live moves, dry-run does not)
         run: |
           source /opt/ros/jazzy/setup.bash

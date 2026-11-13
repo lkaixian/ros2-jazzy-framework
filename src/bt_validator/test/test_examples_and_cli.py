@@ -114,7 +114,9 @@ def test_llm_listing_has_descriptions_but_slm_listing_does_not(cat):
     specs = list(cat.all().values())
     with_desc = format_listing(specs, with_desc=True)
     plain = format_listing(specs)
-    assert 'DetectObject[Condition](label,min_conf?,out_bbox?) - ' in with_desc
+    assert 'DetectObject[Condition,sync](label,min_conf?,out_bbox?) - ' in with_desc
+    assert 'Sleep[Action,async](msec) - ' in with_desc          # mode tag is LLM-only
+    assert '[Action,async]' not in plain and '[Condition,sync]' not in plain
     assert ' - ' not in plain                      # SLM prompt/training format must not change
     for core in ('DetectObject', 'DetectPerson', 'RecognizeFace', 'ExtractFaceFeature'):
         assert core in with_desc

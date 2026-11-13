@@ -1,3 +1,4 @@
+import json
 import threading
 
 import rclpy
@@ -6,7 +7,10 @@ from bt_pipeline_msgs.srv import GenerateXml, ValidateTree
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
+
+from bt_orchestrator.task_fsm import TaskFsm, repair_prompt
 
 
 class OrchestratorNode(Node):
@@ -14,12 +18,17 @@ class OrchestratorNode(Node):
 
     Only a validated tree is published with valid=true; after max_attempts the last
     failing attempt is published with valid=false so consumers can refuse it.
+
+    It also tracks the task lifecycle (task_fsm.py, published latched on task/state). With
+    max_repairs > 0 a failed run is re-planned: the LLM gets the task, the failing spec and the
+    failed node on bt/repair. The new plan still only runs if bt_executor allows it (auto_run).
     """
 
     def __init__(self):
         super().__init__('orchestrator_node')
         self.declare_parameter('max_attempts', 3)
         self.declare_parameter('call_timeout_sec', 60.0)
+        self.declare_parameter('max_repairs', 0)      # 0 = never re-plan a failed run on its own
         cb = ReentrantCallbackGroup()
         self.slm = self.create_client(GenerateXml, 'bt_slm/generate', callback_group=cb)
         self.val = self.create_client(ValidateTree, 'bt_validator/validate',
@@ -28,6 +37,37 @@ class OrchestratorNode(Node):
         self.create_subscription(String, 'bt/task_spec', self._on_spec, 10,
                                  callback_group=cb)
         self.lock = threading.Lock()   # one plan at a time
+        self.fsm = TaskFsm(self.get_parameter('max_repairs').value)
+        self.fsm_lock = threading.Lock()
+        self.state_pub = self.create_publisher(
+            String, 'task/state', QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                                             durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.repair_pub = self.create_publisher(String, 'bt/repair', 10)
+        self.create_subscription(String, 'bt/task', self._on_task, 10, callback_group=cb)
+        self.create_subscription(String, 'bt/status', self._on_status, 10, callback_group=cb)
+        self._publish_state()
+
+    def _publish_state(self):
+        self.state_pub.publish(String(data=json.dumps(self.fsm.snapshot())))
+
+    def _on_task(self, msg):
+        with self.fsm_lock:
+            self.fsm.on_task(msg.data)
+            self._publish_state()
+
+    def _on_status(self, msg):
+        try:
+            st = json.loads(msg.data)
+        except ValueError:
+            return
+        with self.fsm_lock:
+            repair = self.fsm.on_status(st.get('state', ''), st.get('message', ''),
+                                        st.get('failed_node', ''))
+            self._publish_state()
+        if repair:
+            self.get_logger().warn(f"run failed at {repair['failed_node'] or '?'}: asking the "
+                                   f"LLM for a repaired plan ({repair['attempt']}/{repair['of']})")
+            self.repair_pub.publish(String(data=repair_prompt(repair)))
 
     def _call(self, client, req):
         done = threading.Event()
@@ -39,6 +79,8 @@ class OrchestratorNode(Node):
         return fut.result()
 
     def _on_spec(self, msg):
+        with self.fsm_lock:
+            self.fsm.on_spec(msg.data)
         with self.lock:
             plan = BtPlan(task_spec=msg.data, valid=False)
             plan.header.stamp = self.get_clock().now().to_msg()
@@ -48,6 +90,9 @@ class OrchestratorNode(Node):
                 plan.errors = [f'pipeline error: {type(e).__name__}: {e}']
                 self.get_logger().error(plan.errors[0])
             self.plan_pub.publish(plan)
+            with self.fsm_lock:
+                self.fsm.on_plan(plan.valid, plan.errors)
+                self._publish_state()
             self.get_logger().info(
                 f'plan valid={plan.valid} attempts={plan.attempts} errors={len(plan.errors)}')
 

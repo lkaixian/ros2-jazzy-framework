@@ -20,6 +20,9 @@ Verification levels used below:
 | Orchestrator | `bt_orchestrator` | light | yes | n/a | generate -> validate -> retry loop; `submit_bt` for hand-written trees |
 | BT executor (C++) | `bt_executor` | yes | yes | no | dry-run default, `run`/`halt` services, built-in perception conditions |
 | Extensions | `odom_`, `pid_`, `pose_`, `social_`, `arm_`, `nav_extension` | yes | odom/pid/social/nav: yes | no | arm: only goal construction tested (arm model undecided) |
+| LLM failover + hosts joining/leaving | `llm_bridge`, `cluster_core`, `cluster_msgs` | yes | fake servers; real agent+scheduler+bridge on one machine | no | endpoints advertised in heartbeats; breaker; probation until /health; emergency halt when all down. llama.cpp/Gemma never run |
+| Task lifecycle + repair | `bt_orchestrator` (`task_fsm`), `bt_executor` (`failed_node`) | yes | fake LLM, dry-run executor | no | `max_repairs` default 0; node `mode` sync/async in the LLM listing only (SLM format unchanged) |
+| Terminal view | `framework_bringup dash` | yes | against sims | no | status table + `--logs` verbose |
 | Safety mux | `bt_common/cmd_vel_mux_node` | yes | yes | no | priority + 0.5 s watchdog + clamps; Nav2 is the lowest-priority input; bumper/cliff latch + `safety_reset` service (fake events only) |
 | Audio | `audio_msgr`, `audio_capture`, `stt_pipeline`, `tts_pipeline` | yes | mock engines | no | no real STT engine installed; espeak works; Piper/Kokoro untested |
 | Navigation | `nav_sim`, `nav_extension`, launch+params in `framework_bringup` | yes | real Nav2+AMCL+slam_toolbox+Cartographer on a simulated lidar | no | RTAB-Map/RealSense only launch-checked |

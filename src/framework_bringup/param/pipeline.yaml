@@ -46,6 +46,7 @@ orchestrator_node:
   ros__parameters:
     max_attempts: 3
     call_timeout_sec: 60.0
+    max_repairs: 0         # >0: a failed run is re-planned by the LLM (bt/repair) this many times
 
 scene_summarizer_node:
   ros__parameters:

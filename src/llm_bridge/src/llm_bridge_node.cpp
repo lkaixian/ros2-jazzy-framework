@@ -30,7 +30,12 @@ const char * kDefaultSystem =
   "{\"node\": <id>, \"ports\": {<port>: <string>}} or a nested group "
   "{\"group\": \"Sequence|Fallback|ReactiveSequence|ReactiveFallback\", \"retry\": optional int, "
   "\"steps\": [STEP,...]}. Use Fallback for 'try A, otherwise B'. Use ONLY the node ids below "
-  "with their ports (a trailing ? marks an optional port). Do not invent nodes.\n";
+  "with their ports (a trailing ? marks an optional port). Do not invent nodes. "
+  "Nodes are tagged sync (finishes inside one tick: conditions, instant actions) or async "
+  "(runs over many ticks and may fail halfway: movement, speech, anything over DDS). Plan in "
+  "phases: first sync checks of what must hold before starting, then the async actions, and "
+  "wrap every async step that can fail in a Fallback with an alternative or a retry. If a "
+  "REPAIR note says where the previous plan broke, change that step and keep the rest.\n";
 }
 
 class LlmBridgeNode : public rclcpp::Node
@@ -146,6 +151,10 @@ public:
     catalog_client_ = create_client<GetCatalog>("bt_validator/catalog");
     task_sub_ = create_subscription<std_msgs::msg::String>(
       "bt/task", 10, [this](std_msgs::msg::String::ConstSharedPtr m) {on_task(m->data);},
+      work_opts);
+    // the orchestrator asks for a repaired plan here; to the LLM it is just another task
+    repair_sub_ = create_subscription<std_msgs::msg::String>(
+      "bt/repair", 10, [this](std_msgs::msg::String::ConstSharedPtr m) {on_task(m->data);},
       work_opts);
     query_srv_ = create_service<LlmQuery>(
       "llm/query",
@@ -399,7 +408,7 @@ private:
   double started_ = 0.0;
   rclcpp::CallbackGroup::SharedPtr work_group_;
   rclcpp::Subscription<ExtensionManifest>::SharedPtr manifest_sub_;
-  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr scene_sub_, task_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr scene_sub_, task_sub_, repair_sub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr spec_pub_;
   rclcpp::Service<LlmQuery>::SharedPtr query_srv_;
   rclcpp::Client<GetCatalog>::SharedPtr catalog_client_;

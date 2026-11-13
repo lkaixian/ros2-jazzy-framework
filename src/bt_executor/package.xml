@@ -10,6 +10,7 @@
   <depend>rclcpp_action</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
+  <depend>nlohmann-json-dev</depend>
   <depend>behaviortree_cpp</depend>
   <depend>bt_pipeline_msgs</depend>
   <depend>object_detection_msgr</depend>

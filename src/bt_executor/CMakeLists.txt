@@ -11,6 +11,7 @@ find_package(rclcpp_action REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
+find_package(nlohmann_json REQUIRED)
 find_package(bt_pipeline_msgs REQUIRED)
 find_package(object_detection_msgr REQUIRED)
 find_package(person_detection_msgr REQUIRED)
@@ -27,6 +28,7 @@ ament_target_dependencies(bt_executor_lib PUBLIC rclcpp rclcpp_action bt_pipelin
 add_executable(bt_executor_node src/bt_executor_node.cpp)
 target_link_libraries(bt_executor_node bt_executor_lib)
 ament_target_dependencies(bt_executor_node std_msgs std_srvs)
+target_link_libraries(bt_executor_node nlohmann_json::nlohmann_json)
 
 install(TARGETS bt_executor_lib bt_executor_node
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION lib/${PROJECT_NAME})

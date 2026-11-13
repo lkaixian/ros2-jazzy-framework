@@ -6,14 +6,37 @@
 #include <string>
 #include <thread>
 
+#include "behaviortree_cpp/loggers/abstract_logger.h"
 #include "bt_executor/registry.hpp"
 #include "bt_pipeline_msgs/msg/bt_plan.hpp"
+#include "nlohmann/json.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
 using bt_pipeline_msgs::msg::BtPlan;
 using bt_pipeline_msgs::msg::ExtensionManifest;
 using namespace std::chrono_literals;
+
+// Remembers the last leaf node that returned FAILURE: Sequence/Fallback reset their children's
+// status before tickOnce() returns, so the tree can no longer be asked afterwards.
+class FailureTracker : public BT::StatusChangeLogger
+{
+public:
+  explicit FailureTracker(BT::TreeNode * root)
+  : BT::StatusChangeLogger(root) {}
+  void callback(BT::Duration, const BT::TreeNode & n, BT::NodeStatus, BT::NodeStatus st) override
+  {
+    const auto t = n.type();
+    if (st == BT::NodeStatus::FAILURE && t != BT::NodeType::CONTROL &&
+      t != BT::NodeType::DECORATOR && t != BT::NodeType::SUBTREE)
+    {
+      last = n.registrationName();
+      if (n.name() != last) {last += " (" + n.name() + ")";}
+    }
+  }
+  void flush() override {}
+  std::string last;
+};
 
 class BtExecutorNode : public rclcpp::Node
 {
@@ -80,10 +103,13 @@ public:
   }
 
 private:
-  void status(const std::string & state, const std::string & msg)
+  // failed_node (optional): the leaf that failed, so a repair step knows where the plan broke
+  void status(const std::string & state, const std::string & msg, const std::string & failed_node = "")
   {
     std_msgs::msg::String s;
-    s.data = "{\"state\":\"" + state + "\",\"message\":\"" + msg + "\"}";
+    nlohmann::ordered_json j = {{"state", state}, {"message", msg}};   // keep state first
+    if (!failed_node.empty()) {j["failed_node"] = failed_node;}
+    s.data = j.dump();
     status_pub_->publish(s);
     RCLCPP_INFO(get_logger(), "%s: %s", state.c_str(), msg.c_str());
   }
@@ -131,12 +157,14 @@ private:
     ctx->dry_run = dry;
     ctx->log = [this](const std::string & s) {RCLCPP_INFO(get_logger(), "%s", s.c_str());};
     std::string result = "FAILURE";
+    std::string failed;
     try {
       BT::BehaviorTreeFactory factory;
       bt_executor::register_perception(
         factory, cache_, get_parameter("perception_max_age_sec").as_double());
       bt_executor::register_extensions(factory, manifests, ctx);
       auto tree = factory.createTreeFromText(xml);
+      FailureTracker tracker(tree.rootNode());
       status("running", dry ? "dry run" : "LIVE");
       const auto period = std::chrono::duration<double>(1.0 / get_parameter("tick_hz").as_double());
       const auto deadline = std::chrono::steady_clock::now() +
@@ -155,10 +183,11 @@ private:
       } else {
         result = BT::toStr(st);
       }
+      if (result == "FAILURE") {failed = tracker.last;}
     } catch (const std::exception & e) {
       result = std::string("ERROR: ") + e.what();
     }
-    status("finished", result);
+    status("finished", result, failed);
     running_ = false;
   }
 

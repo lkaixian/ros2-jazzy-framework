@@ -17,6 +17,9 @@ class NodeSpec:
     required: List[str] = field(default_factory=list)
     optional: List[str] = field(default_factory=list)
     description: str = ''
+    # sync = finishes inside one tick; async = returns RUNNING over several ticks (a DDS action).
+    # '' for Control/Decorator nodes, which have no mode of their own.
+    mode: str = ''
 
 
 RESERVED_PORTS = ('name', 'ID')
@@ -31,12 +34,28 @@ def check_port_names(nid, ports):
                              f"(reserved: {', '.join(RESERVED_PORTS)}; must start with a letter)")
 
 
-def _from_dict(d):
+MODES = ('sync', 'async')
+
+
+def default_mode(category, extension):
+    """Mirrors bt_executor: every extension node is an ExtNode (StatefulActionNode, one DDS action
+    goal, async) whatever its category; core Conditions are SimpleConditions (sync); core Actions
+    default to async (Sleep) and the instant ones say `mode: sync` in core_nodes.yaml."""
+    if category not in ('Action', 'Condition'):
+        return ''
+    return 'async' if extension or category == 'Action' else 'sync'
+
+
+def _from_dict(d, extension=False):
     out = {}
     for nid, s in (d.get('nodes') or {}).items():
         check_port_names(nid, list(s.get('required', [])) + list(s.get('optional', [])))
+        mode = s.get('mode') or default_mode(s['category'], extension)
+        if mode and (mode not in MODES or s['category'] not in ('Action', 'Condition')):
+            raise ValueError(f"node {nid}: mode {mode!r} must be one of {MODES} and only applies "
+                             f"to Action/Condition nodes")
         out[nid] = NodeSpec(nid, s['category'], list(s.get('required', [])),
-                            list(s.get('optional', [])), s.get('description', ''))
+                            list(s.get('optional', [])), s.get('description', ''), mode)
     return out
 
 
@@ -61,7 +80,9 @@ def format_listing(specs, with_desc=False):
     lines = []
     for n in specs:
         ports = ','.join(n.required + [p + '?' for p in n.optional])
-        line = f'{n.id}[{n.category}]({ports})'
+        # the mode tag is LLM-only: the SLM prompt/training data must stay byte-identical
+        tag = f'{n.category},{n.mode}' if with_desc and n.mode else n.category
+        line = f'{n.id}[{tag}]({ports})'
         if with_desc and n.description:
             line += f' - {n.description}'
         lines.append(line)
@@ -78,11 +99,11 @@ class Catalog:
 
     def add_manifest_msg(self, msg):
         self.extensions[msg.extension] = {
-            n.id: NodeSpec(n.id, n.category, list(n.required_ports),
-                           list(n.optional_ports), n.description) for n in msg.nodes}
+            n.id: NodeSpec(n.id, n.category, list(n.required_ports), list(n.optional_ports),
+                           n.description, default_mode(n.category, True)) for n in msg.nodes}
 
     def add_manifest_dict(self, d):
-        self.extensions[d['extension']] = _from_dict(d)
+        self.extensions[d['extension']] = _from_dict(d, extension=True)
 
     def all(self):
         out = dict(self.core)

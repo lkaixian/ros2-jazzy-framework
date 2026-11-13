@@ -10,8 +10,8 @@ nodes:
   Inverter:             {category: Decorator}
   ForceSuccess:         {category: Decorator}
   ForceFailure:         {category: Decorator}
-  AlwaysSuccess:        {category: Action}
-  AlwaysFailure:        {category: Action}
+  AlwaysSuccess:        {category: Action, mode: sync}
+  AlwaysFailure:        {category: Action, mode: sync}
   Sleep:                {category: Action, required: [msec], description: "Wait msec milliseconds"}
   DetectObject:         {category: Condition, required: [label], optional: [min_conf, out_bbox], description: "True while the camera sees an object with this label (use only the listed labels); out_bbox receives x_min,y_min,x_max,y_max"}
   DetectPerson:         {category: Condition, optional: [min_conf, out_track_id], description: "True while a person is visible"}
