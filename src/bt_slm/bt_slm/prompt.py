@@ -16,6 +16,11 @@ def build_prompt(task_spec, catalog_listing, previous_xml='', errors=()):
     return p + '### BT_XML\n'
 
 
+def prompt_for(task_spec, catalog, previous_xml='', errors=()):
+    """The exact prompt the SLM gets at inference (and was trained on)."""
+    return build_prompt(normalize_spec(task_spec), catalog.prompt_listing(), previous_xml, errors)
+
+
 def extract_xml(text):
     i = text.find('<root')
     if i < 0:

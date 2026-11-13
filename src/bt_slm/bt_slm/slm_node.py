@@ -8,7 +8,7 @@ from bt_pipeline_msgs.srv import GenerateXml
 from rclpy.node import Node
 
 from bt_slm.fallback import build_xml
-from bt_slm.prompt import build_prompt, extract_xml, normalize_spec
+from bt_slm.prompt import prompt_for
 
 
 class SlmNode(Node):
@@ -44,8 +44,9 @@ class SlmNode(Node):
         if self.model is None:
             return build_xml(req.task_spec, set(self.catalog.all()), req.previous_errors)
         import torch
-        prompt = build_prompt(req.task_spec, self.catalog.prompt_listing(),
-                              req.previous_xml, req.previous_errors)
+        from bt_slm.prompt import extract_xml
+        prompt = prompt_for(req.task_spec, self.catalog, req.previous_xml,
+                            list(req.previous_errors))
         ids = self.tok(prompt, return_tensors='pt').to(self.model.device)
         temp = self.get_parameter('temperature').value
         with torch.no_grad():

@@ -107,3 +107,23 @@ def test_encode_drops_overlong_instead_of_truncating():
 
 def test_extract_xml_stops_at_root_end():
     assert extract_xml('<root>x</root> garbage </root>') == '<root>x</root>'
+
+
+def test_inference_prompt_equals_training_prompt(cat):
+    """Train/inference skew guard: rebuild each dataset prompt the way the SLM node does."""
+    from bt_slm.prompt import prompt_for
+    full = cat.prompt_listing()
+    checked = 0
+    for r in rows(cat, 300, 5):
+        if ('### NODES\n' + full + '\n### TASK_SPEC') not in r['prompt']:
+            continue                                   # subsetted listing: not comparable
+        spec = r['prompt'].split('### TASK_SPEC\n')[1].split('\n###')[0].rstrip('\n')
+        pretty = json.dumps(json.loads(spec), indent=2)        # what an LLM might send
+        if r['kind'] == 'generate':
+            assert prompt_for(pretty, cat) == r['prompt']
+        else:
+            prev = r['prompt'].split('### PREVIOUS_XML\n')[1].split('\n### ERRORS\n')[0]
+            errs = r['prompt'].split('### ERRORS\n')[1].split('\n### BT_XML')[0].split('\n')
+            assert prompt_for(pretty, cat, prev, errs) == r['prompt']
+        checked += 1
+    assert checked > 100
