@@ -47,6 +47,15 @@ Depth: `sensors.launch.py depth_scan:=true` publishes `/depth_scan` (depthimage_
 `depth_scan` to `observation_sources` of both costmaps in `param/nav2_params.yaml` to use it.
 RTAB-Map reads the RealSense color + aligned depth (`param/realsense.yaml` enables alignment).
 
+## Depth ranging for people (optional)
+`person_depth_node` (package `person_detection`) turns `persons` + the RealSense aligned depth image
+into `persons_ranged`, the same message with `Person.distance_m` filled in (median depth over the
+central 40 % of the box; **0 = unknown**: no fresh depth frame, too few valid pixels, or out of
+range 0.2-8 m). Start it with `perception.launch.py enable_depth_ranging:=true` and point consumers
+at it, e.g. `extensions.launch.py persons_topic:=persons_ranged`. `FollowTarget approach="true"
+distance="1.0"` then closes to that stand-off in metres (minimum 0.5 m, forward only, never
+reverses); without depth it falls back to the `target_height` box proxy.
+
 ## Try it without a robot: nav_sim
 `nav_sim` ray-casts a simulated RPLIDAR on a map and integrates `cmd_vel` into odometry
 (emulating the Kobuki's 0.6 s command timeout), so the real Nav2/AMCL/slam_toolbox can be tested:
@@ -76,7 +85,9 @@ through the BT path: `submit_bt` -> bt_validator -> bt_executor -> nav_extension
 | Cartographer (`param/cartographer/kobuki_2d.lua`), same drift, 4 legs + `SaveMap` | all `SUCCESS`; pose error 0.054 m; map 99.8 % / 99.9 % / 99.4 % |
 | `SaveMap` BT node | wrote `<map_dir>/<file>.yaml/.pgm`; refuses names with `/`, `..` and existing files unless `overwrite="true"` |
 | RTAB-Map launch, depth_scan node, `sensors.launch.py` logic | start without parameter errors (RTAB-Map then waits for the camera); sensors.launch.py evaluated offline: every argument exists in `rs_launch.py` / `sllidar_a1_launch.py` |
-| Unit tests | 28 new Python tests (map ray casting, kinematics, places/map-name/result logic) + the existing suite (140 pass) |
+| `person_depth_node` with synthetic depth (person at 2.0 m, background 5 m) | `distance_m = 2.0`; with no fresh depth frame `distance_m = 0.0` |
+| `FollowTarget approach distance=1.0` in nav_sim, fake person 3.04 m ahead | BT `SUCCESS`, stopped at 1.07 m, aligned (bearing 0.000 rad); `distance=0.2` is refused ("outside [0.5, 8.0]") |
+| Unit tests | 37 new Python tests (map ray casting, kinematics, places/map-name/result logic, depth ranging, range_speed) + the existing suite (140 pass) |
 
 **Failed / limitation:** on `~/maps/my_map.yaml` AMCL localizes (0 m error at the start pose) but
 Nav2 **cannot plan** a 3 m route ("Failed to create plan"): that saved map is a patchy partial scan

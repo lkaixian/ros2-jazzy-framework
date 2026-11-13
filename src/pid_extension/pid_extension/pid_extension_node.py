@@ -7,7 +7,7 @@ from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from person_detection_msgr.msg import PersonArray
 
-from pid_extension.pid import PID
+from pid_extension.pid import MIN_STANDOFF_M, PID, range_speed
 
 
 def wrap(a):
@@ -99,6 +99,10 @@ class PidExtension(ExtensionExecutor):
         tid = int(port_float(ports, 'track_id')) if ports.get('track_id') else None
         target_h = port_float(ports, 'target_height', 0.6, lo=0.1, hi=0.95)
         approach = port_bool(ports, 'approach', False)
+        # metric mode: only with approach and a depth-ranged person (distance_m > 0); the stand-off
+        # is never below MIN_STANDOFF_M. Without depth the bbox-height proxy is used instead.
+        target_d = (port_float(ports, 'distance', lo=MIN_STANDOFF_M, hi=8.0)
+                    if ports.get('distance') else 0.0)
         timeout = port_float(ports, 'timeout_ms', 10000.0, lo=100.0, hi=120000.0) / 1000.0
         turn, rng = self.pids['follow_turn'], self.pids['follow_range']
         turn.reset()
@@ -121,9 +125,15 @@ class PidExtension(ExtensionExecutor):
                     ex = ((person.x_min + person.x_max) / 2 - W / 2) / (W / 2)
                     h = (person.y_max - person.y_min) / H
                     w = -turn.update(0.0, 0.0, dt, err=ex)       # target right -> turn right (cw)
-                    v = rng.update(target_h, h, dt) if approach and h < target_h else 0.0
+                    if approach and target_d > 0 and person.distance_m > 0:
+                        v = range_speed(person.distance_m, target_d, 0.5,
+                                        self.get_parameter('max_linear').value)
+                        arrived = person.distance_m <= target_d + 0.1
+                    else:
+                        v = rng.update(target_h, h, dt) if approach and h < target_h else 0.0
+                        arrived = h >= target_h - 0.03
                     v = max(0.0, v)
-                    aligned = abs(ex) < 0.08 and (not approach or h >= target_h - 0.03)
+                    aligned = abs(ex) < 0.08 and (not approach or arrived)
                     ok_since = (ok_since or now) if aligned else None
                     if ok_since and now - ok_since >= 0.5:
                         return True, 'aligned'

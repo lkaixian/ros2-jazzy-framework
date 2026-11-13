@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'person_detection_node = person_detection.person_detection_node:main',
+            'person_depth_node = person_detection.person_depth_node:main',
         ],
     },
 )

@@ -1,5 +1,17 @@
 """Small PID with output clamp, integral anti-windup and derivative-on-measurement."""
 
+MIN_STANDOFF_M = 0.5     # FollowTarget never approaches a person closer than this
+
+
+def range_speed(distance_m, target_m, kp, v_max):
+    """Forward speed to close the gap to a person: proportional, forward only, clamped.
+
+    Never negative (the robot stops rather than backs into someone) and 0 at/inside target.
+    """
+    if distance_m <= target_m:
+        return 0.0
+    return min(v_max, kp * (distance_m - target_m))
+
 
 class PID:
     def __init__(self, kp, ki=0.0, kd=0.0, out_limit=1.0, i_limit=None):
