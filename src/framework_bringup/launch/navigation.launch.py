@@ -128,12 +128,22 @@ def _localization(context, sim, map_yaml):
     ]
 
 
+# planner:=<key> swaps the global planner plugin without touching nav2_params.yaml
+PLANNERS = {'navfn': 'nav2_navfn_planner::NavfnPlanner',
+            'dstar_lite': 'dstar_lite_planner::DStarLite'}
+
+
 def _nav2(context, sim):
     params = [param_path(context, 'nav2_params.yaml'), {'use_sim_time': sim}]
     to_nav = [('cmd_vel', 'cmd_vel_nav')]
+    planner = given(context, 'planner')
+    if planner is not None and planner not in PLANNERS:
+        raise ValueError(f'planner:={planner!r}: choose one of {sorted(PLANNERS)}')
 
     def n(pkg, exe, name, remap=()):
-        return Node(package=pkg, executable=exe, name=name, output='screen', parameters=params,
+        p = params + ([{'GridBased.plugin': PLANNERS[planner]}]
+                      if name == 'planner_server' and planner else [])
+        return Node(package=pkg, executable=exe, name=name, output='screen', parameters=p,
                     remappings=list(remap))
     return [
         n('nav2_controller', 'controller_server', 'controller_server', to_nav),
@@ -194,6 +204,6 @@ def generate_launch_description():
                               description='base->laser and base->camera_link from navigation.yaml'),
         DeclareLaunchArgument('rtabmap_new_map', default_value='true',
                               description='slam:=rtabmap: delete the old database on start'),
-        *declare_overrides('slam', 'map', 'initial_pose'),
+        *declare_overrides('slam', 'map', 'initial_pose', 'planner'),
         OpaqueFunction(function=_actions),
     ])

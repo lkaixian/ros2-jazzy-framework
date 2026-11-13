@@ -77,6 +77,7 @@ jobs:
           ./build/bt_executor/test_registry
           ./build/llm_bridge/test_llama_client
           ./build/llm_bridge/test_failover
+          ./build/dstar_lite_planner/test_core
 
       - name: check_params (every node starts and matches param/)
         run: |
@@ -149,6 +150,14 @@ jobs:
           source kobuki_ws/install/setup.bash
           source install/setup.bash
           python3 tools/integration/repair_test.py
+
+      - name: Sim - Nav2 with the D* Lite planner plugin (door route in nav_sim)
+        timeout-minutes: 8
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          python3 tools/integration/nav_planner_test.py dstar_lite
 
       - name: Sim - task to simulated robot (live moves, dry-run does not)
         run: |

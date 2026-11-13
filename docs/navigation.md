@@ -69,6 +69,18 @@ ros2 launch framework_bringup nav_sim.launch.py slam:=slam_toolbox   # mapping i
 `maps/my_map.yaml` is a copy of `~/maps/my_map.yaml`; it is a patchy partial scan whose connected
 free space is only about 2.6 m^2 for a 0.18 m robot, so Nav2 cannot plan long routes on it.
 
+## Choosing the global planner
+`planner:=navfn` (default) or `planner:=dstar_lite` on `navigation.launch.py` / `nav_sim.launch.py`.
+`dstar_lite` is `src/dstar_lite_planner`: an incremental D* Lite (8-connected, costmap-aware) ported
+from lkaixian/dstarlite-py. It keeps its search between planner calls (only changed costmap cells
+are repaired), so it pays off when the costmap changes under a long path. Parameters under
+`planner_server.GridBased`: `penalty_weight` (default 2.0), `allow_unknown` (false). The path is a
+raw grid path; add Nav2's smoother if you want it rounder. Verified: 9 gtests against a Dijkstra
+oracle (random grids, incremental repair with a moving start), and the door route in `nav_sim`
+(`tools/integration/nav_planner_test.py navfn|dstar_lite`: both SUCCEEDED in 45.5 s, plan 10.89 m
+NavFn vs 11.11 m D* Lite). NOT verified: repair inside the real Nav2 loop with moving obstacles,
+large maps (memory is ~30 bytes per cell), the real robot.
+
 ## Verified vs not
 **Verified in simulation** (nav_sim + the real Nav2/AMCL/slam_toolbox/Cartographer nodes, goals sent
 through the BT path: `submit_bt` -> bt_validator -> bt_executor -> nav_extension -> Nav2 -> cmd_vel_mux

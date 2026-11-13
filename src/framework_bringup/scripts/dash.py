@@ -15,6 +15,7 @@ Read-only: it publishes nothing.
 import argparse
 import importlib.machinery
 import json
+import ipaddress
 import os
 import re
 import socket
@@ -85,11 +86,15 @@ def check_link(url):
     u = urlparse(url)
     host, port = u.hostname or '', u.port or (443 if u.scheme == 'https' else 80)
     try:
-        out = subprocess.run(['ip', '-o', 'route', 'get', socket.gethostbyname(host)],
-                             capture_output=True, text=True, timeout=2).stdout
-    except (OSError, subprocess.SubprocessError, socket.gaierror):
-        out = ''
-    dev = parse_route_dev(out)
+        addr = socket.gethostbyname(host)
+        if ipaddress.ip_address(addr).is_loopback:
+            dev = 'lo'          # no need for `ip`, which minimal containers do not have
+        else:                   # needs iproute2; without it the link type shows '?'
+            dev = parse_route_dev(subprocess.run(
+                ['ip', '-o', 'route', 'get', addr], capture_output=True, text=True,
+                timeout=2).stdout)
+    except (OSError, subprocess.SubprocessError, socket.gaierror, ValueError):
+        dev = ''
     first = tcp_ms(host, port) if host else None
     ms = first
     if first is not None:      # median of 3: one sample over WiFi is often an outlier

@@ -1,0 +1,5 @@
+<library path="dstar_lite_planner">
+  <class type="dstar_lite_planner::DStarLite" base_class_type="nav2_core::GlobalPlanner">
+    <description>Incremental D* Lite global planner (8-connected, costmap-aware)</description>
+  </class>
+</library>
