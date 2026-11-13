@@ -22,7 +22,7 @@ cluster_scheduler_node:
     params_dir: ""
     failover_after_sec: 5.0   # silent host is dead; must exceed agent_orphan_timeout_sec + 0.5
     agent_orphan_timeout_sec: 4.0   # keep equal to the agents' orphan_timeout_sec
-    adopt_wait_sec: 2.0       # after a restart, listen to heartbeats this long, then adopt;
+    adopt_wait_sec: 1.0       # after a restart, listen to heartbeats this long, then adopt;
                               # restart blackout must stay below the agents' orphan timeout
     plan_hz: 2.0
     publish_hz: 1.0

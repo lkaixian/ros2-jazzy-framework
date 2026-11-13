@@ -28,7 +28,7 @@ class SchedulerNode(Node):
         super().__init__('cluster_scheduler_node')
         defaults = {'scheduler_id': '', 'jobs_file': '', 'params_dir': '',
                     'failover_after_sec': 5.0, 'agent_orphan_timeout_sec': 4.0,
-                    'adopt_wait_sec': 2.0, 'plan_hz': 2.0, 'publish_hz': 1.0,
+                    'adopt_wait_sec': 1.0, 'plan_hz': 2.0, 'publish_hz': 1.0,
                     'overload': 0.85, 'underload': 0.6, 'hysteresis_sec': 10.0,
                     'cooldown_sec': 60.0, 'quarantine_sec': 60.0, 'settle_sec': 10.0,
                     'forget_after_sec': 300.0}
@@ -40,7 +40,7 @@ class SchedulerNode(Node):
                 f"failover_after_sec ({p('failover_after_sec')}) must exceed the agents' "
                 f"orphan_timeout_sec ({p('agent_orphan_timeout_sec')}) by at least 0.5 s: otherwise "
                 'a partitioned host may still run a job when it is started elsewhere')
-        if p('adopt_wait_sec') > p('agent_orphan_timeout_sec') - 1.5:
+        if p('adopt_wait_sec') > p('agent_orphan_timeout_sec') - 2.5:
             self.get_logger().warn(
                 f"adopt_wait_sec ({p('adopt_wait_sec')}) is too close to the agents' orphan timeout "
                 f"({p('agent_orphan_timeout_sec')}): a scheduler restart will make agents stop their "

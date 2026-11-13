@@ -100,7 +100,7 @@ free capacity. Then:
 |---|---|
 | agent process dies (even SIGKILL) | its jobs die within ~0.1 s (`cluster_core.guard` notices the parent change and kills the job's process group). After `failover_after_sec` the scheduler restarts its **movable** jobs elsewhere. No duplicate instance exists at any time. |
 | a machine is silent but alive (network partition) | the agent stops its movable jobs after `orphan_timeout_sec` (4 s) without an accepted assignment set. `failover_after_sec` (5 s) must exceed it by >= 0.5 s (the scheduler refuses to start otherwise): **fencing by timeout**, assuming clocks run at similar *rates* (not synchronised). |
-| scheduler dies | agents keep **immovable** jobs running (fail-static); movable jobs stop after 4 s. A new scheduler adopts what is running. Its blackout (start + `adopt_wait_sec`) must stay below 4 s: measured 2.65 s. If the scheduler is down longer, movable jobs stop and are started again afterwards. |
+| scheduler dies | agents keep **immovable** jobs running (fail-static); movable jobs stop after 4 s. A new scheduler adopts what is running. Its blackout (start + `adopt_wait_sec`) must stay well below 4 s: measured 1.6 s with the default 1 s wait. (It was 2 s once and measured 2.65 s: that passed on an idle machine but failed under load, because the old scheduler's last publish is also up to 1 s old. The node now warns if adopt_wait_sec > orphan timeout - 2.5 s.) If the scheduler is down longer, movable jobs stop and are started again afterwards. |
 | scheduler frozen (VM pause, SIGSTOP) | on waking it notices its own stall and extends host liveness timers, so it does **not** declare the whole cluster dead. Measured: no failover, every job back on the same host. |
 | a half partition (the agent hears the scheduler, the scheduler no longer hears the agent) | by design the agent follows the newest set, so overlap is bounded by DDS delivery rather than by a timeout. **Not tested.** |
 | host with a different catalog | excluded by the scheduler; its agent refuses assignments and (after the orphan timeout) stops movable jobs. |
@@ -160,7 +160,7 @@ stops its jobs.
 | agent `min_rx_before_act` | 2 | act only after 2 receptions (ignores a stale latched set replayed to a fresh agent); 1 = obey immediately |
 | agent `use_guard` | true | run jobs through the guard (die with the agent). `false` is for tests only |
 | scheduler `failover_after_sec` | 5.0 | silent host = dead. Must be >= `agent_orphan_timeout_sec` + 0.5 |
-| scheduler `adopt_wait_sec` | 2.0 | restart: listen, then adopt. Keep restart blackout < agent orphan timeout |
+| scheduler `adopt_wait_sec` | 1.0 | restart: listen, then adopt. Keep restart blackout < agent orphan timeout |
 | scheduler `overload` / `underload` | 0.85 / 0.6 | rebalancing thresholds |
 | scheduler `hysteresis_sec` / `cooldown_sec` | 10 / 60 | overload must persist / per-job minimum between migrations |
 | scheduler `quarantine_sec` | 60 | avoid a host for a job that FAILED there |
