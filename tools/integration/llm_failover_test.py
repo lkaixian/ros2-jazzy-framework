@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Sim check of llm_bridge failover + emergency halt with two fake llama-servers (no models).
+"""Sim check of llm_bridge: endpoints joining/leaving via the cluster, failover, emergency halt.
 
-primary = stand-in for Gemma E4B on the strong PC, secondary = small model on the laptop.
-Scenarios: both up -> kill primary (fallback, degraded) -> kill secondary (emergency, halt sent)
--> primary returns (recovery). Isolated DDS domain LLM_FAILOVER_DOMAIN (default 78).
-Exit code 0 only if every check passed.
+Two fake llama-servers (real HTTP, no models):
+  secondary = the small model on the robot laptop, a STATIC endpoint of the bridge
+  primary   = Gemma E4B on the strong PC; only known through a fake cluster agent's heartbeat
+Scenario: only static -> strong PC joins (preferred) -> its server dies while still heartbeating
+(fallback) -> it disconnects (heartbeat stops: endpoint removed, never called) -> everything dead
+(emergency halt) -> small model returns (recovery) -> strong PC rejoins (preferred again).
+Isolated DDS domain LLM_FAILOVER_DOMAIN (default 78). Exit code 0 only if every check passed.
 """
 import json
 import os
@@ -20,6 +23,7 @@ os.environ['ROS_AUTOMATIC_DISCOVERY_RANGE'] = 'LOCALHOST'
 
 import rclpy  # noqa: E402
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy  # noqa: E402
+from cluster_msgs.msg import NodeInfo, ServiceEndpoint  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
 from std_srvs.srv import Trigger  # noqa: E402
 
@@ -62,11 +66,10 @@ class Fake:
 
 
 def main():
-    a, b = Fake(P1, 'primary'), Fake(P2, 'secondary')
-    urls = f"['http://127.0.0.1:{P1}','http://127.0.0.1:{P2}']"
+    big, small = Fake(P1, 'primary'), Fake(P2, 'secondary')
     proc = subprocess.Popen(
         ['ros2', 'run', 'llm_bridge', 'llm_bridge_node', '--ros-args',
-         '-p', f'server_urls:={urls}', '-p', 'probe_period_sec:=1.0',
+         '-p', f"server_urls:=['http://127.0.0.1:{P2}']", '-p', 'probe_period_sec:=1.0',
          '-p', 'startup_grace_sec:=0.0', '-p', 'cooldown_sec:=3.0',
          '-p', 'connect_timeout_sec:=1.0'], start_new_session=True)
     res = {}
@@ -78,7 +81,7 @@ def main():
         n.create_subscription(String, 'bt/task_spec', lambda m: specs.append(json.loads(m.data)), 10)
         q = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                        durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        n.create_subscription(String, 'llm/status', lambda m: states.append(json.loads(m.data)['state']), q)
+        n.create_subscription(String, 'llm/status', lambda m: states.append(json.loads(m.data)), q)
 
         def halt(_req, resp):
             halts.append(time.monotonic())
@@ -86,13 +89,25 @@ def main():
             return resp
         n.create_service(Trigger, 'bt_executor/halt', halt)
         task = n.create_publisher(String, 'bt/task', 10)
+        info = n.create_publisher(NodeInfo, 'cluster/node_info', rclpy.qos.QoSProfile(
+            depth=10, reliability=ReliabilityPolicy.RELIABLE))
+        host_alive = {'pc': False}
+
+        def beat():
+            if host_alive['pc']:
+                m = NodeInfo()
+                m.host_id = 'strong-pc'
+                m.endpoints = [ServiceEndpoint(job_id='llm_big', kind='llm', priority=10,
+                                               url=f'http://127.0.0.1:{P1}')]
+                info.publish(m)
+        n.create_timer(0.5, beat)
 
         def spin(sec):
             end = time.monotonic() + sec
             while time.monotonic() < end:
                 rclpy.spin_once(n, timeout_sec=0.05)
 
-        def ask(label, wait=6.0):
+        def ask(wait=6.0):
             before = len(specs)
             end = time.monotonic() + wait
             while time.monotonic() < end and len(specs) == before:
@@ -100,24 +115,38 @@ def main():
                 spin(0.5)
             return specs[-1]['goal'] if len(specs) > before else None
 
+        def last_state():
+            return states[-1]['state'] if states else None
+
         spin(3.0)
-        res['both up: served by primary'] = ask('t1') == 'primary'
-        res['state ok at start'] = 'ok' in states
-        a.stop()
-        res['primary dead: task still served (secondary)'] = ask('t2') == 'secondary'
+        res['no host yet: static small model serves'] = ask() == 'secondary'
+        host_alive['pc'] = True
+        spin(2.0)
+        res['strong PC joined: it is preferred'] = ask() == 'primary'
+        big.stop()                                    # server dies, host still heartbeating
+        res['strong PC server died: falls back to small'] = ask() == 'secondary'
         spin(2.5)
-        res['state degraded'] = 'degraded' in states
+        res['state degraded'] = last_state() == 'degraded'
         res['no halt while one LLM is alive'] = not halts
-        b.stop()
+        big.start()
+        host_alive['pc'] = False                      # strong PC disconnects (no more heartbeats)
+        spin(6.0)                                     # > endpoint_ttl_sec (4 s)
+        urls = [e['url'] for e in (states[-1]['endpoints'] if states else [])]
+        res['strong PC left: endpoint removed from the list'] = urls == [f'http://127.0.0.1:{P2}']
+        res['strong PC left: small model serves'] = ask() == 'secondary'
+        small.stop()
         t_dead = time.monotonic()
         spin(5.0)
-        res['both dead: state down'] = bool(states) and states[-1] == 'down'
-        res['both dead: executor halt sent'] = bool(halts) and halts[0] > t_dead - 0.1
-        res['both dead: task gets no spec'] = ask('t3', wait=3.0) is None
-        a.start()
+        res['all gone: state down'] = last_state() == 'down'
+        res['all gone: executor halt sent'] = bool(halts) and halts[0] > t_dead - 0.1
+        res['all gone: task gets no spec'] = ask(wait=3.0) is None
+        small.start()
         spin(4.0)
-        res['primary back: state recovers'] = bool(states) and states[-1] in ('ok', 'degraded')
-        res['primary back: preferred again'] = ask('t4') == 'primary'
+        res['small back: state recovers'] = last_state() in ('ok', 'degraded')
+        res['small back: serves again'] = ask() == 'secondary'
+        host_alive['pc'] = True
+        spin(2.5)
+        res['strong PC rejoined: preferred again'] = ask() == 'primary'
     finally:
         for k, v in res.items():
             print(('PASS ' if v else 'FAIL ') + k)
@@ -127,7 +156,7 @@ def main():
             except ProcessLookupError:
                 break
             time.sleep(2)
-        for f in (a, b):
+        for f in (big, small):
             try:
                 f.stop()
             except Exception:

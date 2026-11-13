@@ -17,4 +17,9 @@ llm_bridge_node:
     startup_grace_sec: 60.0    # no emergency while servers are still loading at boot
     halt_on_all_down: true     # EMERGENCY: every endpoint down -> call halt_service
     halt_service: bt_executor/halt
+    use_cluster: true          # add/remove endpoints advertised in cluster/node_info
+    endpoint_kind: llm
+    endpoint_ttl_sec: 4.0      # silent host leaves after this (< scheduler failover_after_sec)
+    static_priority_base: 100  # static urls sort after advertised ones (priority < 100)
+    use_static_urls: true      # false (cluster jobs): rely only on advertised endpoints
     task_system_prompt: ""                # empty -> built-in prompt

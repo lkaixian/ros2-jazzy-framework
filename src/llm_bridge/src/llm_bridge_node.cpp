@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -9,6 +10,7 @@
 #include "bt_pipeline_msgs/msg/extension_manifest.hpp"
 #include "bt_pipeline_msgs/srv/get_catalog.hpp"
 #include "bt_pipeline_msgs/srv/llm_query.hpp"
+#include "cluster_msgs/msg/node_info.hpp"
 #include "llm_bridge/failover.hpp"
 #include "llm_bridge/llama_client.hpp"
 #include "nlohmann/json.hpp"
@@ -49,6 +51,14 @@ public:
     declare_parameter("startup_grace_sec", 60.0);   // no emergency while servers are loading
     declare_parameter("halt_on_all_down", true);    // emergency: halt the executor
     declare_parameter("halt_service", "bt_executor/halt");
+    // Hosts advertise their running LLM servers in cluster/node_info; a host that joins is added
+    // to the endpoint list and one that goes silent for endpoint_ttl_sec is removed. Static
+    // server_urls always stay (typically the local small model) after every advertised endpoint.
+    declare_parameter("use_cluster", true);
+    declare_parameter("endpoint_kind", "llm");
+    declare_parameter("endpoint_ttl_sec", 4.0);   // < scheduler failover_after_sec (5 s)
+    declare_parameter("static_priority_base", 100);
+    declare_parameter("use_static_urls", true);   // false: only cluster-advertised endpoints
     declare_parameter("model", "default");
     declare_parameter("temperature", 0.1);
     declare_parameter("max_tokens", 512);
@@ -60,25 +70,21 @@ public:
       if (!u.empty()) {urls.push_back(u);}  // [""] is the "unset" value for YAML files
     }
     if (urls.empty()) {urls.push_back(get_parameter("server_url").as_string());}
-    for (const auto & u : urls) {
-      clients_.push_back(
-        std::make_unique<llm_bridge::LlamaClient>(
-          u, get_parameter("timeout_sec").as_double(),
-          get_parameter("connect_timeout_sec").as_double()));
-    }
-    urls_ = urls;
+    if (get_parameter("use_static_urls").as_bool()) {static_urls_ = urls;}
     llm_bridge::FailoverConfig fc;
-    fc.endpoints = urls.size();
     fc.max_failures = static_cast<int>(get_parameter("failure_threshold").as_int());
     fc.cooldown_sec = get_parameter("cooldown_sec").as_double();
     fc.json_retries = static_cast<int>(get_parameter("json_retries").as_int());
     failover_ = std::make_unique<llm_bridge::FailoverClient>(
-      fc, [this](size_t i, const llm_bridge::ChatRequest & r) {return clients_[i]->chat(r);},
+      fc, [this](const std::string & u, const llm_bridge::ChatRequest & r) {
+        return client_for(u).chat(r);
+      },
       [] {
         return std::chrono::duration<double>(
           std::chrono::steady_clock::now().time_since_epoch()).count();
       });
     started_ = now();
+    refresh_endpoints();
 
     // Blocking HTTP calls live in their own group so manifests/scene keep flowing.
     work_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -111,6 +117,26 @@ public:
     latched_status.reliable().transient_local();
     status_pub_ = create_publisher<std_msgs::msg::String>("llm/status", latched_status);
     halt_client_ = create_client<std_srvs::srv::Trigger>(get_parameter("halt_service").as_string());
+    if (get_parameter("use_cluster").as_bool()) {
+      cluster_sub_ = create_subscription<cluster_msgs::msg::NodeInfo>(
+        "cluster/node_info", rclcpp::QoS(10).reliable(),
+        [this](cluster_msgs::msg::NodeInfo::ConstSharedPtr m) {
+          {
+            std::lock_guard<std::mutex> lk(mu_);
+            auto & h = hosts_[m->host_id];
+            h.rx = now();
+            h.eps.clear();
+            for (const auto & e : m->endpoints) {
+              if (e.kind == get_parameter("endpoint_kind").as_string()) {
+                h.eps.push_back({e.url, e.priority});
+              }
+            }
+          }
+          refresh_endpoints();
+        });
+    }
+    // leaves are noticed by silence, so re-evaluate even when no heartbeat arrives
+    refresh_timer_ = create_wall_timer(std::chrono::seconds(1), [this] {refresh_endpoints();});
     const double probe = get_parameter("probe_period_sec").as_double();
     if (probe > 0.0) {
       probe_timer_ = create_wall_timer(
@@ -137,9 +163,8 @@ public:
         res->error = r.chat.error;
         report(r);
       }, rclcpp::ServicesQoS(), work_group_);
-    for (size_t i = 0; i < urls_.size(); ++i) {
-      RCLCPP_INFO(get_logger(), "llm_bridge endpoint %zu%s -> %s", i, i ? " (fallback)" : "",
-        urls_[i].c_str());
+    for (const auto & u : static_urls_) {
+      RCLCPP_INFO(get_logger(), "llm_bridge static endpoint -> %s", u.c_str());
     }
     publish_state("ok", "starting");
   }
@@ -213,6 +238,57 @@ private:
            .count();
   }
 
+  llm_bridge::LlamaClient & client_for(const std::string & url)
+  {
+    std::lock_guard<std::mutex> lk(clients_mu_);
+    auto & c = clients_[url];
+    if (!c) {
+      c = std::make_unique<llm_bridge::LlamaClient>(
+        url, get_parameter("timeout_sec").as_double(),
+        get_parameter("connect_timeout_sec").as_double());
+    }
+    return *c;
+  }
+
+  // advertised endpoints of live hosts (best priority first) + the static fallbacks
+  void refresh_endpoints()
+  {
+    std::vector<llm_bridge::Endpoint> eps;
+    {
+      std::lock_guard<std::mutex> lk(mu_);
+      const double ttl = get_parameter("endpoint_ttl_sec").as_double();
+      const double t = now();
+      for (auto it = hosts_.begin(); it != hosts_.end();) {
+        if (t - it->second.rx > ttl) {
+          RCLCPP_WARN(get_logger(), "host %s silent for %.1f s: its LLM endpoints leave",
+            it->first.c_str(), t - it->second.rx);
+          it = hosts_.erase(it);
+          continue;
+        }
+        for (const auto & e : it->second.eps) {eps.push_back({e.url, e.priority});}
+        ++it;
+      }
+    }
+    const int base = static_cast<int>(get_parameter("static_priority_base").as_int());
+    for (size_t i = 0; i < static_urls_.size(); ++i) {
+      eps.push_back({static_urls_[i], base + static_cast<int>(i)});
+    }
+    // after the first call, newly advertised endpoints wait for a passing /health (needs the prober)
+    const bool probation = initialized_ && get_parameter("probe_period_sec").as_double() > 0.0;
+    initialized_ = true;
+    auto delta = failover_->set_endpoints(eps, probation);
+    for (const auto & u : delta.first) {RCLCPP_INFO(get_logger(), "LLM endpoint joined: %s", u.c_str());}
+    for (const auto & u : delta.second) {RCLCPP_WARN(get_logger(), "LLM endpoint left: %s", u.c_str());}
+    if (!delta.first.empty() || !delta.second.empty()) {
+      std::string cur;
+      {
+        std::lock_guard<std::mutex> lk(state_mu_);
+        cur = last_state_;
+      }
+      if (!cur.empty()) {publish_state(cur, "endpoint set changed");}
+    }
+  }
+
   void report(const llm_bridge::FailoverResult & r)
   {
     for (const auto & e : r.errors) {
@@ -220,17 +296,24 @@ private:
     }
     if (r.chat.ok) {
       recovered();
-      publish_state(r.endpoint == 0 ? "ok" : "degraded", "served by endpoint " +
-        std::to_string(r.endpoint));
+      publish_state(r.rank == 0 ? "ok" : "degraded", "served by " + r.endpoint);
     }
   }
 
   // ok = every endpoint answers; degraded = only some do; down = none -> emergency.
   void publish_state(const std::string & state, const std::string & why)
   {
-    if (state == last_state_) {return;}
+    nlohmann::json eps = nlohmann::json::array();
+    for (const auto & kv : failover_->status()) {
+      eps.push_back({{"url", kv.first}, {"available", kv.second}});
+    }
+    // republish on a state change OR when the endpoint set / availability changed
+    const std::string sig = eps.dump();
+    std::lock_guard<std::mutex> lk(state_mu_);   // called from several callback groups
+    if (state == last_state_ && sig == last_sig_) {return;}
     last_state_ = state;
-    nlohmann::json j = {{"state", state}, {"reason", why}, {"endpoints", urls_}};
+    last_sig_ = sig;
+    nlohmann::json j = {{"state", state}, {"reason", why}, {"endpoints", eps}};
     std_msgs::msg::String m;
     m.data = j.dump();
     status_pub_->publish(m);
@@ -275,13 +358,14 @@ private:
 
   void probe_once()
   {
-    for (size_t i = 0; i < clients_.size(); ++i) {
-      failover_->report_health(i, clients_[i]->healthy(2.0));
+    refresh_endpoints();
+    for (const auto & kv : failover_->status()) {
+      failover_->report_health(kv.first, client_for(kv.first).healthy(2.0));
     }
-    const auto av = failover_->available();
+    const auto av = failover_->status();
     size_t up = 0;
-    for (bool a : av) {up += a ? 1 : 0;}
-    if (up == av.size()) {
+    for (const auto & kv : av) {up += kv.second ? 1 : 0;}
+    if (!av.empty() && up == av.size()) {
       recovered();
       publish_state("ok", "all endpoints healthy");
     } else if (up > 0) {
@@ -293,14 +377,25 @@ private:
     }
   }
 
-  std::vector<std::unique_ptr<llm_bridge::LlamaClient>> clients_;
+  struct HostEps
+  {
+    double rx = 0.0;
+    std::vector<llm_bridge::Endpoint> eps;
+  };
+  std::map<std::string, std::unique_ptr<llm_bridge::LlamaClient>> clients_;
+  std::mutex clients_mu_;
+  std::map<std::string, HostEps> hosts_;   // guarded by mu_
+  rclcpp::Subscription<cluster_msgs::msg::NodeInfo>::SharedPtr cluster_sub_;
+  rclcpp::TimerBase::SharedPtr refresh_timer_;
   std::unique_ptr<llm_bridge::FailoverClient> failover_;
-  std::vector<std::string> urls_;
+  std::vector<std::string> static_urls_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
   rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr halt_client_;
   rclcpp::TimerBase::SharedPtr probe_timer_;
-  std::string last_state_;
-  bool emergency_active_ = false;
+  std::atomic<bool> initialized_{false};
+  std::mutex state_mu_;
+  std::string last_state_, last_sig_;   // guarded by state_mu_
+  std::atomic<bool> emergency_active_{false};
   double started_ = 0.0;
   rclcpp::CallbackGroup::SharedPtr work_group_;
   rclcpp::Subscription<ExtensionManifest>::SharedPtr manifest_sub_;

@@ -19,7 +19,16 @@ def test_shipped_catalog_loads_and_has_the_expected_shape():
     for core in ('cmd_vel_mux', 'odom_extension', 'pid_extension'):
         assert c[core]['role'] == 'core' and c[core]['movable'] is False
         assert c[core]['stop_on_orphan'] is False          # hardware-bound: fail-static
-    assert c['llm']['prefer_tags'] == ['gpu'] and len(c['llm']['cmds']) == 2
+    big, small = c['llm_big'], c['llm_small']
+    assert big['tags'] == ['llm_big'] and small['tags'] == ['robot']
+    assert big['endpoint']['kind'] == small['endpoint']['kind'] == 'llm'
+    assert big['endpoint']['priority'] < small['endpoint']['priority']       # big PC preferred
+    assert big['endpoint']['port'] != small['endpoint']['port']
+    assert small['movable'] is False                                         # stays with the robot
+    assert c['llm_bridge']['role'] == 'core' and c['llm_bridge']['movable'] is False
+    assert 'use_static_urls:=false' in c['llm_bridge']['cmds'][0]            # cluster-only endpoints
+    for j in (big, small):                                                   # reachable from other PCs
+        assert '0.0.0.0' in j['cmds'][0]
     assert c['stt']['tags'] == ['audio'] and c['tts']['tags'] == ['audio']
     assert 'camera' in c['person_detection']['tags']
     for jid in c.ids():

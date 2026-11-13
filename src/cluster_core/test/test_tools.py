@@ -15,8 +15,10 @@ HOSTS = {'hosts': {
     # NOT: the planner would correctly leave stt/tts pending)
     'pi': {'roles': 'core', 'tags': 'camera,audio', 'cores': 16, 'cpu_load': 0.1,
            'mem_total_mb': 16000, 'mem_free_mb': 12000},
-    'laptop': {'roles': 'compute', 'tags': ['gpu'], 'cores': 12, 'cpu_load': 0.2,
+    'laptop': {'roles': 'compute', 'tags': ['gpu', 'robot'], 'cores': 12, 'cpu_load': 0.2,
                'mem_total_mb': 16000, 'mem_free_mb': 9000, 'gpu_mem_free_mb': 3500},
+    'strongpc': {'roles': 'compute', 'tags': ['gpu', 'llm_big'], 'cores': 16, 'cpu_load': 0.1,
+                 'mem_total_mb': 32000, 'mem_free_mb': 24000, 'gpu_mem_free_mb': 10000},
 }}
 
 
@@ -37,10 +39,11 @@ def test_preview_on_the_shipped_catalog(tmp_path):
     a = first.assignment
     assert {a[j] for j in ('cmd_vel_mux', 'odom_extension', 'pid_extension')} == {'pi'}   # role core
     assert a['stt'] == a['tts'] == 'pi'                                                   # tag audio
-    assert a['llm'] == 'laptop'                                                           # prefers gpu
+    assert a['llm_big'] == 'strongpc' and a['llm_small'] == 'laptop'                      # by tag
+    assert a['llm_bridge'] == 'pi'                                                        # role core
     assert second.assignment == first.assignment                                          # stable
     text = pp.render(jobs, pp.load_hosts(hosts_file(tmp_path)), first, second)
-    assert 'identical (stable)' in text and 'llm' in text
+    assert 'identical (stable)' in text and 'llm_big' in text
 
 
 def test_preview_with_the_core_host_down(tmp_path):
@@ -50,7 +53,16 @@ def test_preview_with_the_core_host_down(tmp_path):
     for jid in ('cmd_vel_mux', 'odom_extension', 'pid_extension', 'stt', 'tts'):
         assert first.placements[jid].state == 'unplaceable'                              # never moved to the laptop
         assert first.assignment.get(jid) is None
-    assert first.assignment['llm'] == 'laptop'
+    assert first.assignment['llm_big'] == 'strongpc' and first.assignment['llm_small'] == 'laptop'
+    assert first.placements['llm_bridge'].state == 'unplaceable'    # bridge is core-bound too
+
+
+def test_strong_pc_down_leaves_llm_big_unplaced_and_small_untouched(tmp_path):
+    cat = load_catalog(SHIPPED)
+    hosts = pp.load_hosts(hosts_file(tmp_path), dead=['strongpc'])
+    _, first, _ = pp.run(hosts, cat, current={'llm_big': 'strongpc', 'llm_small': 'laptop'})
+    assert first.assignment.get('llm_big') is None           # never moved onto the 4 GB laptop
+    assert first.assignment['llm_small'] == 'laptop'
 
 
 def test_preview_failover_of_a_movable_job(tmp_path):
@@ -72,7 +84,7 @@ def test_preview_cli_exit_status(tmp_path, capsys):
 def status(**over):
     s = {'scheduler_id': 's1', 'epoch': 7, 'alive': ['pi', 'laptop'], 'dead': [], 'excluded': [],
          'events': ['assign llm -> laptop'],
-         'jobs': [{'job_id': 'llm', 'host_id': 'laptop', 'state': 'placed', 'reason': '', 'job_state': 'running'}]}
+         'jobs': [{'job_id': 'llm_big', 'host_id': 'laptop', 'state': 'placed', 'reason': '', 'job_state': 'running'}]}
     s.update(over)
     return s
 

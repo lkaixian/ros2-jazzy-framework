@@ -7,6 +7,7 @@ find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/JobStatus.msg"
+  "msg/ServiceEndpoint.msg"
   "msg/NodeInfo.msg"
   "msg/Assignment.msg"
   "msg/AssignmentSet.msg"

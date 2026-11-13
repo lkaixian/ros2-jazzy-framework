@@ -15,10 +15,11 @@ import time
 
 import rclpy
 from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
-from cluster_msgs.msg import AssignmentSet, JobStatus, NodeInfo
+from cluster_msgs.msg import AssignmentSet, JobStatus, NodeInfo, ServiceEndpoint
 from rclpy.node import Node
 
 from cluster_core.catalog import CatalogError, expand, load_catalog
+from cluster_core.endpoints import advertised, local_address
 from cluster_core.qos import INFO_QOS, LATCHED_QOS, TOPIC_ASSIGN, TOPIC_INFO
 from cluster_core.supervisor import Supervisor
 from cluster_core.sysinfo import Sampler
@@ -40,7 +41,8 @@ class AgentNode(Node):
         super().__init__('cluster_agent_node')
         defaults = {'host_id': '', 'roles': '', 'tags': '', 'jobs_file': '', 'params_dir': '',
                     'log_dir': '', 'heartbeat_hz': 2.0, 'poll_hz': 10.0,
-                    'orphan_timeout_sec': 4.0, 'min_rx_before_act': 2, 'use_guard': True}
+                    'orphan_timeout_sec': 4.0, 'min_rx_before_act': 2, 'use_guard': True,
+                    'advertise_host': ''}
         for k, v in defaults.items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
@@ -54,6 +56,8 @@ class AgentNode(Node):
             for argv in self.catalog[jid]['cmds']:
                 expand(argv, self.vars)
         log_dir = p('log_dir') or os.path.expanduser(f'~/.ros/cluster/{self.host}')
+        # address other machines reach this host on (for jobs that declare `endpoint:`)
+        self.address = p('advertise_host') or local_address()
         self.sup = Supervisor(log_dir, use_guard=p('use_guard'))
         self.sampler = Sampler()
         try:
@@ -147,10 +151,13 @@ class AgentNode(Node):
         m.catalog_hash = self.catalog.hash
         self.seq += 1
         m.seq, m.assignment_epoch = self.seq, int(self.epoch)
-        for st in self.sup.statuses():
+        sts = self.sup.statuses()
+        for st in sts:
             m.jobs.append(JobStatus(job_id=st['job_id'], state=st['state'],
                                     restarts=st['restarts'], pid=st['pid'],
                                     last_error=st['last_error'][:200]))
+        for jid, kind, url, prio in advertised(self.catalog, sts, self.address):
+            m.endpoints.append(ServiceEndpoint(job_id=jid, kind=kind, url=url, priority=prio))
         self.info_pub.publish(m)
 
     def destroy_node(self):

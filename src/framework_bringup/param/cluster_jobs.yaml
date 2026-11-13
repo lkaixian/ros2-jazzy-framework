@@ -69,17 +69,44 @@ jobs:
     gpu_mem_mb: 500
     priority: 20
 
-  # ---- LLM: server and bridge together so the bridge's localhost URL stays valid -----------
-  llm:
-    cmds:
-      - [llama-server, -hf, ggml-org/gemma-4-E4B-it-GGUF, --port, "8080"]
-      - [ros2, run, llm_bridge, llm_bridge_node, --ros-args, --params-file, "${PARAMS_DIR}/pipeline.yaml"]
-    prefer_tags: [gpu]
+  # ---- LLM: servers advertise themselves, the bridge follows hosts joining and leaving ------
+  # Strong PC (launch its agent with tags:=gpu,llm_big): Gemma E4B. Not movable to another host:
+  # nothing else can run it, so when that PC dies the bridge simply drops the endpoint.
+  # llama-server binds 127.0.0.1 by default; --host 0.0.0.0 makes it reachable from other PCs
+  # (unauthenticated: only on your own router, see technical_debt T-03).
+  llm_big:
+    cmd: [llama-server, -hf, "ggml-org/gemma-4-E4B-it-GGUF:Q4_0", --host, 0.0.0.0, --port, "8080", -c, "8192"]
+    tags: [llm_big]
+    endpoint: {kind: llm, port: 8080, priority: 10}
     cpu: 3.0
-    mem_mb: 6000
-    gpu_mem_mb: 3000
+    mem_mb: 8000
+    gpu_mem_mb: 6000
     priority: 50
     grace_sec: 10
+    restart: {max_restarts: 10}
+  # Robot laptop (tags:=robot): Gemma E2B, always there, the fallback when the big PC is gone.
+  # Q4_0 is 2.65 GiB; -c 4096 keeps the KV cache small enough for a 4 GB GPU (unverified).
+  llm_small:
+    cmd: [llama-server, -hf, "ggml-org/gemma-4-E2B-it-GGUF:Q4_0", --host, 0.0.0.0, --port, "8081", -c, "4096", -ngl, "99"]
+    tags: [robot]
+    movable: false
+    endpoint: {kind: llm, port: 8081, priority: 100}
+    cpu: 2.0
+    mem_mb: 4000
+    gpu_mem_mb: 3000
+    priority: 55
+    grace_sec: 10
+    restart: {max_restarts: 10}
+  # Emergency halt lives with the robot core: when every LLM endpoint is gone it calls
+  # bt_executor/halt. Endpoints come only from heartbeats (use_static_urls false).
+  llm_bridge:
+    cmd: [ros2, run, llm_bridge, llm_bridge_node, --ros-args, --params-file, "${PARAMS_DIR}/pipeline.yaml", -p, "use_static_urls:=false"]
+    role: core
+    movable: false
+    cpu: 0.2
+    mem_mb: 150
+    priority: 70
+    restart: {max_restarts: 10}
 
   # ---- planning pipeline -------------------------------------------------------------------
   slm:

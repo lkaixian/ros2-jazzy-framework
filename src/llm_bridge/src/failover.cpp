@@ -1,7 +1,7 @@
 #include "llm_bridge/failover.hpp"
 
+#include <algorithm>
 #include <nlohmann/json.hpp>
-#include <utility>
 
 namespace llm_bridge
 {
@@ -12,57 +12,107 @@ bool is_json_object(const std::string & text)
 }
 
 FailoverClient::FailoverClient(FailoverConfig cfg, ChatFn fn, Clock clock)
-: cfg_(cfg), fn_(std::move(fn)), clock_(std::move(clock)), st_(cfg.endpoints)
+: cfg_(cfg), fn_(std::move(fn)), clock_(std::move(clock))
 {
 }
 
-bool FailoverClient::skipped(size_t i, double now) const
+std::pair<std::vector<std::string>, std::vector<std::string>> FailoverClient::set_endpoints(
+  std::vector<Endpoint> eps, bool probation_new)
 {
   std::lock_guard<std::mutex> lk(mu_);
-  return st_[i].failures >= cfg_.max_failures && now < st_[i].open_until;
+  std::vector<State> next;
+  std::vector<std::string> joined, left;
+  for (const auto & e : eps) {
+    if (e.url.empty() ||
+      std::any_of(next.begin(), next.end(), [&](const State & s) {return s.url == e.url;}))
+    {
+      continue;  // ignore blanks and duplicates
+    }
+    State s;
+    auto old = std::find_if(st_.begin(), st_.end(), [&](const State & o) {return o.url == e.url;});
+    if (old != st_.end()) {
+      s = *old;
+    } else {
+      joined.push_back(e.url);
+      s.probation = probation_new;
+    }
+    s.url = e.url;
+    s.priority = e.priority;
+    next.push_back(s);
+  }
+  for (const auto & o : st_) {
+    if (std::none_of(next.begin(), next.end(), [&](const State & s) {return s.url == o.url;})) {
+      left.push_back(o.url);
+    }
+  }
+  std::stable_sort(
+    next.begin(), next.end(), [](const State & a, const State & b) {return a.priority < b.priority;});
+  st_ = std::move(next);
+  return {joined, left};
 }
 
-void FailoverClient::note(size_t i, bool ok)
+bool FailoverClient::skipped(const std::string & url, double now) const
+{
+  std::lock_guard<std::mutex> lk(mu_);
+  for (const auto & s : st_) {
+    if (s.url == url) {
+      return s.probation || (s.failures >= cfg_.max_failures && now < s.open_until);
+    }
+  }
+  return true;  // removed while we were iterating: do not call it
+}
+
+void FailoverClient::note(const std::string & url, bool ok)
 {
   const double now = clock_();
   std::lock_guard<std::mutex> lk(mu_);
-  if (ok) {
-    st_[i].failures = 0;
-    st_[i].open_until = 0.0;
+  for (auto & s : st_) {
+    if (s.url != url) {continue;}
+    if (ok) {
+      s.failures = 0;
+      s.open_until = 0.0;
+      s.probation = false;
+    } else {
+      ++s.failures;
+      // also re-opens at once when a half-open probe after the cooldown fails
+      if (s.failures >= cfg_.max_failures) {s.open_until = now + cfg_.cooldown_sec;}
+    }
     return;
-  }
-  ++st_[i].failures;
-  if (st_[i].failures >= cfg_.max_failures) {
-    // also re-opens at once when a half-open probe after the cooldown fails
-    st_[i].open_until = now + cfg_.cooldown_sec;
   }
 }
 
 FailoverResult FailoverClient::chat(const ChatRequest & req)
 {
+  std::vector<std::string> order;
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    for (const auto & s : st_) {order.push_back(s.url);}
+  }
   FailoverResult out;
   bool any_answered = false;
-  for (size_t i = 0; i < cfg_.endpoints; ++i) {
-    const std::string tag = "endpoint " + std::to_string(i);
-    if (skipped(i, clock_())) {
-      out.errors.push_back(tag + ": skipped (breaker open)");
+  for (size_t i = 0; i < order.size(); ++i) {
+    const std::string & url = order[i];
+    const std::string tag = "endpoint " + url;
+    if (skipped(url, clock_())) {
+      out.errors.push_back(tag + ": skipped (breaker open or removed)");
       continue;
     }
     for (int attempt = 0; attempt <= cfg_.json_retries; ++attempt) {
-      ChatResult r = fn_(i, req);
+      ChatResult r = fn_(url, req);
       if (!r.ok) {
-        note(i, false);
+        note(url, false);
         out.errors.push_back(tag + ": " + (r.error.empty() ? "failed" : r.error));
         break;  // transport/HTTP failure: go to the next endpoint
       }
       any_answered = true;
-      note(i, true);  // it answered, so it is alive even if the text is bad
+      note(url, true);  // it answered, so it is alive even if the text is bad
       if (req.json_mode && !is_json_object(r.text)) {
         out.errors.push_back(tag + ": reply is not a JSON object");
         continue;  // ask the same endpoint again, up to json_retries
       }
       out.chat = std::move(r);
-      out.endpoint = static_cast<int>(i);
+      out.endpoint = url;
+      out.rank = static_cast<int>(i);
       return out;
     }
   }
@@ -73,23 +123,23 @@ FailoverResult FailoverClient::chat(const ChatRequest & req)
   return out;
 }
 
-void FailoverClient::report_health(size_t endpoint, bool ok)
+void FailoverClient::report_health(const std::string & url, bool ok)
 {
-  if (endpoint < st_.size()) {note(endpoint, ok);}
+  note(url, ok);
 }
 
-std::vector<bool> FailoverClient::available() const
+std::vector<std::pair<std::string, bool>> FailoverClient::status() const
 {
   std::lock_guard<std::mutex> lk(mu_);
-  std::vector<bool> v;
-  for (const auto & s : st_) {v.push_back(s.failures < cfg_.max_failures);}
+  std::vector<std::pair<std::string, bool>> v;
+  for (const auto & s : st_) {v.emplace_back(s.url, !s.probation && s.failures < cfg_.max_failures);}
   return v;
 }
 
 bool FailoverClient::all_unavailable() const
 {
-  for (bool a : available()) {
-    if (a) {return false;}
+  for (const auto & kv : status()) {
+    if (kv.second) {return false;}
   }
   return true;
 }

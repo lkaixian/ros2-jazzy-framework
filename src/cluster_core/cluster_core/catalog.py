@@ -72,6 +72,18 @@ def parse_job(jid, spec):
     for k in restart:
         if k not in DEFAULT_RESTART:
             raise CatalogError(f'job {jid}: unknown restart key {k!r}')
+    endpoint = spec.get('endpoint')
+    if endpoint is not None:
+        if (not isinstance(endpoint, dict) or set(endpoint) - {'kind', 'port', 'priority'}
+                or not isinstance(endpoint.get('kind'), str) or not endpoint['kind']
+                or isinstance(endpoint.get('port'), bool)
+                or not isinstance(endpoint.get('port'), int) or not 1 <= endpoint['port'] <= 65535
+                or isinstance(endpoint.get('priority', 0), bool)
+                or not isinstance(endpoint.get('priority', 0), int)):
+            raise CatalogError(f"job {jid}: endpoint must be {{kind: str, port: 1-65535, "
+                               f"priority: int (optional)}}, got {endpoint!r}")
+        endpoint = {'kind': endpoint['kind'], 'port': endpoint['port'],
+                    'priority': endpoint.get('priority', 0)}
     env = spec.get('env') or {}
     if not isinstance(env, dict) or not all(isinstance(k, str) for k in env):
         raise CatalogError(f'job {jid}: env must be a mapping')
@@ -91,6 +103,7 @@ def parse_job(jid, spec):
         'grace_sec': _num(spec, 'grace_sec', 5.0, jid),
         'restart': {k: float(v) for k, v in restart.items()},
         'env': {k: str(v) for k, v in env.items()},
+        'endpoint': endpoint,
     }
     if not isinstance(out['stop_on_orphan'], bool):
         raise CatalogError(f'job {jid}: stop_on_orphan must be true/false')

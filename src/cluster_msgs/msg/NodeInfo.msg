@@ -15,3 +15,4 @@ string catalog_hash      # hash of this agent's local job catalog
 uint64 seq
 uint64 assignment_epoch  # epoch of the last AssignmentSet this agent accepted (0 = none)
 JobStatus[] jobs
+ServiceEndpoint[] endpoints   # services of RUNNING jobs that declare `endpoint:` in the catalog
