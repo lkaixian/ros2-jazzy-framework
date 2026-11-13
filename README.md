@@ -30,6 +30,8 @@ orchestrator -> bt_slm (fine-tuned ~230M SLM, e.g. LFM2.5-230M) -> bt_validator
 | `odom_extension` | ament_python | NavigateTo, DriveDistance, RotateBy, IsAtGoal (odometry frame only) |
 | `pid_extension` | ament_python | HoldHeading, FollowTarget (bbox-based, no depth), SetPidGains |
 | `social_extension` | ament_python | `Speak` (TTS, `{person}` placeholder) and `EnrollFace` (face gallery) |
+| `nav_extension` | ament_python | Nav2 BT nodes: `NavigateToPose`, `NavigateToPlace`, `SetInitialPose`, `ClearCostmaps`, `SaveMap`, `IsNearPose` |
+| `nav_sim` | ament_python | 2D simulator (ray-cast lidar + odometry on a map) to test Nav2/SLAM without a robot |
 | `pose_extension` | ament_python | GetPersonPose, IsPersonWaving, IsPersonPointing from YOLO11-pose keypoints |
 | `arm_extension` | ament_python | MoveArmToPose / OpenGripper / CloseGripper through MoveIt `MoveGroup` + `GripperCommand`; arm model is a parameter set |
 | `bt_common` also ships | | `cmd_vel_mux_node`: priority + 0.5 s watchdog + hard clamps in front of the robot's `cmd_vel` |
@@ -49,6 +51,14 @@ ros2 run framework_bringup check_params     # param files vs the real nodes
 
 ## Parameters
 Everything tunable lives in `src/framework_bringup/param/*.yaml` (`perception`, `pipeline`, `llama_server`, `extensions`, `audio`). Precedence: package defaults < these files < launch arguments (only arguments you actually pass override). Edit and relaunch; no rebuild needed. Another folder: `params_dir:=/path`. `check_params` starts every node with these files and reports typo'd keys and wrong types, which ROS would otherwise ignore silently. Per-package `launch/<pkg>.launch.py` files use the package's own `config/` defaults, not `param/`.
+
+## Navigation
+Nav2 + slam_toolbox (default 2D SLAM; Cartographer and RTAB-Map optional) + RealSense, with Nav2's output going through the safety mux. See **docs/navigation.md** for how to map, localize and navigate, and **the static transforms in `param/navigation.yaml` are placeholders you must measure**.
+```
+ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox         # map
+ros2 launch framework_bringup navigation.launch.py map:=$HOME/maps/room1.yaml  # navigate
+ros2 launch framework_bringup nav_sim.launch.py                                # no robot needed
+```
 
 ## Hand-written behaviour trees
 ```

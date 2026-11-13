@@ -1,6 +1,6 @@
 cmd_vel_mux_node:
   ros__parameters:
-    inputs: [odom_extension/cmd_vel, pid_extension/cmd_vel]   # highest priority first
+    inputs: [odom_extension/cmd_vel, pid_extension/cmd_vel, nav2/cmd_vel]   # highest priority first
     output: cmd_vel
     stamped: false
     timeout_sec: 0.5       # watchdog: no fresh input -> zero Twist, then silence

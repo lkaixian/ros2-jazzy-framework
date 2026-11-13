@@ -1,0 +1,47 @@
+# Navigation launch options (read by navigation.launch.py / sensors.launch.py; NOT a ROS
+# parameter file).
+#
+# !!!  PLACEHOLDERS - MEASURE THEM ON THE ROBOT  !!!
+# The static transforms below are guesses. Wrong lidar/camera mounts make the map skewed,
+# AMCL drift, and obstacles appear in the wrong place. Measure from the `base` frame origin
+# (Kobuki: centre of the wheel axis, on the floor plane unless your URDF says otherwise):
+#   x forward (m), y left (m), z up (m); yaw/pitch/roll in radians.
+# Check with:  ros2 run tf2_ros tf2_echo base laser
+
+static_tf:
+  base_to_laser:                  # RPLIDAR A1 (driver frame_id: laser)
+    parent: base
+    child: laser
+    x: 0.00                       # PLACEHOLDER
+    y: 0.00                       # PLACEHOLDER
+    z: 0.25                       # PLACEHOLDER
+    roll: 0.0
+    pitch: 0.0
+    yaw: 0.0                      # PLACEHOLDER (0 = lidar 0 deg points forward)
+  base_to_camera:                 # RealSense camera_link (published by realsense2_camera)
+    parent: base
+    child: camera_link
+    x: 0.10                       # PLACEHOLDER
+    y: 0.00                       # PLACEHOLDER
+    z: 0.30                       # PLACEHOLDER
+    roll: 0.0
+    pitch: 0.0
+    yaw: 0.0
+
+navigation:
+  default_map: ""                 # "" -> the sample map installed with framework_bringup (maps/my_map.yaml)
+
+lidar:
+  launch_package: sllidar_ros2    # from ~/ros2_ws; used by sensors.launch.py when installed
+  launch_file: sllidar_a1_launch.py
+  serial_port: /dev/ttyUSB0
+  serial_baudrate: "115200"
+  frame_id: laser
+  angle_compensate: "true"
+  scan_mode: Sensitivity
+
+depth_scan:                       # depthimage_to_laserscan (optional second obstacle source)
+  scan_height: 10
+  range_min: 0.3
+  range_max: 3.0
+  output_frame: camera_depth_frame

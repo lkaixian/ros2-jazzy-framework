@@ -1,0 +1,19 @@
+# RealSense arguments for rs_launch.py (read by sensors.launch.py; NOT a ROS parameter file).
+# Every key is a launch argument of realsense2_camera/launch/rs_launch.py (4.58.x); values are
+# passed as strings. Change profiles as WIDTH,HEIGHT,FPS. Topics appear under /camera/camera/...
+# Kept light for a Pi/Jetson: 640x480, 15 fps, point cloud off. NOT verified with a device.
+camera_name: camera
+camera_namespace: camera
+enable_color: true
+enable_depth: true
+enable_infra: false
+enable_infra1: false
+enable_infra2: false
+enable_gyro: false
+enable_accel: false
+rgb_camera.color_profile: 640,480,15
+depth_module.depth_profile: 640,480,15
+align_depth.enable: true            # publishes aligned_depth_to_color (used for RTAB-Map / ranging)
+pointcloud.enable: false            # big CPU/USB cost; enable only when you need the cloud
+initial_reset: false                # set true if the camera hangs after an unclean shutdown
+publish_tf: true                    # camera_link -> camera_*_frame (base -> camera_link is in navigation.yaml)

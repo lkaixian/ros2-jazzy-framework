@@ -5,7 +5,7 @@
 
 cmd_vel_mux_node:
   ros__parameters:
-    inputs: [odom_extension/cmd_vel, pid_extension/cmd_vel]   # highest priority first
+    inputs: [odom_extension/cmd_vel, pid_extension/cmd_vel, nav2/cmd_vel]   # highest priority first
     output: cmd_vel
     stamped: false
     timeout_sec: 0.5        # watchdog: no fresh input -> zero Twist
@@ -72,4 +72,19 @@ social_extension_node:
     enroll_service: face/enroll
     speak_timeout_sec: 30.0
     enroll_timeout_sec: 10.0
+    republish_sec: 3.0
+
+nav_extension_node:         # Nav2 BT nodes; needs navigation.launch.py (see docs/navigation.md)
+  ros__parameters:
+    nav2_action: navigate_to_pose
+    base_frame: base        # Kobuki driver frame (not base_link)
+    global_frame: map
+    places_file: ""         # "" = param/places.yaml of framework_bringup
+    map_dir: ~/maps         # SaveMap writes <map_dir>/<file>.yaml/.pgm (plain file names only)
+    default_timeout_sec: 180.0
+    tf_timeout_sec: 0.5
+    initial_pose_topic: initialpose
+    saver_service: map_saver/save_map
+    clear_local_service: local_costmap/clear_entirely_local_costmap
+    clear_global_service: global_costmap/clear_entirely_global_costmap
     republish_sec: 3.0

@@ -1,0 +1,36 @@
+# RTAB-Map RGB-D (+ optional lidar) mapping with the RealSense. Optional 3D/visual SLAM backend.
+# Launch: navigation.launch.py slam:=rtabmap   (needs sensors.launch.py enable_camera:=true)
+# NOT verified with hardware. rtabmap parameters are all strings.
+rtabmap:
+  ros__parameters:
+    frame_id: base
+    odom_frame_id: odom
+    map_frame_id: map
+    subscribe_depth: false          # we use the synced rgbd_image topic from rgbd_sync
+    subscribe_rgb: false
+    subscribe_rgbd: true
+    subscribe_scan: true            # fuse the lidar scan too (set false for camera-only)
+    approx_sync: true
+    sync_queue_size: 20
+    publish_tf: true                # map -> odom
+    database_path: ~/.ros/robocup_rtabmap.db   # own file: rtabmap_new_map:=true deletes it on start
+    Mem/IncrementalMemory: "true"
+    Mem/InitWMWithAllNodes: "false"
+    RGBD/NeighborLinkRefining: "true"
+    RGBD/ProximityBySpace: "true"
+    RGBD/OptimizeFromGraphEnd: "false"
+    Reg/Strategy: "1"               # 1 = ICP, 0 = visual; with a scan, ICP refines odometry
+    Reg/Force3DoF: "true"           # ground robot: x, y, yaw only
+    Optimizer/Slam2D: "true"
+    Grid/FromDepth: "false"         # 2D grid from the lidar scan; set true for camera-only
+    Grid/RangeMax: "5.0"
+    Grid/CellSize: "0.05"
+    Kp/MaxFeatures: "400"
+    Vis/MinInliers: "12"
+    Rtabmap/DetectionRate: "1"      # Hz, keeps CPU low on a Pi/Jetson
+
+rgbd_sync:
+  ros__parameters:
+    approx_sync: true
+    approx_sync_max_interval: 0.05
+    sync_queue_size: 10

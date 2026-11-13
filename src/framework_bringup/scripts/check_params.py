@@ -32,6 +32,8 @@ NODES = {
     'pose_extension_node': ('pose_extension', 'pose_extension_node', 'extensions.yaml', {}),
     'arm_extension_node': ('arm_extension', 'arm_extension_node', 'extensions.yaml', {}),
     'social_extension_node': ('social_extension', 'social_extension_node', 'extensions.yaml', {}),
+    'nav_extension_node': ('nav_extension', 'nav_extension_node', 'extensions.yaml', {}),
+    'nav_sim_node': ('nav_sim', 'nav_sim_node', 'nav_sim.yaml', {}),
     'audio_capture_node': ('audio_capture', 'audio_capture_node', 'audio.yaml',
                            {'source': 'file', 'file': '/nonexistent.wav'}),
     'vad_node': ('stt_pipeline', 'vad_node', 'audio.yaml', {}),

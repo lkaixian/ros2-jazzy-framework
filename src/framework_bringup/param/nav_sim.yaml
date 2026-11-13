@@ -1,0 +1,25 @@
+nav_sim_node:                 # 2D simulator for testing Nav2/SLAM without a robot (nav_sim.launch.py)
+  ros__parameters:
+    map_yaml: ""              # "" = sample map maps/test_room.yaml (12 x 8 m, two rooms + a door)
+    cmd_vel_topic: cmd_vel    # what the safety mux publishes (use commands/velocity on the Kobuki)
+    odom_frame: odom
+    base_frame: base
+    laser_frame: laser
+    start_x: 0.5              # start pose in the map frame
+    start_y: 0.5
+    start_yaw: 0.0
+    robot_radius: 0.17
+    lidar_x: 0.0              # must match static_tf base_to_laser in navigation.yaml
+    lidar_y: 0.0
+    lidar_z: 0.25
+    lidar_yaw: 0.0
+    lidar_range_min: 0.15
+    lidar_range_max: 12.0
+    lidar_beams: 360
+    scan_rate_hz: 10.0
+    scan_noise_std: 0.01
+    physics_hz: 50.0
+    cmd_timeout_sec: 0.6      # the Kobuki driver stops without commands for this long
+    max_lin_acc: 1.5
+    max_ang_acc: 4.0
+    odom_slip: 0.0            # heading drift factor, e.g. 0.03 to stress AMCL/SLAM

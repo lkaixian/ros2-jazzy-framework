@@ -1,0 +1,11 @@
+# Named places in the MAP frame for the BT node NavigateToPlace (nav_extension).
+# These coordinates are for the SAMPLE map maps/test_room.yaml (12 x 8 m, two rooms joined by a
+# door at x=5, y 2.2..3.6) - REPLACE them with places from your own map (read a pose with
+#   ros2 run tf2_ros tf2_echo map base
+# or use rviz "2D Goal Pose"). Names: letters, digits, underscore, hyphen. yaw in radians.
+places:
+  start: {x: 0.5, y: 0.5, yaw: 0.0}
+  left_room: {x: 3.0, y: 3.0, yaw: 0.0}
+  door: {x: 5.05, y: 2.9, yaw: 0.0}
+  right_room: {x: 9.5, y: 5.5, yaw: 1.57}
+  far_corner: {x: 9.5, y: 0.5, yaw: 3.14}
