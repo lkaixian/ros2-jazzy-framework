@@ -25,3 +25,52 @@ def test_paint_and_plain():
 def test_expected_nodes_come_from_check_params():
     names = dash.expected_nodes()
     assert 'llm_bridge_node' in names and 'cmd_vel_mux_node' in names
+
+
+def test_parse_route_dev():
+    assert dash.parse_route_dev('192.168.1.50 via 192.168.1.1 dev wlp3s0 src 192.168.1.9 uid 1000') == 'wlp3s0'
+    assert dash.parse_route_dev('local 127.0.0.1 dev lo src 127.0.0.1 uid 1000') == 'lo'
+    assert dash.parse_route_dev('') == '' and dash.parse_route_dev(None) == ''
+
+
+def test_link_type_from_sysfs(tmp_path):
+    (tmp_path / 'wlan0' / 'wireless').mkdir(parents=True)
+    (tmp_path / 'wlan1' / 'phy80211').mkdir(parents=True)
+    (tmp_path / 'enp2s0' / 'device').mkdir(parents=True)
+    (tmp_path / 'docker0').mkdir()
+    lt = lambda d: dash.link_type(d, str(tmp_path))      # noqa: E731
+    assert lt('wlan0') == 'wireless' and lt('wlan1') == 'wireless'
+    assert lt('enp2s0') == 'wired' and lt('docker0') == 'virtual'
+    assert lt('lo') == 'local' and lt('') == '?' and lt('gone0') == '?'
+
+
+def test_tcp_ms_measures_open_port_and_rejects_closed_one():
+    import socket
+    srv = socket.socket()
+    srv.bind(('127.0.0.1', 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+    ms = dash.tcp_ms('127.0.0.1', port)
+    srv.close()
+    assert ms is not None and 0.0 <= ms < 500.0
+    assert dash.tcp_ms('127.0.0.1', port, timeout=0.5) is None       # nothing listens any more
+
+
+def test_check_link_on_this_machine():
+    import socket
+    srv = socket.socket()
+    srv.bind(('127.0.0.1', 0))
+    srv.listen(1)
+    r = dash.check_link(f'http://127.0.0.1:{srv.getsockname()[1]}')
+    srv.close()
+    assert r['kind'] == 'local' and r['dev'] == 'lo' and r['ms'] is not None
+
+
+def test_check_link_unreachable_has_no_ms():
+    import socket
+    srv = socket.socket()
+    srv.bind(('127.0.0.1', 0))
+    port = srv.getsockname()[1]
+    srv.close()                                      # nothing listens: connection refused
+    r = dash.check_link(f'http://127.0.0.1:{port}')
+    assert r['ms'] is None and r['kind'] == 'local'

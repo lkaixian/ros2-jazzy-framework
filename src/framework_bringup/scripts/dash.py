@@ -8,14 +8,21 @@
 
 Node states: ONLINE (in the ROS graph), BUSY (bt_executor running a tree), ERROR (logged an
 error in the last 30 s, or llm_bridge reports `down`), OFFLINE (expected but not in the graph).
-Expected nodes = the table in check_params. Read-only: it publishes nothing.
+Expected nodes = the table in check_params. Each LLM endpoint line also shows the link to it: local / wired / wireless (the interface this
+machine routes through) and the TCP connect time in ms, measured every 3 s in the background.
+Read-only: it publishes nothing.
 """
 import argparse
 import importlib.machinery
 import json
 import os
+import re
+import socket
+import subprocess
 import sys
+import threading
 import time
+from urllib.parse import urlparse
 
 import rclpy
 from cluster_msgs.msg import ClusterStatus
@@ -41,6 +48,56 @@ def classify(online, err_age, busy=False, down=False):
     return 'BUSY' if busy else 'ONLINE'
 
 
+def parse_route_dev(text):
+    """`ip route get <addr>` output -> interface name ('lo' for this machine), or ''."""
+    m = re.search(r'\bdev (\S+)', text or '')
+    return m.group(1) if m else ''
+
+
+def link_type(dev, sysroot='/sys/class/net'):
+    """local | wireless | wired | virtual | ? for a Linux interface. Wireless interfaces have a
+    `wireless` or `phy80211` entry in sysfs; a physical NIC has a `device` entry, a bridge/veth/tun
+    (docker0, VPN) does not. Only describes THIS machine's side of the link."""
+    if not dev:
+        return '?'
+    if dev == 'lo':
+        return 'local'
+    base = os.path.join(sysroot, dev)
+    if not os.path.isdir(base):
+        return '?'
+    if any(os.path.exists(os.path.join(base, n)) for n in ('wireless', 'phy80211')):
+        return 'wireless'
+    return 'wired' if os.path.exists(os.path.join(base, 'device')) else 'virtual'
+
+
+def tcp_ms(host, port, timeout=1.0):
+    """TCP connect time in ms (one SYN/SYN-ACK round trip), or None if unreachable."""
+    t0 = time.monotonic()
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return (time.monotonic() - t0) * 1000.0
+    except OSError:
+        return None
+
+
+def check_link(url):
+    """{'kind', 'dev', 'ms'} for an http(s) endpoint url."""
+    u = urlparse(url)
+    host, port = u.hostname or '', u.port or (443 if u.scheme == 'https' else 80)
+    try:
+        out = subprocess.run(['ip', '-o', 'route', 'get', socket.gethostbyname(host)],
+                             capture_output=True, text=True, timeout=2).stdout
+    except (OSError, subprocess.SubprocessError, socket.gaierror):
+        out = ''
+    dev = parse_route_dev(out)
+    first = tcp_ms(host, port) if host else None
+    ms = first
+    if first is not None:      # median of 3: one sample over WiFi is often an outlier
+        more = [m for m in (tcp_ms(host, port), tcp_ms(host, port)) if m is not None]
+        ms = sorted([first] + more)[len(more) // 2] if more else first
+    return {'kind': link_type(dev), 'dev': dev, 'ms': ms}
+
+
 def paint(text, code, color=True):
     return f'\033[{code}m{text}\033[0m' if color else text
 
@@ -64,6 +121,8 @@ class Dash:
         self.llm = {}
         self.bt = {}
         self.task = {}
+        self.links = {}      # endpoint url -> check_link() result, refreshed by a thread
+        threading.Thread(target=self._probe_links, daemon=True).start()
         self.cluster = None
         node.create_subscription(Log, '/rosout', self._log, 100)
         node.create_subscription(String, 'llm/status', lambda m: self._js('llm', m), TL)
@@ -71,6 +130,12 @@ class Dash:
         node.create_subscription(String, 'task/state', lambda m: self._js('task', m), TL)
         node.create_subscription(ClusterStatus, 'cluster/status',
                                  lambda m: setattr(self, 'cluster', m), TL)
+
+    def _probe_links(self):
+        while True:     # blocking probes live here so a dead host never stalls the 1 Hz frame
+            for e in list(self.llm.get('endpoints', [])):
+                self.links[e['url']] = check_link(e['url'])
+            time.sleep(3.0)
 
     def _js(self, attr, m):
         try:
@@ -94,9 +159,16 @@ class Dash:
                          COL['WARN'] if st == 'degraded' else COL['ONLINE'], c) +
                    f"   {self.llm.get('reason', '')}")
         for e in self.llm.get('endpoints', []):
+            lk = self.links.get(e['url'])
+            if lk is None:
+                link = 'checking...'
+            elif lk['ms'] is None:
+                link = paint(f"{lk['kind']:<8} unreachable", COL['ERROR'], c)
+            else:
+                link = f"{lk['kind']:<8} {lk['ms']:6.1f} ms"
             out.append('   ' + paint('up  ' if e['available'] else 'DOWN',
                                      COL['ONLINE'] if e['available'] else COL['ERROR'], c) +
-                       f"  {e['url']}")
+                       f"  {e['url']:<34} {link}")
         # task lifecycle (orchestrator)
         t = self.task
         if t:
@@ -160,6 +232,11 @@ def main(argv=None):
         end = time.monotonic() + 2.5      # let latched topics and the graph arrive
         while time.monotonic() < end:
             rclpy.spin_once(node, timeout_sec=0.1)
+        if a.once:     # give the background link check one round before the single frame
+            end = time.monotonic() + 6.0
+            while time.monotonic() < end and not all(
+                    e['url'] in d.links for e in d.llm.get('endpoints', [])):
+                rclpy.spin_once(node, timeout_sec=0.1)
         while True:
             frame = d.frame(exp)
             print(frame if a.once else '\033[H\033[J' + frame, flush=True)
