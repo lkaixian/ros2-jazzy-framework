@@ -118,7 +118,7 @@ Python edits need `colcon build` again: in this setup `--symlink-install` copies
 
 ## Executing plans (safety)
 `framework.launch.py` starts `bt_executor` in **dry-run**: extension nodes are only logged and succeed, nothing moves. To command hardware you must pass `dry_run:=false`, and by default a plan still waits for `ros2 service call /bt_executor/run std_srvs/srv/Trigger` (`auto_run:=true` runs each valid plan immediately). `ros2 service call /bt_executor/halt ...` stops the tree and cancels the running extension goal.
-All motion goes through `cmd_vel_mux_node` (clamps `max_linear`/`max_angular`; zero Twist if no input for `timeout_sec`=0.5 s, so a crashed extension coasts at most ~0.5 s at its last command). The mux is a software watchdog, **not** an e-stop: keep a hardware stop within reach.
+All motion goes through `cmd_vel_mux_node` (clamps `max_linear`/`max_angular`; zero Twist if no input for `timeout_sec`=0.5 s, so a crashed extension coasts at most ~0.5 s at its last command). Kobuki bumper/cliff events latch the mux to zero until the `safety_reset` service is called (refused while a sensor is still hit; sim-verified only). The mux is a software gate, **not** an e-stop: keep a hardware stop within reach.
 Arm: pass `arm_group:=... arm_ee_link:=... arm_base_frame:=... gripper_action:=...` once the arm is chosen; with those empty `arm_extension` refuses to move. Velocity scale is capped at 0.1 by default.
 
 ## Audio engines

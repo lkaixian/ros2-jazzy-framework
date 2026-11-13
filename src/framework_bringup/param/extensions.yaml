@@ -12,6 +12,9 @@ cmd_vel_mux_node:
     max_linear: 0.3         # hard clamp, m/s
     max_angular: 0.8        # hard clamp, rad/s
     rate_hz: 20.0
+    safety_events_enabled: true   # false = bumper/cliff ignored (sim without kobuki msgs)
+    bumper_topic: events/bumper   # Kobuki driver, relative to its namespace
+    cliff_topic: events/cliff
 
 odom_extension_node:
   ros__parameters:
