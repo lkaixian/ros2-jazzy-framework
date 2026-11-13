@@ -1,0 +1,140 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: ros:jazzy
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+    steps:
+      - uses: actions/checkout@v4
+
+      # Kobuki driver messages: cmd_vel_mux imports them for the bumper/cliff latch and fails
+      # closed without them. Pinned to the commit the robot workspace uses (~/ros2_ws).
+      - uses: actions/checkout@v4
+        with:
+          repository: kobuki-base/kobuki_ros_interfaces
+          ref: 7711d4fbec13c69bcf6477ce8e446c3ccca33113
+          path: kobuki_ws/src/kobuki_ros_interfaces
+
+      - name: System packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential cmake python3-pip python3-pytest python3-yaml python3-numpy \
+            python3-opencv python3-colcon-common-extensions python3-rosdep \
+            libcurl4-openssl-dev nlohmann-json3-dev libgtest-dev \
+            ros-jazzy-nav2-bringup ros-jazzy-slam-toolbox ros-jazzy-cartographer-ros \
+            ros-jazzy-rtabmap-ros ros-jazzy-realsense2-camera \
+            ros-jazzy-depthimage-to-laserscan
+
+      - name: rosdep
+        run: |
+          rosdep init || true
+          rosdep update --rosdistro jazzy
+          rosdep install --from-paths src kobuki_ws/src --ignore-src --rosdistro jazzy -y -r \
+            --skip-keys "sllidar_ros2"
+
+      - name: Build kobuki_ros_interfaces
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          cd kobuki_ws && colcon build --event-handlers console_cohesion+
+
+      - name: Build workspace
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          colcon build --event-handlers console_cohesion+
+
+      - name: Python tests
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          ls src/*/test/test_*.py | grep -vE "test_(flake8|pep257|copyright)" \
+            | xargs python3 -m pytest -q -p no:cacheprovider
+
+      - name: C++ tests
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          ./build/bt_executor/test_registry
+          ./build/llm_bridge/test_llama_client
+
+      - name: check_params (every node starts and matches param/)
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          ros2 run framework_bringup check_params
+
+      - name: Launch files parse (--show-args)
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          rc=0
+          for f in $(find src launch -name '*.launch.py' | sort); do
+            if ros2 launch "$f" --show-args > /dev/null 2> /tmp/launch_err.txt; then
+              echo "ok   $f"
+            else
+              echo "FAIL $f"; cat /tmp/launch_err.txt; rc=1
+            fi
+          done
+          exit $rc
+
+      - name: Sim - bumper/cliff stop latch
+        timeout-minutes: 3
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          python3 tools/integration/stop_latch_test.py
+
+      - name: Sim - task to simulated robot (live moves, dry-run does not)
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          export OUT=/tmp/robocup_it ROS_DOMAIN_ID=45
+          SPEC='{"goal":"x","steps":[{"node":"DriveDistance","ports":{"meters":"0.30"}}]}'
+          tools/integration/itest.sh live false "$SPEC" none | tee /tmp/itest_live.txt
+          tools/integration/itest.sh dry true "$SPEC" none | tee /tmp/itest_dry.txt
+          grep -q '"message":"SUCCESS"' /tmp/itest_live.txt
+          grep -q '"message":"dry run"' /tmp/itest_dry.txt
+          # pose line: "pose:   x y yaw ..."; live must have moved ~0.30 m, dry-run must stay at 0
+          python3 - <<'PY'
+          def x(path):
+              line = [l for l in open(path) if l.startswith('pose:')][-1]
+              return float(line.split()[1])
+          live, dry = x('/tmp/itest_live.txt'), x('/tmp/itest_dry.txt')
+          print(f'live x={live} dry x={dry}')
+          assert 0.25 < live < 0.35, live
+          assert abs(dry) < 1e-6, dry
+          PY
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            /tmp/robocup_it
+            log/latest_build
+            log/latest_test

@@ -20,7 +20,7 @@ Verification levels used below:
 | Orchestrator | `bt_orchestrator` | light | yes | n/a | generate -> validate -> retry loop; `submit_bt` for hand-written trees |
 | BT executor (C++) | `bt_executor` | yes | yes | no | dry-run default, `run`/`halt` services, built-in perception conditions |
 | Extensions | `odom_`, `pid_`, `pose_`, `social_`, `arm_`, `nav_extension` | yes | odom/pid/social/nav: yes | no | arm: only goal construction tested (arm model undecided) |
-| Safety mux | `bt_common/cmd_vel_mux_node` | yes | yes | no | priority + 0.5 s watchdog + clamps; Nav2 is the lowest-priority input |
+| Safety mux | `bt_common/cmd_vel_mux_node` | yes | yes | no | priority + 0.5 s watchdog + clamps; Nav2 is the lowest-priority input; bumper/cliff latch + `safety_reset` service (fake events only) |
 | Audio | `audio_msgr`, `audio_capture`, `stt_pipeline`, `tts_pipeline` | yes | mock engines | no | no real STT engine installed; espeak works; Piper/Kokoro untested |
 | Navigation | `nav_sim`, `nav_extension`, launch+params in `framework_bringup` | yes | real Nav2+AMCL+slam_toolbox+Cartographer on a simulated lidar | no | RTAB-Map/RealSense only launch-checked |
 | Cluster | `cluster_msgs`, `cluster_core` | 621 tests | scheduler + 3 simulated hosts, one machine | no 2nd machine | failover ~5.2 s, restart blackout 1.6 s |
@@ -51,13 +51,13 @@ Verification levels used below:
 - Arm: model unknown (ask the user's teammate), MoveIt config, gripper action, pick/place.
 - Two physical machines / WiFi for the cluster; half-partition behaviour; SROS2.
 - `setup.sh` apt/rosdep/pip/llama.cpp/models steps (dry-run only).
-- Kobuki bumper/cliff events are not wired into any safety path.
+- Bumper/cliff latch exists in the mux but is untested with the real Kobuki driver (topic names, event timing); no scan-based obstacle check for extension motion; no hardware e-stop.
 
 ## Suggested next steps (in order)
 1. Bring up the real robot step by step with the user present: Kobuki driver -> lidar -> TF check ->
    `navigation.launch.py slam:=slam_toolbox` -> save map -> measure the placeholder transforms ->
    `map:=...` navigation with `dry_run` still true, then live with a spotter.
-2. Wire Kobuki bumper/cliff + a hardware stop into the mux path (see technical_debt T-01).
+2. Finish T-01: verify the bumper/cliff latch on the real Kobuki, add a scan-based check for extension motion, document a hardware stop.
 3. Collect images of the user's items, train the detector (`train_detector`), then regenerate SLM
    data with `--labels`.
 4. Decide the face-recognition approach (technical_debt T-12), install STT/TTS engines, test audio.
@@ -65,4 +65,4 @@ Verification levels used below:
    runtime failure -> SLM repair loop (the "fast brain" idea, T-06).
 6. Pick the arm model; fill `arm_*` params; test MoveIt in its simulator.
 7. Two-machine cluster test; set real job costs in `param/cluster_jobs.yaml`.
-8. Add CI (build + tests + `check_params` + launch smoke) so silent breakage is caught (T-02).
+8. Push and watch the first run of `.github/workflows/ci.yml`, fix what GitHub finds (T-02; never run there yet).

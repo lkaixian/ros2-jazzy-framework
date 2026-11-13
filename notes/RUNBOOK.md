@@ -54,6 +54,7 @@ Examples: `src/framework_bringup/behavior_trees/{greet_person,enroll_person}.xml
 tools/integration/greet_test.sh greet_person.xml alice mytest        # fake perception + mock TTS
 tools/integration/itest.sh live false '<spec json>' none              # full chain to a simulated robot
 tools/integration/itest.sh halt false '{"goal":"x","steps":[{"node":"DriveDistance","ports":{"meters":"3.0"}}]}' 2.5
+python3 tools/integration/stop_latch_test.py                          # bumper/cliff latch on the mux (own domain 77)
 python3 src/cluster_core/test/integration/it_cluster.py               # cluster: 3 simulated hosts, failover timing
 ```
 They use an isolated DDS domain (default 45), log to `/tmp/robocup_it`, and clean up on exit.
