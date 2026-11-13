@@ -25,6 +25,14 @@ ros2 run framework_bringup check_params          # starts each node on domain 97
 ```
 Run pytest from the workspace root with the workspace sourced (tests import installed packages).
 
+## See what is running (terminal dashboard)
+```
+ros2 run framework_bringup dash              # 1 Hz table: LLM endpoints, cluster jobs, every node ONLINE/BUSY/ERROR/OFFLINE
+ros2 run framework_bringup dash --logs       # verbose: all /rosout lines (--level warn, --node llm_bridge)
+ros2 run framework_bringup dash --once       # one frame, for pipes/CI
+```
+Read-only. "Expected" nodes come from the table in `check_params`; BUSY only means bt_executor is running a tree.
+
 ## Launch
 ```
 ros2 launch framework_bringup framework.launch.py [args]        # or: ros2 launch launch/framework.launch.py
