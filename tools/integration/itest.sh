@@ -6,7 +6,10 @@ TOOLS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$TOOLS/../.." && pwd)"
 OUT="${OUT:-/tmp/robocup_it}"; mkdir -p "$OUT"
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-45}" ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
-trap 'kill -INT $(jobs -p) 2>/dev/null; sleep 3; kill $(jobs -p) 2>/dev/null' EXIT
+# set -m: every background job is its own process group, so the trap reaches ros2 launch's
+# children too (they used to survive and pile up, and a stale live executor broke the next run)
+set -m
+trap 'for p in $(jobs -p); do kill -INT -- -$p 2>/dev/null; done; sleep 3; for p in $(jobs -p); do kill -KILL -- -$p 2>/dev/null; done' EXIT
 # usage: itest.sh <name> <dry_run true|false> <spec-json> <halt_after_sec|none>
 export PATH=/usr/bin:$PATH; source /opt/ros/jazzy/setup.bash; source "$ROOT/install/setup.bash"
 N=$1; echo "$3" > $OUT/spec_$N.json
@@ -16,7 +19,7 @@ ros2 launch framework_bringup extensions.launch.py enable_arm:=false enable_pose
 ros2 launch framework_bringup pipeline.launch.py dry_run:=$2 auto_run:=true > $OUT/pipe_$N.log 2>&1 &
 sleep 11
 (timeout 30 ros2 topic echo /bt/status --field data > $OUT/status_$N.txt 2>&1 &)
-sleep 1
+sleep 3   # a cold `ros2 topic echo` needs a moment to subscribe, or it misses the first states
 ros2 topic pub --once /bt/task std_msgs/msg/String "{data: 'do it'}" > /dev/null 2>&1
 if [ "$4" != "none" ]; then sleep $4; ros2 service call /bt_executor/halt std_srvs/srv/Trigger > $OUT/halt_$N.txt 2>&1; fi
 sleep 9

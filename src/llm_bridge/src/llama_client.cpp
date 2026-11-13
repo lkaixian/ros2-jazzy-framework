@@ -120,6 +120,9 @@ bool LlamaClient::healthy(double timeout_sec) const
   const CURLcode rc = curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
   curl_easy_cleanup(curl);
-  return rc == CURLE_OK && status == 200;
+  if (rc != CURLE_OK) {return false;}
+  // 200 = ready. 503 = llama-server still loading its model. 404/405/501 = reachable but the
+  // server has no /health (other OpenAI-compatible servers, test doubles): do not call it down.
+  return status == 200 || status == 404 || status == 405 || status == 501;
 }
 }  // namespace llm_bridge

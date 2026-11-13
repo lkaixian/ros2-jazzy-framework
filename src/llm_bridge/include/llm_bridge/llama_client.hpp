@@ -32,7 +32,8 @@ public:
   /// connect_timeout_sec <= 0 leaves curl's default (minutes): set it so a dead host fails fast.
   LlamaClient(std::string base_url, double timeout_sec, double connect_timeout_sec = 0.0);
   ChatResult chat(const ChatRequest & req) const;
-  /// GET /health within timeout_sec; true only for HTTP 200 (503 = model still loading).
+  /// GET /health within timeout_sec: true for 200, and for 404/405/501 (reachable, no /health);
+  /// false for 503 (model still loading), other errors and connection failures.
   bool healthy(double timeout_sec) const;
 
 private:
