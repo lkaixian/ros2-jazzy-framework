@@ -8,6 +8,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>bt_pipeline_msgs</depend>
   <depend>libcurl-dev</depend>
   <depend>nlohmann-json-dev</depend>

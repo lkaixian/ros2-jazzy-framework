@@ -58,8 +58,9 @@ ChatResult parse_response(const std::string & body)
   return r;
 }
 
-LlamaClient::LlamaClient(std::string base_url, double timeout_sec)
-: base_url_(std::move(base_url)), timeout_sec_(timeout_sec)
+LlamaClient::LlamaClient(std::string base_url, double timeout_sec, double connect_timeout_sec)
+: base_url_(std::move(base_url)), timeout_sec_(timeout_sec),
+  connect_timeout_sec_(connect_timeout_sec)
 {
   while (!base_url_.empty() && base_url_.back() == '/') {base_url_.pop_back();}
   curl_init_once();
@@ -85,6 +86,10 @@ ChatResult LlamaClient::chat(const ChatRequest & req) const
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
   curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeout_sec_ * 1000));
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+  if (connect_timeout_sec_ > 0) {
+    curl_easy_setopt(
+      curl, CURLOPT_CONNECTTIMEOUT_MS, static_cast<long>(connect_timeout_sec_ * 1000));
+  }
   const CURLcode rc = curl_easy_perform(curl);
   long status = 0;
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
@@ -98,5 +103,23 @@ ChatResult LlamaClient::chat(const ChatRequest & req) const
   r = parse_response(response);
   if (!r.ok && r.error.empty()) {r.error = "HTTP " + std::to_string(status);}
   return r;
+}
+
+bool LlamaClient::healthy(double timeout_sec) const
+{
+  CURL * curl = curl_easy_init();
+  if (!curl) {return false;}
+  const std::string url = base_url_ + "/health";
+  std::string sink;
+  curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &sink);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, static_cast<long>(timeout_sec * 1000));
+  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+  long status = 0;
+  const CURLcode rc = curl_easy_perform(curl);
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+  curl_easy_cleanup(curl);
+  return rc == CURLE_OK && status == 200;
 }
 }  // namespace llm_bridge

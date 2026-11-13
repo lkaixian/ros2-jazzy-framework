@@ -8,11 +8,12 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(bt_pipeline_msgs REQUIRED)
 find_package(CURL REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
-add_library(llama_client src/llama_client.cpp)
+add_library(llama_client src/llama_client.cpp src/failover.cpp)
 target_include_directories(llama_client PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
@@ -20,7 +21,7 @@ target_link_libraries(llama_client PUBLIC CURL::libcurl nlohmann_json::nlohmann_
 
 add_executable(llm_bridge_node src/llm_bridge_node.cpp)
 target_link_libraries(llm_bridge_node llama_client)
-ament_target_dependencies(llm_bridge_node rclcpp std_msgs bt_pipeline_msgs)
+ament_target_dependencies(llm_bridge_node rclcpp std_msgs std_srvs bt_pipeline_msgs)
 
 install(TARGETS llama_client llm_bridge_node
   ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION lib/${PROJECT_NAME})
@@ -31,6 +32,8 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_llama_client test/test_llama_client.cpp)
   target_link_libraries(test_llama_client llama_client)
+  ament_add_gtest(test_failover test/test_failover.cpp)
+  target_link_libraries(test_failover llama_client)
 endif()
 
 ament_package()

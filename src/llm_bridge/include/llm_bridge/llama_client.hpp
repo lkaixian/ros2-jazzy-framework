@@ -29,11 +29,15 @@ ChatResult parse_response(const std::string & body);
 class LlamaClient
 {
 public:
-  LlamaClient(std::string base_url, double timeout_sec);
+  /// connect_timeout_sec <= 0 leaves curl's default (minutes): set it so a dead host fails fast.
+  LlamaClient(std::string base_url, double timeout_sec, double connect_timeout_sec = 0.0);
   ChatResult chat(const ChatRequest & req) const;
+  /// GET /health within timeout_sec; true only for HTTP 200 (503 = model still loading).
+  bool healthy(double timeout_sec) const;
 
 private:
   std::string base_url_;
   double timeout_sec_;
+  double connect_timeout_sec_;
 };
 }  // namespace llm_bridge
