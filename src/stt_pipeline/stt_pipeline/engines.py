@@ -28,7 +28,10 @@ class Vosk:
             raise SttError('vosk not installed: pip install vosk') from e
         self._vosk = vosk
         vosk.SetLogLevel(-1)
-        self.model = vosk.Model(model)
+        try:
+            self.model = vosk.Model(model)
+        except Exception as e:  # noqa: BLE001  vosk raises a bare Exception for a bad path
+            raise SttError(f'vosk could not load model {model!r}: {e}') from e
 
     def transcribe(self, pcm, rate):
         rec = self._vosk.KaldiRecognizer(self.model, rate)
@@ -48,7 +51,10 @@ class FasterWhisper:
             from faster_whisper import WhisperModel
         except ImportError as e:
             raise SttError('faster-whisper not installed: pip install faster-whisper') from e
-        self.model = WhisperModel(model, device=device, compute_type=compute_type)
+        try:
+            self.model = WhisperModel(model, device=device, compute_type=compute_type)
+        except Exception as e:  # noqa: BLE001  bad name/path, no network, wrong compute type...
+            raise SttError(f'faster-whisper could not load {model!r}: {e}') from e
         self.language = language or None
 
     def transcribe(self, pcm, rate):

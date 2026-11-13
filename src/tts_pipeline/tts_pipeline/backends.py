@@ -39,7 +39,10 @@ class Kokoro:
             raise TtsError('kokoro-onnx not installed: pip install kokoro-onnx') from e
         if not model or not voices:
             raise TtsError('kokoro_model and kokoro_voices parameters are required')
-        self._k = _K(model, voices)
+        try:
+            self._k = _K(model, voices)
+        except Exception as e:  # noqa: BLE001  onnxruntime raises NoSuchFile etc.
+            raise TtsError(f'kokoro could not load {model!r} / {voices!r}: {e}') from e
 
     def synth(self, text, voice, speed=1.0, lang='en-us'):
         """Returns (int16 PCM bytes, sample_rate)."""
