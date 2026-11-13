@@ -9,6 +9,7 @@ Read in this order (10 minutes):
 | [RUNBOOK.md](RUNBOOK.md) | Exact commands: setup, build, launch, test, debug |
 | [GOTCHAS.md](GOTCHAS.md) | Traps that already cost time (silent edit failures, PATH, numpy, process cleanup...) |
 | [technical_debt.md](technical_debt.md) | Known shortcuts, risks and unfinished edges, ranked |
+| [BACKLOG.md](BACKLOG.md) | What to do next, as a checklist (start here after the status) |
 
 Repo: `~/ros2-jazzy-robocup-fw` (ROS 2 Jazzy, Ubuntu 24.04), remote
 `https://github.com/lkaixian/ros2-jazzy-framework.git`, branch `main`. The user's older robot
