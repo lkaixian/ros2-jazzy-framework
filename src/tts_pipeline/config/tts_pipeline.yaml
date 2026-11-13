@@ -1,0 +1,13 @@
+tts_node:
+  ros__parameters:
+    engine: espeak           # espeak | piper | kokoro | mock
+    voice: ""                # espeak voice (e.g. en-us) or ignored by piper
+    rate: 160                # espeak words/minute
+    piper_model: ""          # path to a .onnx Piper voice
+    piper_rate: 22050        # sample rate of the Piper voice
+    audio_device: ""         # aplay -D device for piper (empty = default)
+    max_queue: 16
+plan_announcer_node:
+  ros__parameters:
+    speak_errors: true
+    max_errors_spoken: 2

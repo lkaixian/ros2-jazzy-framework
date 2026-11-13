@@ -1,0 +1,6 @@
+string text
+string voice               # engine-specific; empty = default
+bool blocking              # wait until the utterance finished
+---
+bool ok
+string error

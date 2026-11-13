@@ -1,0 +1,22 @@
+vad_node:
+  ros__parameters:
+    threshold_rms: 500.0      # absolute RMS floor (int16 units)
+    noise_ratio: 3.0          # speech must also exceed noise_floor * ratio
+    min_speech_ms: 150
+    hangover_ms: 600
+    preroll_ms: 300
+    max_utterance_sec: 15.0
+    mute_while_speaking: true # drop audio while tts/status is SPEAKING (+ tail)
+    mute_tail_ms: 400
+stt_node:
+  ros__parameters:
+    engine: faster_whisper    # faster_whisper | vosk | mock
+    model: base.en            # faster_whisper model name/path, or Vosk model dir
+    language: ""              # "" = auto
+    device: cpu
+    compute_type: int8
+    min_confidence: 0.0
+transcript_to_task_node:
+  ros__parameters:
+    wake_word: ""             # e.g. "robot"; empty = every final transcript is a task
+    wake_window_sec: 8.0      # a bare wake word arms the next utterance for this long

@@ -13,7 +13,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 def _node(pkg, exe, enable):
     cfg = os.path.join(share(pkg), 'config', f'{pkg}.yaml')
     return Node(package=pkg, executable=exe, parameters=[
-        cfg, {'image_topic': LC('image_topic'),
+        cfg, {'image_topic': ParameterValue(LC('image_topic'), value_type=str),
               'show': ParameterValue(LC('show'), value_type=bool)}],
         condition=IfCondition(LC(enable)), output='screen')
 

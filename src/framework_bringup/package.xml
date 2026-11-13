@@ -20,6 +20,9 @@
   <exec_depend>pose_extension</exec_depend>
   <exec_depend>odom_extension</exec_depend>
   <exec_depend>pid_extension</exec_depend>
+  <exec_depend>audio_capture</exec_depend>
+  <exec_depend>stt_pipeline</exec_depend>
+  <exec_depend>tts_pipeline</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>
