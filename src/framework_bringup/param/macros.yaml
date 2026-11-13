@@ -1,0 +1,94 @@
+# Macros: named step lists the LLM can call as {"macro": "<name>", "args": {...}} instead of writing
+# every node (fewer tokens = faster plans). Expanded in plain code before the SLM / rule generator;
+# Tests expand and validate every macro here against the real node catalog
+# (src/bt_validator/test/test_macro_library.py), so a typo in a node or port fails the build.
+#   params: name -> {required: true | default: "..."}   (values are strings; ${name} in any value)
+#   example_args: used by the test. A macro may call other macros (max depth 4, no cycles).
+macros:
+  say:
+    description: "Say one short sentence"
+    params: {text: {required: true}}
+    example_args: {text: "Hello"}
+    steps:
+      - {node: Speak, ports: {text: "${text}"}}
+
+  go_to_place:
+    description: "Drive to a named place from places.yaml; if blocked, clear the costmaps and try once more"
+    params: {place: {required: true}}
+    example_args: {place: door}
+    steps:
+      - group: Fallback
+        steps:
+          - {node: NavigateToPlace, ports: {place: "${place}"}}
+          - group: Sequence
+            steps:
+              - {node: ClearCostmaps}
+              - {node: NavigateToPlace, ports: {place: "${place}"}}
+
+  go_and_say:
+    description: "Drive to a named place, then say a sentence there"
+    params: {place: {required: true}, text: {required: true}}
+    example_args: {place: door, text: "I have arrived"}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {macro: say, args: {text: "${text}"}}
+
+  patrol:
+    description: "Visit two named places in order"
+    params: {first: {required: true}, second: {required: true}}
+    example_args: {first: left_room, second: right_room}
+    steps:
+      - {macro: go_to_place, args: {place: "${first}"}}
+      - {macro: go_to_place, args: {place: "${second}"}}
+
+  turn_around:
+    description: "Rotate in place by half a turn"
+    steps:
+      - {node: RotateBy, ports: {radians: "3.14"}}
+
+  greet_person:
+    description: "Wait for a person, recognise the face and greet them by name (unknown -> there); keeps trying about 30 rounds"
+    steps:
+      - group: Fallback
+        retry: 30
+        steps:
+          - group: Sequence
+            steps:
+              - {node: DetectPerson, ports: {min_conf: "0.5"}}
+              - {node: ExtractFaceFeature, ports: {min_conf: "0.5", out_identity: "{who}", out_similarity: "{sim}"}}
+              - {node: Speak, ports: {text: "Hello {person}", person: "{who}"}}
+          - group: Sequence
+            steps:
+              - {node: Sleep, ports: {msec: "200"}}
+              - {node: AlwaysFailure}
+
+  approach_person:
+    description: "Find a person and walk up to them, stopping at a stand-off distance in metres (min 0.5)"
+    params: {distance: {default: "1.0"}}
+    steps:
+      - {node: DetectPerson}
+      - {node: FollowTarget, ports: {approach: "true", distance: "${distance}"}}
+
+  wave_back:
+    description: "If a person is waving, say hello to them"
+    steps:
+      - {node: IsPersonWaving}
+      - {node: Speak, ports: {text: "Hello!"}}
+
+  report_object:
+    description: "Look for an object (label from the detector's list), turning once if not seen, and say what was found"
+    params: {label: {required: true}}
+    example_args: {label: person}
+    steps:
+      - group: Fallback
+        steps:
+          - group: Sequence
+            steps:
+              - {node: DetectObject, ports: {label: "${label}"}}
+              - {node: Speak, ports: {text: "I can see a ${label}"}}
+          - group: Sequence
+            steps:
+              - {node: RotateBy, ports: {radians: "1.57"}}
+              - {node: DetectObject, ports: {label: "${label}"}}
+              - {node: Speak, ports: {text: "I can see a ${label} now"}}
+          - {node: Speak, ports: {text: "I cannot see a ${label}"}}

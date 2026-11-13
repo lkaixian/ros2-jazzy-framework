@@ -1,6 +1,8 @@
 import json
 import threading
 
+from bt_common.macros import MacroError, expand, load_macros
+
 import rclpy
 from bt_pipeline_msgs.msg import BtPlan
 from bt_pipeline_msgs.srv import GenerateXml, ValidateTree
@@ -28,6 +30,7 @@ class OrchestratorNode(Node):
         super().__init__('orchestrator_node')
         self.declare_parameter('max_attempts', 3)
         self.declare_parameter('call_timeout_sec', 60.0)
+        self.declare_parameter('macros_file', '')     # '' = framework_bringup/param/macros.yaml
         self.declare_parameter('max_repairs', 0)      # 0 = never re-plan a failed run on its own
         cb = ReentrantCallbackGroup()
         self.slm = self.create_client(GenerateXml, 'bt_slm/generate', callback_group=cb)
@@ -37,6 +40,11 @@ class OrchestratorNode(Node):
         self.create_subscription(String, 'bt/task_spec', self._on_spec, 10,
                                  callback_group=cb)
         self.lock = threading.Lock()   # one plan at a time
+        try:
+            self.macros = load_macros(self.get_parameter('macros_file').value or None)
+        except (MacroError, OSError) as e:
+            self.get_logger().error(f'macros not loaded ({e}): macro steps will be refused')
+            self.macros = {}
         self.fsm = TaskFsm(self.get_parameter('max_repairs').value)
         self.fsm_lock = threading.Lock()
         self.state_pub = self.create_publisher(
@@ -85,7 +93,10 @@ class OrchestratorNode(Node):
             plan = BtPlan(task_spec=msg.data, valid=False)
             plan.header.stamp = self.get_clock().now().to_msg()
             try:
-                self._run(plan)
+                self._run(plan, self._expanded(plan.task_spec))
+            except (MacroError, ValueError) as e:        # bad JSON or a bad macro call: tell the LLM
+                plan.errors = [f'task spec rejected: {e}']
+                self.get_logger().warn(plan.errors[0])
             except Exception as e:  # noqa: BLE001
                 plan.errors = [f'pipeline error: {type(e).__name__}: {e}']
                 self.get_logger().error(plan.errors[0])
@@ -96,11 +107,15 @@ class OrchestratorNode(Node):
             self.get_logger().info(
                 f'plan valid={plan.valid} attempts={plan.attempts} errors={len(plan.errors)}')
 
-    def _run(self, plan):
+    def _expanded(self, task_spec):
+        """Macro steps -> real nodes. plan.task_spec stays the short form the LLM wrote."""
+        return json.dumps(expand(json.loads(task_spec), self.macros))
+
+    def _run(self, plan, expanded):
         for attempt in range(1, self.get_parameter('max_attempts').value + 1):
             plan.attempts = attempt
             g = self._call(self.slm, GenerateXml.Request(
-                task_spec=plan.task_spec, previous_xml=plan.xml,
+                task_spec=expanded, previous_xml=plan.xml,
                 previous_errors=list(plan.errors)))
             if not g.ok:
                 plan.errors = [f'SLM failed: {g.error}']

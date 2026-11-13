@@ -39,7 +39,7 @@ jobs:
             build-essential cmake python3-pip python3-pytest python3-yaml python3-numpy \
             python3-opencv python3-colcon-common-extensions python3-rosdep \
             libcurl4-openssl-dev nlohmann-json3-dev libgtest-dev espeak-ng \
-            openssl ros-jazzy-sros2 \
+            openssl ros-jazzy-sros2 ros-jazzy-rmw-cyclonedds-cpp \
             ros-jazzy-nav2-bringup ros-jazzy-slam-toolbox ros-jazzy-cartographer-ros \
             ros-jazzy-rtabmap-ros ros-jazzy-realsense2-camera \
             ros-jazzy-depthimage-to-laserscan
@@ -181,6 +181,14 @@ jobs:
           tools/integration/itest.sh dry true "$SPEC" none | tee /tmp/itest_dry.txt
           grep -q '"message":"SUCCESS"' /tmp/itest_live.txt
           grep -q '"message":"dry run"' /tmp/itest_dry.txt
+          # the LLM answers with a macro step: expanded by the orchestrator, validated, executed
+          tools/integration/itest.sh macro false '{"goal":"turn","steps":[{"macro":"turn_around"}]}' none \
+            | tee /tmp/itest_macro.txt
+          grep -q '"message":"SUCCESS"' /tmp/itest_macro.txt
+          python3 -c "
+          l = [x for x in open('/tmp/itest_macro.txt') if x.startswith('pose:')][-1].split()
+          assert 3.0 < float(l[3]) < 3.3, l
+          print('macro turn_around: yaw', l[3])"
           # pose line: "pose:   x y yaw ..."; live must have moved ~0.30 m, dry-run must stay at 0
           python3 - <<'PY'
           def x(path):

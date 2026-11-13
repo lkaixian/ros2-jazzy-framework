@@ -55,7 +55,15 @@ def env_of(path):
 
 def peer(role, env):
     return subprocess.Popen([sys.executable, '-c', PEER, role], env=env, stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL, text=True)
+                            stderr=subprocess.PIPE, text=True)
+
+
+def result(name, p):
+    out, err = p.communicate(timeout=40)
+    out = out.strip()
+    if out not in ('RECEIVED', 'NOTHING'):      # the probe itself broke: say why, do not guess
+        print(f'--- probe {name} printed {out!r}; stderr tail:\n{err[-600:]}', file=sys.stderr)
+    return out
 
 
 def main():
@@ -96,8 +104,11 @@ def main():
         member = peer('sub', eb)
         outsider = peer('sub', out)
         evil = peer('sub', {**ee, 'ROBOCUP_PEER': 'localhost'})
-        got = {k: p.communicate(timeout=40)[0].strip() for k, p in
+        got = {k: result(k, p) for k, p in
                (('member', member), ('unsecured', outsider), ('evil', evil))}
+        pub_err = pub.communicate(timeout=20)[1] if pub.poll() is not None else ''
+        if pub_err:
+            print(f'--- publisher stderr tail:\n{pub_err[-600:]}', file=sys.stderr)
         pub.kill()
         res['a joined member receives over secured DDS'] = got['member'] == 'RECEIVED'
         res['an unsecured outsider receives nothing'] = got['unsecured'] == 'NOTHING'

@@ -2,6 +2,7 @@ import json
 
 import rclpy
 from bt_common.catalog import Catalog, format_listing
+from bt_common.macros import MacroError, describe, load_macros
 from bt_common.extension_node import MANIFEST_QOS
 from bt_pipeline_msgs.msg import ExtensionManifest
 from bt_pipeline_msgs.srv import GetCatalog, ValidateTree
@@ -21,8 +22,14 @@ class ValidatorNode(Node):
         super().__init__('bt_validator_node')
         self.declare_parameter('max_depth', 12)
         self.declare_parameter('max_nodes', 64)
+        self.declare_parameter('macros_file', '')     # '' = framework_bringup/param/macros.yaml
         self.declare_parameter('labels', '')       # comma-separated; used until a detector announces
         self.catalog = Catalog()
+        try:
+            self.macros = load_macros(self.get_parameter('macros_file').value or None)
+        except (MacroError, OSError) as e:
+            self.get_logger().error(f'macros not loaded: {e}')
+            self.macros = {}
         self.vocab = {}
         labels = [s.strip() for s in self.get_parameter('labels').value.split(',') if s.strip()]
         if labels:
@@ -58,6 +65,10 @@ class ValidatorNode(Node):
 
     def _on_catalog(self, _req, res):
         res.listing = format_listing(self.catalog.all().values(), with_desc=True)
+        if self.macros:
+            res.listing += ('\n\nMacros: a step {"macro": "<name>", "args": {...}} expands to several '
+                            'nodes - prefer a macro when one fits (shorter, faster):\n' +
+                            describe(self.macros))
         res.labels = sorted(self.vocab.get(LABEL_KEY, ()))
         return res
 

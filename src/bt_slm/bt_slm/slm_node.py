@@ -3,6 +3,7 @@ import json
 import rclpy
 from bt_common.catalog import Catalog
 from bt_common.extension_node import MANIFEST_QOS
+from bt_validator.validate import validate_xml
 from bt_pipeline_msgs.msg import ExtensionManifest
 from bt_pipeline_msgs.srv import GenerateXml
 from rclpy.node import Node
@@ -18,6 +19,9 @@ class SlmNode(Node):
         self.declare_parameter('device', 'cpu')
         self.declare_parameter('max_new_tokens', 768)
         self.declare_parameter('temperature', 0.0)
+        # the rule-based generator is exact for every spec in the grammar and ~25000x faster than the
+        # model (0.06 ms vs 1.5 s on a GTX 1650), so the model only runs when rules cannot do it
+        self.declare_parameter('rules_first', True)
         self.catalog = Catalog()
         self.tok = self.model = None
         self._load()
@@ -43,6 +47,13 @@ class SlmNode(Node):
     def _generate(self, req):
         if self.model is None:
             return build_xml(req.task_spec, set(self.catalog.all()), req.previous_errors)
+        if self.get_parameter('rules_first').value and not req.previous_errors:
+            try:
+                xml = build_xml(req.task_spec)
+                if not validate_xml(xml, self.catalog):
+                    return xml
+            except Exception:  # noqa: BLE001 - out of grammar / unknown node: the model may cope
+                pass
         import torch
         from bt_slm.prompt import extract_xml
         prompt = prompt_for(req.task_spec, self.catalog, req.previous_xml,

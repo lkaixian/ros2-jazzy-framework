@@ -25,6 +25,16 @@ ros2 run framework_bringup check_params          # starts each node on domain 97
 ```
 Run pytest from the workspace root with the workspace sourced (tests import installed packages).
 
+## Macros (shorter LLM output = faster plans)
+`param/macros.yaml`: named step lists with parameters. The LLM writes `{"macro": "go_to_place", "args":
+{"place": "door"}}`; the orchestrator expands it to real nodes before the SLM/rule generator (plan keeps
+the short form). The macro list is appended to the LLM's node listing by the validator. Add a macro =
+add an entry with `example_args`; `test_macro_library.py` expands and validates every macro against
+the real catalog, so a typo in a node or port fails the build. Unknown macro / missing arg -> the plan
+is refused with a message naming the problem.
+The SLM node has `rules_first: true`: the exact rule-based generator runs first (0.06 ms vs 1.5 s for
+the 230M model on the GTX 1650) and the model only runs for retries or specs the rules cannot handle.
+
 ## Workspaces (SROS2 keys + domain + LLM key, joined by token)
 ```
 ros2 run framework_bringup ws create lab          # first machine: keystore, TLS cert, token; prints the invite
