@@ -1,0 +1,77 @@
+# Runbook
+
+## Every terminal
+```
+source ~/ros2-jazzy-robocup-fw/env.sh     # created by ./setup.sh --only build; puts /usr/bin first, sources ROS + workspace
+# or by hand:  export PATH=/usr/bin:$PATH; source /opt/ros/jazzy/setup.bash; source install/setup.bash
+```
+(`~/pyvenv.cfg` makes `~/bin/python3` hide system packages; always put `/usr/bin` first.)
+
+## Setup (new machine)
+```
+./setup.sh --dry-run          # read the plan
+./setup.sh                    # apt, rosdep, pip, llama.cpp, LLM + SLM base downloads, build
+./setup.sh --only build       # just colcon build + env.sh   (this is the only step ever executed so far)
+./setup.sh --only python      # incl. a NumPy-2-compatible matplotlib (needed for detector training)
+./setup.sh --only slm         # optional: SLM dataset + fine-tune (never run yet)
+```
+
+## Build and test
+```
+colcon build --symlink-install      # ament_python COPIES .py into install/: rebuild after Python edits
+ls src/*/test/test_*.py | grep -vE "test_(flake8|pep257|copyright)" | xargs python3 -m pytest -q -p no:cacheprovider
+./build/bt_executor/test_registry ; ./build/llm_bridge/test_llama_client       # C++ gtests
+ros2 run framework_bringup check_params          # starts each node on domain 97, compares file vs loaded params
+```
+Run pytest from the workspace root with the workspace sourced (tests import installed packages).
+
+## Launch
+```
+ros2 launch framework_bringup framework.launch.py [args]        # or: ros2 launch launch/framework.launch.py
+   switches: enable_object/person/face, enable_audio, enable_sensors, enable_navigation (off by default),
+             enable_arm/pose/odom/pid/social/nav (extensions, on by default)
+   args:     image_topic, show, start_llama_server, llama_model, llama_hf_repo, llama_port, slm_model_path,
+             dry_run (default true), auto_run (default false), slam:=slam_toolbox|cartographer|rtabmap|none,
+             map:=<yaml>, initial_pose:=x,y,yaw, params_dir:=...
+             cmd_vel_topic:=commands/velocity (mux output; goes to extensions.launch.py)
+ros2 launch framework_bringup pipeline.launch.py                  # LLM/SLM/validator/executor only
+ros2 launch framework_bringup nav_sim.launch.py initial_pose:=0.5,0.5,0.0   # Nav2 + simulated robot, no hardware
+ros2 launch framework_bringup cluster.launch.py role:=agent|scheduler|both host_id:=pi roles:=core tags:=camera
+```
+Params: edit `src/framework_bringup/param/*.yaml` (no rebuild needed). Docs: `docs/navigation.md`, `docs/cluster.md`.
+
+## Behaviour trees by hand
+```
+ros2 run bt_validator validate_bt --list-nodes [--labels a,b,c]
+ros2 run bt_validator validate_bt tree.xml
+ros2 run bt_orchestrator submit_bt tree.xml --run         # needs bt_validator + bt_executor running
+ros2 service call /bt_executor/halt std_srvs/srv/Trigger
+```
+Examples: `src/framework_bringup/behavior_trees/{greet_person,enroll_person}.xml`.
+
+## Integration checks without hardware (`tools/integration/`)
+```
+tools/integration/greet_test.sh greet_person.xml alice mytest        # fake perception + mock TTS
+tools/integration/itest.sh live false '<spec json>' none              # full chain to a simulated robot
+tools/integration/itest.sh halt false '{"goal":"x","steps":[{"node":"DriveDistance","ports":{"meters":"3.0"}}]}' 2.5
+python3 src/cluster_core/test/integration/it_cluster.py               # cluster: 3 simulated hosts, failover timing
+```
+They use an isolated DDS domain (default 45), log to `/tmp/robocup_it`, and clean up on exit.
+`tools/integration/bbox_probe.py` + `object_detection_node` check boxes on a photo;
+`tools/strict_sub.py` is the "fail loudly if nothing matched" replace helper (see GOTCHAS).
+
+## Detector training (boxes only, sized for 4 GB)
+```
+ros2 run object_detection train_detector --data my_items.yaml --base yolo11n.pt --epochs 100
+# set object_detection_node.model in param/perception.yaml to the printed best.pt
+ros2 run bt_slm make_bt_dataset --labels @labels.txt --out-dir bt_dataset
+```
+
+## Mapping / navigation on the real robot (not yet done; see docs/navigation.md)
+```
+# Kobuki driver comes from ~/ros2_ws:  ros2 launch kobuki_node kobuki_node-launch.py
+ros2 launch framework_bringup sensors.launch.py
+ros2 launch framework_bringup extensions.launch.py cmd_vel_topic:=commands/velocity   # safety mux -> Kobuki input
+ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
+# then BT node SaveMap file="room1"  ->  navigate with map:=$HOME/maps/room1.yaml
+```

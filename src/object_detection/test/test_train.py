@@ -1,6 +1,6 @@
-import pytest
-
 from object_detection import train
+
+import pytest
 
 
 def parse(argv):
