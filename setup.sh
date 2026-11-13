@@ -116,7 +116,9 @@ step_python() {
   # Ubuntu 24.04 marks the system Python as externally managed; ROS nodes run on it, so the
   # packages must live there. --user keeps them out of /usr.
   local pip=("$PY" -m pip install --user --break-system-packages)
-  local core=(ultralytics transformers huggingface_hub)
+  # matplotlib: ROS's apt matplotlib is built for NumPy 1 but pip brings NumPy 2, and Ultralytics
+  # training imports matplotlib, so install a NumPy-2-compatible build into ~/.local
+  local core=(ultralytics transformers huggingface_hub 'matplotlib>=3.9')
   local extras=(faster-whisper vosk piper-tts kokoro-onnx soundfile)
   run "${pip[@]}" "${core[@]}"
   if [[ $MINIMAL -eq 1 ]]; then

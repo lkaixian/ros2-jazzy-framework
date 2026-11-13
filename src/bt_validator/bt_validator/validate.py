@@ -6,8 +6,12 @@ BB_REF = re.compile(r'^\{[A-Za-z_][\w]*\}$')
 COMMON_ATTRS = {'name'}
 
 
-def validate_xml(xml, catalog, max_depth=12, max_nodes=64):
-    """Return a list of human/LLM-readable error strings; empty means valid."""
+def validate_xml(xml, catalog, max_depth=12, max_nodes=64, vocab=None):
+    """Return a list of human/LLM-readable error strings; empty means valid.
+
+    vocab: optional {(node, port): set(allowed literal values)}, e.g. the detector's classes for
+    (DetectObject, label). Blackboard references {x} are not checked.
+    """
     errors = []
     try:
         root = ET.fromstring(xml)
@@ -82,6 +86,11 @@ def validate_xml(xml, catalog, max_depth=12, max_nodes=64):
                 errors.append(f"[{tid}] <{el.tag}> port '{a}' has malformed blackboard ref '{v}'")
             elif v == '':
                 errors.append(f"[{tid}] <{el.tag}> port '{a}' is empty")
+            elif vocab and (el.tag, a) in vocab and not BB_REF.match(v) \
+                    and v not in vocab[(el.tag, a)]:
+                known = ', '.join(sorted(vocab[(el.tag, a)])[:30])
+                errors.append(f"[{tid}] <{el.tag}> port '{a}'='{v}' is not a known value "
+                              f"(known: {known})")
         for c in el:
             walk(c, tid, depth + 1)
 

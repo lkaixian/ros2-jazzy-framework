@@ -127,3 +127,15 @@ def test_inference_prompt_equals_training_prompt(cat):
             assert prompt_for(pretty, cat, prev, errs) == r['prompt']
         checked += 1
     assert checked > 100
+
+
+def test_dataset_uses_the_users_detector_labels(cat):
+    labels = ['red_cup', 'screwdriver', 'gear_box']
+    rs = list(dataset.generate(cat, 400, 3, labels=labels))
+    used = set()
+    import re
+    for r in rs:
+        assert validate_xml(r['completion'], cat, vocab={('DetectObject', 'label'): set(labels)}) == []
+        used |= set(re.findall(r'<DetectObject label="([^"]+)"', r['completion']))
+    assert used and used <= set(labels)
+    assert not (used & set(dataset.LABELS))          # no stale default labels leak in

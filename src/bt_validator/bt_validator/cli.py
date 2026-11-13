@@ -23,6 +23,8 @@ def main(argv=None):
                     help='print every usable node and its ports (trailing ? = optional)')
     ap.add_argument('--extension-config', action='append', default=[],
                     help='extra extension manifest YAML (repeatable)')
+    ap.add_argument('--labels', default='',
+                    help="comma-separated DetectObject labels to accept (your model's classes)")
     ap.add_argument('--max-depth', type=int, default=12)
     ap.add_argument('--max-nodes', type=int, default=64)
     a = ap.parse_args(argv)
@@ -31,6 +33,8 @@ def main(argv=None):
         print(list_nodes(cat))
     if not a.files and not a.list_nodes:
         ap.error('give at least one XML file or --list-nodes')
+    labels = {s.strip() for s in a.labels.split(',') if s.strip()}
+    vocab = {('DetectObject', 'label'): labels} if labels else None
     bad = 0
     for path in a.files:
         try:
@@ -40,7 +44,7 @@ def main(argv=None):
             print(f'{path}: cannot read: {e}')
             bad += 1
             continue
-        errors = validate_xml(xml, cat, a.max_depth, a.max_nodes)
+        errors = validate_xml(xml, cat, a.max_depth, a.max_nodes, vocab)
         if errors:
             bad += 1
             print(f'{path}: INVALID ({len(errors)} error(s))')

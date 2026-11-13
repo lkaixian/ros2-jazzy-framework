@@ -75,3 +75,46 @@ def test_every_shipped_manifest_uses_legal_ports():
     for cfg in glob.glob(os.path.join(SRC, '*_extension', 'config', '*_extension.yaml')):
         with open(cfg) as f:
             _from_dict(yaml.safe_load(f))
+
+
+VOCAB = {('DetectObject', 'label'): {'red_cup', 'screwdriver'}}
+DETECT = ('<root BTCPP_format="4" main_tree_to_execute="M"><BehaviorTree ID="M"><Sequence>'
+          '<DetectObject label="{lab}"/></Sequence></BehaviorTree></root>')
+
+
+def test_vocab_accepts_known_rejects_unknown_with_hint(cat):
+    assert validate_xml(DETECT.format(lab='red_cup'), cat, vocab=VOCAB) == []
+    errs = validate_xml(DETECT.format(lab='mug'), cat, vocab=VOCAB)
+    assert len(errs) == 1 and "'mug'" in errs[0] and 'red_cup' in errs[0] and 'screwdriver' in errs[0]
+
+
+def test_vocab_skips_blackboard_refs_and_absent_vocab(cat):
+    assert validate_xml(DETECT.format(lab='{target}'), cat, vocab=VOCAB) == []
+    assert validate_xml(DETECT.format(lab='anything'), cat) == []            # no vocab: no gate
+    assert validate_xml(DETECT.format(lab='anything'), cat, vocab={}) == []
+
+
+def test_vocab_only_applies_to_its_node_and_port(cat):
+    xml = ('<root BTCPP_format="4" main_tree_to_execute="M"><BehaviorTree ID="M"><Sequence>'
+           '<RecognizeFace identity="mug"/></Sequence></BehaviorTree></root>')
+    assert validate_xml(xml, cat, vocab=VOCAB) == []
+
+
+def test_cli_labels_option(tmp_path, capsys):
+    f = tmp_path / 't.xml'
+    f.write_text(DETECT.format(lab='mug'))
+    assert cli.main([str(f)]) == 0
+    assert cli.main([str(f), '--labels', 'red_cup,screwdriver']) == 1
+    assert "'mug'" in capsys.readouterr().out
+    assert cli.main([str(f), '--labels', 'mug']) == 0
+
+
+def test_llm_listing_has_descriptions_but_slm_listing_does_not(cat):
+    from bt_common.catalog import format_listing
+    specs = list(cat.all().values())
+    with_desc = format_listing(specs, with_desc=True)
+    plain = format_listing(specs)
+    assert 'DetectObject[Condition](label,min_conf?,out_bbox?) - ' in with_desc
+    assert ' - ' not in plain                      # SLM prompt/training format must not change
+    for core in ('DetectObject', 'DetectPerson', 'RecognizeFace', 'ExtractFaceFeature'):
+        assert core in with_desc

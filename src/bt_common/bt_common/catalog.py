@@ -55,12 +55,16 @@ def discover_catalog(extra_configs=()):
     return cat
 
 
-def format_listing(specs):
-    """Compact one-line-per-node listing used identically in prompts and training data."""
+def format_listing(specs, with_desc=False):
+    """Compact one-line-per-node listing. The SLM prompt/training data use with_desc=False
+    (it must stay byte-identical); the LLM prompt adds descriptions."""
     lines = []
     for n in specs:
         ports = ','.join(n.required + [p + '?' for p in n.optional])
-        lines.append(f'{n.id}[{n.category}]({ports})')
+        line = f'{n.id}[{n.category}]({ports})'
+        if with_desc and n.description:
+            line += f' - {n.description}'
+        lines.append(line)
     return '\n'.join(lines)
 
 

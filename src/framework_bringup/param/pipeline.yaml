@@ -23,6 +23,7 @@ bt_validator_node:
   ros__parameters:
     max_depth: 12
     max_nodes: 64
+    labels: ""             # comma-separated DetectObject labels to accept until a detector announces its own
 
 orchestrator_node:
   ros__parameters:

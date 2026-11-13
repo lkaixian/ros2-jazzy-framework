@@ -1,3 +1,4 @@
+#include <chrono>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -5,12 +6,14 @@
 #include <string>
 
 #include "bt_pipeline_msgs/msg/extension_manifest.hpp"
+#include "bt_pipeline_msgs/srv/get_catalog.hpp"
 #include "bt_pipeline_msgs/srv/llm_query.hpp"
 #include "llm_bridge/llama_client.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 
 using bt_pipeline_msgs::msg::ExtensionManifest;
+using bt_pipeline_msgs::srv::GetCatalog;
 using bt_pipeline_msgs::srv::LlmQuery;
 
 namespace
@@ -66,6 +69,8 @@ public:
         scene_ = m->data;
       });
     spec_pub_ = create_publisher<std_msgs::msg::String>("bt/task_spec", 10);
+    // Default callback group on purpose: its response must be processed while on_task() waits.
+    catalog_client_ = create_client<GetCatalog>("bt_validator/catalog");
     task_sub_ = create_subscription<std_msgs::msg::String>(
       "bt/task", 10, [this](std_msgs::msg::String::ConstSharedPtr m) {on_task(m->data);},
       work_opts);
@@ -101,11 +106,36 @@ private:
   {
     std::string system = get_parameter("task_system_prompt").as_string();
     std::string scene;
+    // The validator knows every usable node (core + extensions) and the detector's labels.
+    std::string listing, labels;
+    if (catalog_client_->wait_for_service(std::chrono::milliseconds(0))) {
+      auto fut = catalog_client_->async_send_request(std::make_shared<GetCatalog::Request>());
+      if (fut.wait_for(std::chrono::seconds(2)) == std::future_status::ready) {
+        auto r = fut.get();
+        listing = r->listing;
+        for (size_t i = 0; i < r->labels.size(); ++i) {
+          labels += (i ? ", " : "") + r->labels[i];
+        }
+      }
+    }
+    if (listing.empty()) {
+      RCLCPP_WARN_THROTTLE(
+        get_logger(), *get_clock(), 10000,
+        "bt_validator/catalog unavailable: prompt only lists extension nodes");
+    }
     {
       std::lock_guard<std::mutex> lk(mu_);
       if (system.empty()) {system = kDefaultSystem;}
-      system += "Nodes:\n";
-      for (const auto & kv : ext_listing_) {system += kv.second;}
+      if (!listing.empty()) {
+        system += "Nodes (id[category](ports, ? = optional) - description):\n" + listing + "\n";
+      } else {
+        system += "Nodes:\n";
+        for (const auto & kv : ext_listing_) {system += kv.second;}
+      }
+      if (!labels.empty()) {
+        system += "Object labels the camera can detect: " + labels +
+          ". For DetectObject use EXACTLY one of these labels; never invent one.\n";
+      }
       scene = scene_;
     }
     auto cr = base_request();
@@ -128,6 +158,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr scene_sub_, task_sub_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr spec_pub_;
   rclcpp::Service<LlmQuery>::SharedPtr query_srv_;
+  rclcpp::Client<GetCatalog>::SharedPtr catalog_client_;
   std::mutex mu_;
   std::map<std::string, std::string> ext_listing_;
   std::string scene_;

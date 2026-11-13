@@ -29,6 +29,7 @@ setup(
     entry_points={
         'console_scripts': [
             'object_detection_node = object_detection.object_detection_node:main',
+            'train_detector = object_detection.train:main',
         ],
     },
 )

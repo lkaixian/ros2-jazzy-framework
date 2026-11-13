@@ -23,11 +23,11 @@ EXTENSION_PACKAGES = ['arm_extension', 'pose_extension', 'odom_extension', 'pid_
                       'social_extension']
 
 
-def value_for(node, port, rng):
+def value_for(node, port, rng, labels=None):
     if port.startswith('out_'):
         return '{' + port[4:] + '}'
     if port in ('label',):
-        return rng.choice(LABELS)
+        return rng.choice(labels or LABELS)
     if port == 'text':
         return rng.choice(['Hello {person}', 'Please look at the camera', 'I can see you', 'Done'])
     if port == 'person':
@@ -61,29 +61,29 @@ def value_for(node, port, rng):
     return str(rng.randint(1, 5))
 
 
-def sample_steps(leaves, rng, depth=0):
+def sample_steps(leaves, rng, depth=0, labels=None):
     steps = []
     for _ in range(rng.randint(1, 5 if depth == 0 else 3)):
         if depth < 2 and rng.random() < 0.2:
             g = {'group': rng.choice(['Sequence', 'Fallback', 'ReactiveSequence',
                                       'ReactiveFallback']),
-                 'steps': sample_steps(leaves, rng, depth + 1)}
+                 'steps': sample_steps(leaves, rng, depth + 1, labels)}
             if rng.random() < 0.3:
                 g['retry'] = rng.randint(2, 4)
             steps.append(g)
             continue
         n = rng.choice(leaves)
-        ports = {p: value_for(n.id, p, rng) for p in n.required}
+        ports = {p: value_for(n.id, p, rng, labels) for p in n.required}
         for p in n.optional:
             if rng.random() < 0.4:
-                ports[p] = value_for(n.id, p, rng)
+                ports[p] = value_for(n.id, p, rng, labels)
         steps.append({'node': n.id, 'ports': ports})
     return steps
 
 
-def sample_spec(leaves, rng):
-    spec = {'goal': ' '.join(rng.sample(WORDS, rng.randint(1, 2)) + [rng.choice(LABELS)]),
-            'steps': sample_steps(leaves, rng)}
+def sample_spec(leaves, rng, labels=None):
+    spec = {'goal': ' '.join(rng.sample(WORDS, rng.randint(1, 2)) + [rng.choice(labels or LABELS)]),
+            'steps': sample_steps(leaves, rng, 0, labels)}
     if rng.random() < 0.25:
         spec['retry'] = rng.randint(2, 5)
     return spec
@@ -114,14 +114,14 @@ def corrupt(xml, rng):
     return xml[:s0] + xml[m.start() + a.end():]
 
 
-def generate(cat, n, seed=0, repair_frac=0.25, subset_frac=0.3):
+def generate(cat, n, seed=0, repair_frac=0.25, subset_frac=0.3, labels=None):
     """Yield dict(prompt, completion, kind)."""
     rng = random.Random(seed)
     specs = list(cat.all().values())
     leaves = [s for s in specs if s.category in ('Action', 'Condition')]
     produced = 0
     while produced < n:
-        spec = sample_spec(leaves, rng)
+        spec = sample_spec(leaves, rng, labels)
         spec_json = normalize_spec(json.dumps(spec))
         xml = build_xml(spec_json)
         if validate_xml(xml, cat):          # labels must come from the validator
@@ -152,16 +152,23 @@ def main(args=None):
     ap.add_argument('--val-frac', type=float, default=0.02)
     ap.add_argument('--repair-frac', type=float, default=0.25)
     ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--labels', default='',
+                    help='comma-separated object labels = your detector classes (or @file, one per line)')
     ap.add_argument('--extension-config', action='append', default=[],
                     help='extra extension manifest YAML (repeatable)')
     a = ap.parse_args(args)
     cat = discover_catalog(a.extension_config)
+    if a.labels.startswith('@'):
+        with open(a.labels[1:]) as f:
+            labels = [ln.strip() for ln in f if ln.strip()]
+    else:
+        labels = [s.strip() for s in a.labels.split(',') if s.strip()]
     os.makedirs(a.out_dir, exist_ok=True)
     n_val = max(1, int(a.n * a.val_frac))
     counts = {'train': 0, 'val': 0}
     with open(os.path.join(a.out_dir, 'train.jsonl'), 'w') as tr, \
             open(os.path.join(a.out_dir, 'val.jsonl'), 'w') as va:
-        for i, row in enumerate(generate(cat, a.n, a.seed, a.repair_frac)):
+        for i, row in enumerate(generate(cat, a.n, a.seed, a.repair_frac, labels=labels)):
             split = 'val' if i < n_val else 'train'
             (va if split == 'val' else tr).write(json.dumps(row) + '\n')
             counts[split] += 1
