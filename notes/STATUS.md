@@ -22,6 +22,7 @@ Verification levels used below:
 | Extensions | `odom_`, `pid_`, `pose_`, `social_`, `arm_`, `nav_extension` | yes | odom/pid/social/nav: yes | no | arm: only goal construction tested (arm model undecided) |
 | LLM failover + hosts joining/leaving | `llm_bridge`, `cluster_core`, `cluster_msgs` | yes | fake servers; real agent+scheduler+bridge on one machine | no | endpoints advertised in heartbeats; breaker; probation until /health; emergency halt when all down. llama.cpp/Gemma never run |
 | Task lifecycle + repair | `bt_orchestrator` (`task_fsm`), `bt_executor` (`failed_node`) | yes | fake LLM, dry-run executor | no | `max_repairs` default 0; node `mode` sync/async in the LLM listing only (SLM format unchanged) |
+| Planner knowledge + scene | `llm_bridge`, `framework_bringup/param/llm_knowledge.md`, `bt_orchestrator` (`scene.py`) | yes | prompt captured over real HTTP | no | node list with sync/async tags + robot facts/places (drift-guarded by test) + per-person distance/waving/pointing + known faces. Face and pose models are NOT present here: the skeletons in the sim are synthetic |
 | Terminal view | `framework_bringup dash` | yes | against sims | no | status table + `--logs` verbose |
 | Safety mux | `bt_common/cmd_vel_mux_node` | yes | yes | no | priority + 0.5 s watchdog + clamps; Nav2 is the lowest-priority input; bumper/cliff latch + `safety_reset` service (fake events only) |
 | Audio | `audio_msgr`, `audio_capture`, `stt_pipeline`, `tts_pipeline` | yes | mock engines | no | no real STT engine installed; espeak works; Piper/Kokoro untested |
@@ -47,7 +48,7 @@ Verification levels used below:
 - **Placeholders that must be measured** (`param/navigation.yaml`): lidar mount, camera mount; robot
   radius (0.18) in `param/nav2_params.yaml`; `param/places.yaml` coordinates (sample map only).
 - `~/maps/my_map.yaml` is unusable for planning (2.6 m^2 connected free space): re-map with slam_toolbox.
-- SLM fine-tuning and any evaluation of LLM -> spec -> XML quality with a real model.
+- SLM: a 3000-row fine-tune ran (held-out valid 0.99 / exact 0.985, measured against the rule-based generator, so it only shows the model learned the rules). Not evaluated on real LLM output; `models/bt-slm` is not wired into any launch default (pass `slm_model_path`). LLM -> spec -> XML quality with a real model: not evaluated.
 - Real llama-server / Gemma 4 E4B (needs llama.cpp build >= b8637; model may be gated).
 - Real STT (faster-whisper/Vosk), Piper, Kokoro, live microphone.
 - Detector trained on the user's items (dataset does not exist yet); YOLO face weights; face accuracy.

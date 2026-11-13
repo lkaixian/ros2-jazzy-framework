@@ -1,5 +1,6 @@
 import json
 import time
+from collections import defaultdict, deque
 
 import rclpy
 from face_recognition_msgr.msg import FaceArray
@@ -7,6 +8,8 @@ from object_detection_msgr.msg import ObjectArray
 from person_detection_msgr.msg import PersonArray
 from rclpy.node import Node
 from std_msgs.msg import String
+
+from bt_orchestrator.scene import describe_person
 
 
 class SceneSummarizer(Node):
@@ -18,6 +21,8 @@ class SceneSummarizer(Node):
         self.declare_parameter('period_sec', 1.0)
         self.objects = {}   # label -> (best conf, last seen)
         self.persons = {}   # track_id -> last seen
+        self.pose = defaultdict(lambda: deque(maxlen=60))   # track_id -> [(t, keypoints)]
+        self.dist = {}      # track_id -> last distance_m
         self.faces = {}     # identity -> (best similarity, last seen)
         self.create_subscription(ObjectArray, 'objects', self._on_obj, 10)
         self.create_subscription(PersonArray, 'persons', self._on_person, 10)
@@ -34,6 +39,10 @@ class SceneSummarizer(Node):
         t = time.monotonic()
         for p in m.persons:
             self.persons[p.track_id] = t
+            self.dist[p.track_id] = p.distance_m
+            if len(p.keypoints_x) == len(p.keypoints_y) == len(p.keypoints_conf) > 0:
+                self.pose[p.track_id].append(
+                    (t, list(zip(p.keypoints_x, p.keypoints_y, p.keypoints_conf))))
 
     def _on_face(self, m):
         t = time.monotonic()
@@ -47,6 +56,10 @@ class SceneSummarizer(Node):
         scene = {
             'objects': sorted(k for k, (_, t) in self.objects.items() if fresh(t)),
             'num_persons': sum(1 for t in self.persons.values() if fresh(t)),
+            # per person: distance and gestures, only what is actually known (see scene.py)
+            'people': [describe_person(i, [(t, k) for t, k in self.pose[i] if fresh(t)],
+                                       self.dist.get(i, 0.0))
+                       for i, t in sorted(self.persons.items()) if fresh(t)],
             'known_faces': sorted(k for k, (_, t) in self.faces.items()
                                   if fresh(t) and k != 'unknown'),
         }

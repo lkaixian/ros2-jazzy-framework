@@ -27,7 +27,7 @@ def cat():
 
 
 def test_every_backticked_node_exists(text, cat):
-    names = re.findall(r'`([A-Za-z]+)`', text)
+    names = re.findall(r'`([A-Z][A-Za-z]+)`', text)   # node ids are CamelCase; `waving` is a JSON key
     assert names, 'knowledge file should name the nodes it talks about'
     unknown = [n for n in names if cat.get(n) is None]
     assert not unknown, f'llm_knowledge.md names nodes that do not exist: {unknown}'
