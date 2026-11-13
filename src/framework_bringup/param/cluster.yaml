@@ -1,0 +1,35 @@
+# Cluster platform parameters (agents on every machine, one scheduler). Precedence: package
+# defaults < this file < launch arguments. Job definitions live in cluster_jobs.yaml.
+# roles / tags are COMMA-SEPARATED STRINGS (empty ROS arrays are unreliable).
+cluster_agent_node:
+  ros__parameters:
+    host_id: ""               # "" = this machine's hostname; must be unique in the cluster
+    roles: ""                 # e.g. "core" on the robot controller, "compute" on laptops
+    tags: ""                  # e.g. "camera,audio" / "gpu"
+    jobs_file: ""             # "" = <params_dir>/cluster_jobs.yaml
+    params_dir: ""            # "" = framework_bringup/param (used for ${PARAMS_DIR})
+    log_dir: ""               # "" = ~/.ros/cluster/<host_id>
+    heartbeat_hz: 2.0
+    poll_hz: 10.0
+    orphan_timeout_sec: 4.0   # no scheduler for this long: stop movable jobs (fencing)
+    min_rx_before_act: 2      # act only after 2 receptions: ignores a stale latched set
+    use_guard: true           # run jobs through cluster_core.guard (die with the agent)
+
+cluster_scheduler_node:
+  ros__parameters:
+    scheduler_id: ""          # "" = <hostname>-<pid>; run exactly ONE scheduler per cluster
+    jobs_file: ""
+    params_dir: ""
+    failover_after_sec: 5.0   # silent host is dead; must exceed agent_orphan_timeout_sec + 0.5
+    agent_orphan_timeout_sec: 4.0   # keep equal to the agents' orphan_timeout_sec
+    adopt_wait_sec: 2.0       # after a restart, listen to heartbeats this long, then adopt;
+                              # restart blackout must stay below the agents' orphan timeout
+    plan_hz: 2.0
+    publish_hz: 1.0
+    overload: 0.85            # cpu_load above this counts as overloaded
+    underload: 0.6            # migration targets must be below this
+    hysteresis_sec: 10.0      # overload must last this long before a job is migrated
+    cooldown_sec: 60.0        # min time between migrations of the same job
+    quarantine_sec: 60.0      # avoid a host for a job that FAILED there
+    settle_sec: 10.0          # reserve the cost of freshly assigned jobs until they run
+    forget_after_sec: 300.0   # drop hosts silent this long

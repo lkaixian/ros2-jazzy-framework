@@ -39,6 +39,8 @@ NODES = {
     'transcript_to_task_node': ('stt_pipeline', 'transcript_to_task_node', 'audio.yaml', {}),
     'tts_node': ('tts_pipeline', 'tts_node', 'audio.yaml', {'engine': 'mock'}),
     'plan_announcer_node': ('tts_pipeline', 'plan_announcer_node', 'audio.yaml', {}),
+    'cluster_agent_node': ('cluster_core', 'cluster_agent_node', 'cluster.yaml', {}),
+    'cluster_scheduler_node': ('cluster_core', 'cluster_scheduler_node', 'cluster.yaml', {}),
 }
 PERCEPTION = {
     'object_detection_node': ('object_detection', 'object_detection_node', 'perception.yaml', {}),

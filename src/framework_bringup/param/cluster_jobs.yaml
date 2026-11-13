@@ -1,0 +1,142 @@
+# Job catalog for the cluster platform (cluster_core). It must be IDENTICAL on every machine: its
+# hash is compared, and a machine with a different catalog is excluded from scheduling.
+# Agents only ever run commands from THIS file; assignments carry job ids, never commands.
+#
+# Fields per job
+#   cmd: [argv...]            one process        (argv list, no shell)
+#   cmds: [[argv...], ...]    several processes that live and die together on one host
+#   role: core                host must have this role (agent param `roles`)
+#   host: laptop-1            pin to one host id
+#   tags: [camera]            host must have ALL of these (agent param `tags`)
+#   prefer_tags: [gpu]        soft preference
+#   cpu / mem_mb / gpu_mem_mb declared cost (cores, MB, MB) used for fit and spreading
+#   movable: false            hardware-bound: placed once, never migrated or failed over to another
+#                             machine; keeps running (fail-static) if the scheduler is away
+#   priority: N               higher is placed first
+#   restart: {max_restarts, window_sec, backoff_base, backoff_max}
+#   grace_sec: seconds between SIGTERM and SIGKILL
+# ${PARAMS_DIR} expands to the agent's params_dir (the framework_bringup param folder).
+jobs:
+  # ---- hardware-bound core (the robot controller: Pi / Jetson) -----------------------------
+  cmd_vel_mux:
+    cmd: [ros2, run, bt_common, cmd_vel_mux_node, --ros-args, --params-file, "${PARAMS_DIR}/extensions.yaml"]
+    role: core
+    movable: false
+    priority: 100
+    cpu: 0.1
+    mem_mb: 64
+    restart: {max_restarts: 10}
+  odom_extension:
+    cmd: [ros2, run, odom_extension, odom_extension_node, --ros-args, --params-file, "${PARAMS_DIR}/extensions.yaml"]
+    role: core
+    movable: false
+    priority: 90
+    cpu: 0.2
+    mem_mb: 100
+    restart: {max_restarts: 10}
+  pid_extension:
+    cmd: [ros2, run, pid_extension, pid_extension_node, --ros-args, --params-file, "${PARAMS_DIR}/extensions.yaml"]
+    role: core
+    movable: false
+    priority: 90
+    cpu: 0.2
+    mem_mb: 100
+    restart: {max_restarts: 10}
+
+  # ---- perception (needs the camera attached to the host: keep it next to the camera) -------
+  object_detection:
+    cmd: [ros2, run, object_detection, object_detection_node, --ros-args, --params-file, "${PARAMS_DIR}/perception.yaml"]
+    tags: [camera]
+    prefer_tags: [gpu]
+    cpu: 1.0
+    mem_mb: 900
+    gpu_mem_mb: 400
+    priority: 20
+  person_detection:
+    cmd: [ros2, run, person_detection, person_detection_node, --ros-args, --params-file, "${PARAMS_DIR}/perception.yaml"]
+    tags: [camera]
+    prefer_tags: [gpu]
+    cpu: 1.0
+    mem_mb: 900
+    gpu_mem_mb: 400
+    priority: 20
+  face_recognition:
+    cmd: [ros2, run, face_recognition, face_recognition_node, --ros-args, --params-file, "${PARAMS_DIR}/perception.yaml"]
+    tags: [camera]
+    prefer_tags: [gpu]
+    cpu: 1.0
+    mem_mb: 1000
+    gpu_mem_mb: 500
+    priority: 20
+
+  # ---- LLM: server and bridge together so the bridge's localhost URL stays valid -----------
+  llm:
+    cmds:
+      - [llama-server, -hf, ggml-org/gemma-4-E4B-it-GGUF, --port, "8080"]
+      - [ros2, run, llm_bridge, llm_bridge_node, --ros-args, --params-file, "${PARAMS_DIR}/pipeline.yaml"]
+    prefer_tags: [gpu]
+    cpu: 3.0
+    mem_mb: 6000
+    gpu_mem_mb: 3000
+    priority: 50
+    grace_sec: 10
+
+  # ---- planning pipeline -------------------------------------------------------------------
+  slm:
+    cmd: [ros2, run, bt_slm, bt_slm_node, --ros-args, --params-file, "${PARAMS_DIR}/pipeline.yaml"]
+    prefer_tags: [gpu]
+    cpu: 1.0
+    mem_mb: 1500
+    gpu_mem_mb: 600
+    priority: 40
+  validator:
+    cmd: [ros2, run, bt_validator, bt_validator_node, --ros-args, --params-file, "${PARAMS_DIR}/pipeline.yaml"]
+    cpu: 0.2
+    mem_mb: 200
+    priority: 40
+  orchestrator:
+    cmds:
+      - [ros2, run, bt_orchestrator, orchestrator_node, --ros-args, --params-file, "${PARAMS_DIR}/pipeline.yaml"]
+      - [ros2, run, bt_orchestrator, scene_summarizer_node, --ros-args, --params-file, "${PARAMS_DIR}/pipeline.yaml"]
+    cpu: 0.4
+    mem_mb: 300
+    priority: 40
+  bt_executor:
+    cmd: [ros2, run, bt_executor, bt_executor_node, --ros-args, --params-file, "${PARAMS_DIR}/pipeline.yaml"]
+    cpu: 0.3
+    mem_mb: 200
+    priority: 60
+
+  # ---- extension executors without their own hardware --------------------------------------
+  social_extension:
+    cmd: [ros2, run, social_extension, social_extension_node, --ros-args, --params-file, "${PARAMS_DIR}/extensions.yaml"]
+    cpu: 0.2
+    mem_mb: 150
+  pose_extension:
+    cmd: [ros2, run, pose_extension, pose_extension_node, --ros-args, --params-file, "${PARAMS_DIR}/extensions.yaml"]
+    cpu: 0.2
+    mem_mb: 150
+  arm_extension:
+    cmd: [ros2, run, arm_extension, arm_extension_node, --ros-args, --params-file, "${PARAMS_DIR}/extensions.yaml"]
+    cpu: 0.2
+    mem_mb: 150
+
+  # ---- audio (microphone and speakers are hardware: stay on the host that has them) --------
+  stt:
+    cmds:
+      - [ros2, run, audio_capture, audio_capture_node, --ros-args, --params-file, "${PARAMS_DIR}/audio.yaml"]
+      - [ros2, run, stt_pipeline, vad_node, --ros-args, --params-file, "${PARAMS_DIR}/audio.yaml"]
+      - [ros2, run, stt_pipeline, stt_node, --ros-args, --params-file, "${PARAMS_DIR}/audio.yaml"]
+      - [ros2, run, stt_pipeline, transcript_to_task_node, --ros-args, --params-file, "${PARAMS_DIR}/audio.yaml"]
+    tags: [audio]
+    movable: false
+    cpu: 2.0
+    mem_mb: 1500
+  tts:
+    cmds:
+      - [ros2, run, tts_pipeline, tts_node, --ros-args, --params-file, "${PARAMS_DIR}/audio.yaml"]
+      - [ros2, run, tts_pipeline, plan_announcer_node, --ros-args, --params-file, "${PARAMS_DIR}/audio.yaml"]
+    tags: [audio]
+    movable: false
+    cpu: 0.5
+    mem_mb: 500
