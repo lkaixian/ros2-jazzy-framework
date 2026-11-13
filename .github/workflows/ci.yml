@@ -113,6 +113,8 @@ jobs:
           source kobuki_ws/install/setup.bash
           source install/setup.bash
           export OUT=/tmp/robocup_it ROS_DOMAIN_ID=45
+          # cold CLI/daemon start can take longer than itest's wait and miss /bt/status
+          ros2 daemon start > /dev/null; ros2 topic list > /dev/null
           SPEC='{"goal":"x","steps":[{"node":"DriveDistance","ports":{"meters":"0.30"}}]}'
           tools/integration/itest.sh live false "$SPEC" none | tee /tmp/itest_live.txt
           tools/integration/itest.sh dry true "$SPEC" none | tee /tmp/itest_dry.txt
