@@ -157,7 +157,13 @@ class Dash:
         online = {n for n, _ in self.n.get_node_names_and_namespaces()}
         online = {n for n in online if not n.startswith('_ros2cli')}   # the CLI's own daemon
         names = sorted(set(expected) | online - {self.n.get_name()})
-        out = [paint(time.strftime('framework  %H:%M:%S'), '1', c), '']
+        sec = os.environ.get('ROS_SECURITY_ENABLE', '').lower() == 'true'
+        where = (f"domain {os.environ.get('ROS_DOMAIN_ID', '0')}  " +
+                 (paint(f"SROS2 {os.environ.get('ROS_SECURITY_STRATEGY', '?')} "
+                        f"enclave {os.environ.get('ROS_SECURITY_ENCLAVE_OVERRIDE', '/')}",
+                        COL['ONLINE'], c) if sec else
+                  paint('DDS UNSECURED (no workspace: source `ws env <name>`)', COL['WARN'], c)))
+        out = [paint(time.strftime('framework  %H:%M:%S'), '1', c) + '   ' + where, '']
         # LLM
         st = self.llm.get('state', '?')
         out.append(paint(f'LLM  {st}', COL['ERROR'] if st == 'down' else

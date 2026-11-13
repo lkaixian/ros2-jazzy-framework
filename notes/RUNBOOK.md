@@ -25,6 +25,20 @@ ros2 run framework_bringup check_params          # starts each node on domain 97
 ```
 Run pytest from the workspace root with the workspace sourced (tests import installed packages).
 
+## Workspaces (SROS2 keys + domain + LLM key, joined by token)
+```
+ros2 run framework_bringup ws create lab          # first machine: keystore, TLS cert, token; prints the invite
+source ~/.robocup/workspaces/lab/env.sh           # every terminal on it (domain, SROS2 Enforce, LLM key)
+ros2 run framework_bringup ws serve lab           # keep running while others join (announces on UDP 47611)
+ros2 run framework_bringup ws discover            # other machine: what is announced on this LAN
+ros2 run framework_bringup ws join lab --token T  # or: ws join --invite 'rcw1~lab~<ip>~47610~<fp>~<token>'
+source $(ros2 run framework_bringup ws env lab)
+ros2 run framework_bringup ws members lab | list | invite lab
+python3 tools/integration/workspace_test.py       # whole flow + outsiders on one machine
+```
+Authentication + encryption for every ROS node; each member may use every topic (no per-topic
+permissions), and removing a member means creating a new workspace. Verified on ONE machine only.
+
 ## Secure the LLM link and discovery
 ```
 export LLM_API_KEY=...        # bridge machine: sent as `Authorization: Bearer` (name set by api_key_env)
