@@ -8,3 +8,5 @@ float32 y_max
 float32[] keypoints_x
 float32[] keypoints_y
 float32[] keypoints_conf
+# metres to the person (median depth in the torso region); 0 = unknown / no depth available
+float32 distance_m

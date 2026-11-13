@@ -14,6 +14,9 @@ def _nodes(context):
             ('enable_face', 'face_recognition', 'face_recognition_node', 'face_recognition_node')]:
         if flag(context, flag_name):
             out.append(make_node(context, pkg, exe, node, 'perception.yaml', COMMON))
+    if flag(context, 'enable_depth_ranging'):
+        out.append(make_node(context, 'person_detection', 'person_depth_node', 'person_depth_node',
+                             'perception.yaml'))
     return out
 
 
@@ -24,6 +27,8 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_person', default_value='true'),
         DeclareLaunchArgument('enable_face', default_value='false',
                               description='needs user-supplied YOLO11 face weights'),
+        DeclareLaunchArgument('enable_depth_ranging', default_value='false',
+                              description='persons_ranged with distance_m from the RealSense depth'),
         *declare_overrides(*COMMON),
         OpaqueFunction(function=_nodes),
     ])

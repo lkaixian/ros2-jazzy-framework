@@ -25,7 +25,8 @@ def select(last, now, timeout):
 class CmdVelMux(Node):
     def __init__(self):
         super().__init__('cmd_vel_mux_node')
-        self.declare_parameter('inputs', ['odom_extension/cmd_vel', 'pid_extension/cmd_vel'])
+        self.declare_parameter('inputs', ['odom_extension/cmd_vel', 'pid_extension/cmd_vel',
+                                          'nav2/cmd_vel'])
         self.declare_parameter('output', 'cmd_vel')
         self.declare_parameter('stamped', False)
         self.declare_parameter('timeout_sec', 0.5)

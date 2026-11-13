@@ -29,6 +29,8 @@ def _nodes(context):
                      {'persons_topic': 'persons_topic'}))
     if flag(context, 'enable_social'):
         out.append(n('social_extension', 'social_extension_node', 'social_extension_node', F))
+    if flag(context, 'enable_nav'):
+        out.append(n('nav_extension', 'nav_extension_node', 'nav_extension_node', F))
     if flag(context, 'enable_arm'):
         out.append(n('arm_extension', 'arm_extension_node', 'arm_extension_node', F,
                      {'arm_group': 'group', 'arm_ee_link': 'ee_link',
@@ -41,5 +43,5 @@ def generate_launch_description():
     return LaunchDescription(
         [declare_params_dir()]
         + [DeclareLaunchArgument(f'enable_{e}', default_value='true')
-           for e in ('arm', 'pose', 'odom', 'pid', 'social')]
+           for e in ('arm', 'pose', 'odom', 'pid', 'social', 'nav')]
         + declare_overrides(*ARGS) + [OpaqueFunction(function=_nodes)])

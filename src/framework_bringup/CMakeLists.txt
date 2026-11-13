@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 project(framework_bringup)
 find_package(ament_cmake REQUIRED)
-install(DIRECTORY launch behavior_trees param DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch behavior_trees param maps DESTINATION share/${PROJECT_NAME})
 install(PROGRAMS scripts/check_params.py DESTINATION lib/${PROJECT_NAME} RENAME check_params)
 ament_package()

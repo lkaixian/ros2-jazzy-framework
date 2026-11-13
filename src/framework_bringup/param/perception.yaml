@@ -47,3 +47,13 @@ face_recognition_node:
     threshold: 0.6          # cosine similarity needed to name a face
     publish_embedding: true # required by the BT node ExtractFaceFeature
     enroll_max_age_sec: 2.0
+
+person_depth_node:          # optional: persons + aligned depth -> persons_ranged (distance_m)
+  ros__parameters:
+    depth_topic: /camera/camera/aligned_depth_to_color/image_raw
+    persons_in: persons
+    persons_out: persons_ranged   # point pid_extension persons_topic at this for metric FollowTarget
+    region_frac: 0.4
+    min_m: 0.2
+    max_m: 8.0
+    max_age_sec: 0.25

@@ -22,6 +22,8 @@
   <exec_depend>pid_extension</exec_depend>
   <exec_depend>bt_executor</exec_depend>
   <exec_depend>social_extension</exec_depend>
+  <exec_depend>nav_extension</exec_depend>
+  <exec_depend>nav_sim</exec_depend>
   <exec_depend>bt_common</exec_depend>
   <exec_depend>audio_capture</exec_depend>
   <exec_depend>stt_pipeline</exec_depend>

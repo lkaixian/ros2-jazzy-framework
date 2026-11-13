@@ -1,3 +1,5 @@
+import pytest
+
 from pid_extension.pid import PID
 
 
@@ -43,3 +45,12 @@ def test_set_gains_resets_integral():
     p.update(1, 0, 1.0)
     p.set_gains(kp=2.0)
     assert p.i == 0.0 and p.kp == 2.0
+
+
+def test_range_speed_forward_only_clamped_and_never_inside_target():
+    from pid_extension.pid import MIN_STANDOFF_M, range_speed
+    assert MIN_STANDOFF_M >= 0.5
+    assert range_speed(3.0, 1.0, 0.5, 0.15) == 0.15          # far: clamped to v_max
+    assert range_speed(1.1, 1.0, 0.5, 0.15) == pytest.approx(0.05)
+    assert range_speed(1.0, 1.0, 0.5, 0.15) == 0.0           # at target: stop
+    assert range_speed(0.4, 1.0, 0.5, 0.15) == 0.0           # too close: never reverses

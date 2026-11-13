@@ -1,0 +1,8 @@
+extension: nav_extension
+nodes:
+  NavigateToPose: {category: Action, required: [x, y], optional: [yaw, frame, timeout_ms], description: "Drive to a pose with Nav2 (path planning + obstacle avoidance). Map frame by default; if yaw is omitted the robot ends facing its direction of travel. Needs a localized robot (AMCL or SLAM)."}
+  NavigateToPlace: {category: Action, required: [place], optional: [timeout_ms], description: "Drive to a named place from param/places.yaml with Nav2."}
+  SetInitialPose: {category: Action, required: [x, y], optional: [yaw], description: "Tell AMCL where the robot is in the map (like rviz 2D Pose Estimate)."}
+  ClearCostmaps: {category: Action, required: [], optional: [], description: "Clear Nav2's local and global costmaps (use after a blocked path)."}
+  SaveMap: {category: Action, required: [file], optional: [overwrite], description: "Save the current map as <map_dir>/<file>.yaml/.pgm; file is a plain name; existing maps are not overwritten unless overwrite=true."}
+  IsNearPose: {category: Condition, required: [x, y], optional: [tolerance, frame], description: "True when the robot is within tolerance metres (default 0.3) of the point."}
