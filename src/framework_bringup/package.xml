@@ -26,6 +26,7 @@
   <exec_depend>audio_capture</exec_depend>
   <exec_depend>stt_pipeline</exec_depend>
   <exec_depend>tts_pipeline</exec_depend>
+  <exec_depend>cluster_core</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>
