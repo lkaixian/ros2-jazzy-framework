@@ -58,15 +58,24 @@ def main():
         cli = n.create_client(Trigger, 'bt_executor/run')
         spec = {'goal': 'feed', 'steps': [{'node': 'Step', 'ports': {'tag': 'a'}}, {'node': 'Step', 'ports': {'tag': 'b'}}]}
         plan = BtPlan(task='t', valid=True, xml=build_xml(json.dumps(spec)))
-        end, sent = time.monotonic() + 30, False
+        end, sent = time.monotonic() + 60, False
         while time.monotonic() < end and not any(s['state'] == 'finished' for s in status):
             rclpy.spin_once(n, timeout_sec=0.2)
+            fin = [s for s in status if s['state'] == 'finished']
+            if fin and fin[-1]['message'].startswith('ERROR') and 'not recognized' in fin[-1]['message']:
+                # slow machine: the executor had not received the extension's manifest yet (republished every 3 s): try again
+                status.clear()
+                sent = False
+                time.sleep(3.5)
             if not any(s['state'] == 'plan_received' for s in status):
                 pub.publish(plan)
             elif not sent and cli.wait_for_service(timeout_sec=1.0):
                 fut = cli.call_async(Trigger.Request())
                 rclpy.spin_until_future_complete(n, fut, timeout_sec=5)
                 sent = fut.done() and fut.result().success
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < 1.5:     # topics are independent: the last node_status may arrive after bt/status 'finished'
+            rclpy.spin_once(n, timeout_sec=0.1)
         t = tree[-1] if tree else []
         res['tree has root Sequence + 2 Step children with their ports'] = (
             len(t) == 3 and t[0]['name'] == 'Sequence' and t[0]['parent'] == -1

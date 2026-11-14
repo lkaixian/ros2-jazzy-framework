@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Write docs/macros.md from param/macros.yaml (the single source of truth). Run after editing macros:
-  python3 tools/gen_macro_docs.py            # a test (test_macro_library.py) fails when docs/macros.md is stale
+python3 tools/gen_macro_docs.py            # a test (test_macro_library.py) fails when docs/macros.md is stale
 """
 import json
 import os

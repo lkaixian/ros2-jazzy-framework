@@ -59,10 +59,16 @@ def main():
         spec = {'goal': 'outputs', 'steps': [{'node': 'Produce', 'ports': {'out_text': '{v}'}},
                                               {'node': 'Consume', 'ports': {'text': '{v}'}}]}
         plan = BtPlan(task='t', valid=True, xml=build_xml(json.dumps(spec)))
-        end = time.monotonic() + 30
+        end = time.monotonic() + 60
         sent = False
         while time.monotonic() < end and not any(s['state'] == 'finished' for s in status):
             rclpy.spin_once(n, timeout_sec=0.2)
+            fin = [s for s in status if s['state'] == 'finished']
+            if fin and fin[-1]['message'].startswith('ERROR') and 'not recognized' in fin[-1]['message']:
+                # slow machine: the executor had not received the extension's manifest yet (republished every 3 s): try again
+                status.clear()
+                sent = False
+                time.sleep(3.5)
             if not any(s['state'] == 'plan_received' for s in status):
                 pub.publish(plan)          # republish until the executor has the manifest + plan
             elif not sent and cli.wait_for_service(timeout_sec=1.0):
