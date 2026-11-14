@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
+
 #include <cmath>
 #include <queue>
 #include <random>
@@ -267,4 +269,26 @@ TEST(Core, ChangesAwayFromThePathAndMovingAlongItAreNearlyFree)
   EXPECT_LT(unrelated, 50);
   EXPECT_LT(moved, 50);
   EXPECT_NEAR(c.cost_to_goal(), dijkstra(g, p[15].first, p[15].second, 110, 100), 1e-6);
+}
+
+// Not a pass/fail speed gate (CI machines vary): prints the cost of a fresh search on a sample-map-sized grid so a
+// regression or an optimisation is visible in the test log (`colcon test-result`, or run the binary directly).
+TEST(Core, FreshSearchTiming)
+{
+  std::mt19937 r(7);
+  const Grid g = random_grid(r, 240, 160, 0.08, 0.15);      // ~ the 12 x 8 m sample map at 5 cm
+  const int runs = 20;
+  const auto t0 = std::chrono::steady_clock::now();
+  long expansions = 0;
+  for (int i = 0; i < runs; ++i) {
+    Core c(g.w, g.h);
+    c.set_costs(g.c);
+    c.reset(g.w - 3, g.h - 3, 2, 2);
+    c.compute();
+    expansions += c.expansions();
+  }
+  const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / runs;
+  std::printf("[ TIMING ] fresh search on 240x160: %.2f ms (avg of %d, %ld expansions each)\n", ms, runs,
+    expansions / runs);
+  SUCCEED();
 }

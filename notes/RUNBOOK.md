@@ -163,3 +163,9 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
   trains on only 12 % of the rows (472 of 4000): held-out valid 0.895 / exact 0.795 (old 3000-row run on the smaller catalog: 0.99 / 0.985).
   `--max-len 768` keeps ~60 % of the rows; result in the next entry if it finished. The LLM server and training cannot share the GPU
   (stop `llama-server` first, restart it afterwards). The SLM only runs on retries / odd specs (`rules_first`), so none of this blocks planning.
+
+- **SLM (2026-11-14), `--max-len 768`, 2392 of 4000 rows:** held-out valid 0.975 / exact 0.915 vs the rule generator on 200 rows (`models/bt-slm-v3`,
+  not wired into any launch default; it never sees `repeat` yet because it was trained before that grammar change). 512 tokens (12 % of rows) gave 0.895 / 0.795.
+- **Planner crash incident (2026-11-14):** an experiment that built `dstar_lite_planner` with optimisation was installed into the shared `install/`
+  and `planner_server` crashed for everyone using the workspace. Reverted. Lesson: try builds with `colcon build --build-base X --install-base Y` and
+  source `Y/setup.bash` on top (as done for the investigation); never install an experimental binary into the shared `install/`.
