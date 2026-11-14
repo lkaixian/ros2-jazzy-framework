@@ -6,7 +6,7 @@ from launch import LaunchDescription
 from launch.actions import ExecuteProcess, OpaqueFunction
 
 ARGS = ('start_llama_server', 'llama_model', 'llama_hf_repo', 'llama_port', 'llama_url',
-        'slm_model_path', 'max_attempts', 'dry_run', 'auto_run')
+        'slm_model_path', 'max_attempts', 'dry_run', 'auto_run', 'groot2', 'mode_gate')
 
 
 def _nodes(context):
@@ -37,8 +37,9 @@ def _nodes(context):
         make_node(context, 'bt_orchestrator', 'orchestrator_node', 'orchestrator_node', P,
                   {'max_attempts': 'max_attempts'}),
         make_node(context, 'bt_orchestrator', 'scene_summarizer_node', 'scene_summarizer_node', P),
+        make_node(context, 'bt_orchestrator', 'robot_mode_node', 'robot_mode_node', P),
         make_node(context, 'bt_executor', 'bt_executor_node', 'bt_executor_node', P,
-                  {'dry_run': 'dry_run', 'auto_run': 'auto_run'}),
+                  {'dry_run': 'dry_run', 'auto_run': 'auto_run', 'groot2': 'groot2', 'mode_gate': 'mode_gate'}),
     ]
     return out
 

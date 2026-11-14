@@ -49,12 +49,20 @@ orchestrator_node:
   ros__parameters:
     max_attempts: 3
     call_timeout_sec: 60.0
-    max_repairs: 0         # >0: a failed run is re-planned by the LLM (bt/repair) this many times
+    max_repairs: 0         # >0: recoveries allowed per task after a failed run; the policy (mode.py RecoveryPolicy) picks retry/replan/go home/ask a human/abort
 
 scene_summarizer_node:
   ros__parameters:
     window_sec: 2.0
     period_sec: 1.0
+
+robot_mode_node:
+  ros__parameters:
+    required: [executor, llm]   # init: these must be heard within init_timeout_sec (add scan on the real robot)
+    init_timeout_sec: 60.0
+    teleop_hold_sec: 1.0        # teleop/cmd_vel seen this recently = a human is driving
+    battery_clear_sec: 15.0     # battery critical clears after this long without a new critical report
+    mission_budget_sec: 0.0     # >0: halt a task that runs longer than this (0 = no budget)
 
 bt_executor_node:
   ros__parameters:
@@ -63,3 +71,8 @@ bt_executor_node:
     tick_hz: 20.0
     max_runtime_sec: 300.0
     perception_max_age_sec: 1.0
+    mode_gate: false        # true: refuse bt_executor/run and auto_run unless robot/mode says run_ok (needs robot_mode_node; fails closed)
+    mode_gate_max_age_sec: 3.0
+    groot2: false           # true: serve the running tree to Groot2 (~/Groot2/groot2.sh, Monitor tab, port 1667)
+    groot2_port: 1667
+    nodes_model_path: ""    # e.g. /tmp/bt_nodes_model.xml: the node palette (extension nodes) to load into Groot2 for editing

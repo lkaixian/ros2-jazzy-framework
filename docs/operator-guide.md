@@ -12,6 +12,23 @@ ros2 topic pub --once /bt/task std_msgs/msg/String "{data: 'go to the door and s
 ros2 service call /bt_executor/run std_srvs/srv/Trigger       # run the validated plan (dry-run: logged only)
 ```
 
+## Robot mode, recovery and mission policy (`robot_mode_node`, `bt_orchestrator/mode.py`)
+`ros2 topic echo robot/mode` (latched JSON, 2 Hz): `init` -> `ready` <-> `active` (a task runs) / `teleop` (a human drives); `safe_stop` on a bumper/cliff
+latch (from `cmd_vel_mux`) or a critical battery; `init_failed` when `required` signals (executor, llm, optionally scan) are not heard within 60 s.
+`safe_stop` and `teleop` halt a running plan. `run_ok` is true only in `ready`/`active`. `ros2 service call /robot/reset std_srvs/srv/Trigger` clears
+`init_failed`; it is refused while a hazard is present (first clear the cause, bumper/cliff through `safety_reset`). `mission_budget_sec > 0` halts a task that runs too long.
+**Enforcement is off by default**: `pipeline.launch.py mode_gate:=true` makes `bt_executor` refuse `run`/`auto_run` unless a fresh `robot/mode` says `run_ok` (no mode node = refused).
+**Recovery** (`max_repairs` = how many recoveries per task, 0 = none): after a failed run the policy picks by where it broke: navigation `retry, replan, go_home`;
+detection `retry, replan, ask_human`; speech `retry, ask_human`; anything else `replan, ask_human`; timeout `go_home` once; a crashed tree or a human halt = `abort`.
+`go_home`/`ask_human` run fixed specs (no LLM). The table is a starting point (`RecoveryPolicy.TABLE`): tune it with real runs.
+Tested: `test_mode.py` (logic), `tools/integration/mode_test.py` (real nodes, gate, latch). Not tried on the robot; the recovery enactment is covered only by the FSM tests.
+
+## Groot2 (the BehaviorTree.CPP GUI)
+`ros2 launch framework_bringup pipeline.launch.py groot2:=true` (or `groot2: true` in `param/pipeline.yaml`) serves each running tree on port 1667.
+Start `~/Groot2/groot2.sh`, Monitor tab, connect to `127.0.0.1`: node colours follow the run. The server lives for one plan, so reconnect for the next one.
+To edit trees with the extension nodes in the palette, set `nodes_model_path: /tmp/bt_nodes_model.xml` (written at each run) and import it in Groot2.
+Tested: `tools/integration/groot2_test.py` (port opens, palette written); not tried with the Groot2 GUI itself.
+
 ## Dashboard (`ros2 run framework_bringup dash`)
 Shows domain/SROS2 state, LLM endpoints with link type, Kobuki battery, task state, **the plan tree with live node status**
 (`>` running, `+` done, `x` failed, `-` halted, `.` not reached), cluster jobs and every node ONLINE/BUSY/ERROR/OFFLINE.

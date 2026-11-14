@@ -14,8 +14,8 @@ IDLE, PLANNING, READY, RUNNING, REPAIRING, DONE, FAILED, HALTED = (
 
 
 class TaskFsm:
-    def __init__(self, max_repairs=0):
-        self.max_repairs = max_repairs
+    def __init__(self, max_repairs=0, policy=None):
+        self.max_repairs, self.policy = max_repairs, policy      # policy: RecoveryPolicy; None = always 'replan'
         self.state, self.repairs = IDLE, 0
         self.task, self.spec, self.detail = '', '', ''
 
@@ -52,14 +52,16 @@ class TaskFsm:
         return None
 
     def _failed_run(self, result, failed_node):
-        if self.repairs < self.max_repairs and self.task:
+        used = self.repairs
+        action = self.policy.decide(result, failed_node, used) if self.policy else 'replan'
+        if action != 'abort' and used < self.max_repairs and self.task:
             self.repairs += 1
-            self.state, self.detail = REPAIRING, f'{result} at {failed_node or "?"}'
-            return {'task': self.task, 'spec': self.spec, 'failed_node': failed_node,
-                    'result': result, 'attempt': self.repairs, 'of': self.max_repairs}
+            self.state, self.detail = REPAIRING, f'{action} after {result} at {failed_node or "?"}'
+            return {'task': self.task, 'spec': self.spec, 'failed_node': failed_node, 'result': result,
+                    'attempt': self.repairs, 'of': self.max_repairs, 'action': action}
         self.state = FAILED
         self.detail = f'{result} at {failed_node or "?"}' + (
-            '' if self.max_repairs else ' (repair disabled)')
+            '' if self.max_repairs else ' (repair disabled)') + (' (policy: abort)' if action == 'abort' else '')
         return None
 
 

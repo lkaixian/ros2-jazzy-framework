@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 
 from bt_common.macros import MacroError, expand, load_macros, load_whitelist
 
@@ -11,7 +12,9 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
+from std_srvs.srv import Trigger
 
+from bt_orchestrator.mode import GO_HOME, RecoveryPolicy, ask_human
 from bt_orchestrator.policy import refuse_no_arm
 from bt_orchestrator.task_fsm import TaskFsm, repair_prompt
 
@@ -33,6 +36,7 @@ class OrchestratorNode(Node):
         self.declare_parameter('call_timeout_sec', 60.0)
         self.declare_parameter('macros_file', '')     # '' = framework_bringup/param/macros.yaml
         self.declare_parameter('max_repairs', 0)      # 0 = never re-plan a failed run on its own
+        self.declare_parameter('recovery_policy', True)   # choose the recovery per failure (mode.py); False = always re-plan
         cb = ReentrantCallbackGroup()
         self.slm = self.create_client(GenerateXml, 'bt_slm/generate', callback_group=cb)
         self.val = self.create_client(ValidateTree, 'bt_validator/validate',
@@ -48,7 +52,9 @@ class OrchestratorNode(Node):
         except (MacroError, OSError) as e:
             self.get_logger().error(f'macros not loaded ({e}): macro steps will be refused')
             self.macros, self.whitelist = {}, None
-        self.fsm = TaskFsm(self.get_parameter('max_repairs').value)
+        self.fsm = TaskFsm(self.get_parameter('max_repairs').value,
+                           RecoveryPolicy() if self.get_parameter('recovery_policy').value else None)
+        self.run_cli = self.create_client(Trigger, 'bt_executor/run', callback_group=cb)
         self.fsm_lock = threading.Lock()
         self.state_pub = self.create_publisher(
             String, 'task/state', QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -91,9 +97,32 @@ class OrchestratorNode(Node):
                                         st.get('failed_node', ''))
             self._publish_state()
         if repair:
-            self.get_logger().warn(f"run failed at {repair['failed_node'] or '?'}: asking the "
-                                   f"LLM for a repaired plan ({repair['attempt']}/{repair['of']})")
-            self.repair_pub.publish(String(data=repair_prompt(repair)))
+            self._recover(repair)
+
+    def _recover(self, r):
+        """Carry out the recovery policy's decision. go_home / ask_human use fixed specs: no LLM involved."""
+        where = r['failed_node'] or '?'
+        self.get_logger().warn(f"run failed at {where}: recovery {r['attempt']}/{r['of']} = {r['action']}")
+        if r['action'] == 'replan':
+            self.repair_pub.publish(String(data=repair_prompt(r)))
+        elif r['action'] == 'retry':
+            self._start_executor()
+        else:
+            spec = GO_HOME if r['action'] == 'go_home' else ask_human(f"{r['result']} at {where}")
+            self._on_spec(String(data=json.dumps(spec)))
+            with self.fsm_lock:
+                ready = self.fsm.state == 'ready'
+            if ready:
+                self._start_executor()
+
+    def _start_executor(self):
+        for _ in range(8):          # the executor publishes 'finished' just before it accepts a new run
+            res = self._call(self.run_cli, Trigger.Request())
+            if res.success or 'already running' not in res.message:
+                break
+            time.sleep(0.25)
+        if not res.success:
+            self.get_logger().error(f'executor refused the recovery run: {res.message}')
 
     def _call(self, client, req):
         done = threading.Event()

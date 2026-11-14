@@ -93,3 +93,11 @@ def test_no_arm_policy_ignores_nouns_in_restated_goals():
         assert not needs_arm(goal), goal
     assert needs_arm('Place the cup on the table') and needs_arm('Bring me a cup')
     assert refuse_no_arm('{"goal": "Open the door", "steps": []}') and refuse_no_arm('not json') is None
+
+
+def test_recovery_specs_expand_and_validate(cat):
+    """The fixed specs the orchestrator publishes for 'go_home' / 'ask_human' recovery must be valid plans."""
+    from bt_orchestrator.mode import GO_HOME, ask_human
+    for spec in (GO_HOME, ask_human('FAILURE at DetectPerson')):
+        xml = build_xml(json.dumps(ex(spec)))
+        assert validate_xml(xml, cat) == [], spec['goal']

@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'orchestrator_node = bt_orchestrator.orchestrator_node:main',
+            'robot_mode_node = bt_orchestrator.robot_mode_node:main',
     'scene_summarizer_node = bt_orchestrator.scene_summarizer_node:main',
             'submit_bt = bt_orchestrator.submit_bt:main',
         ],

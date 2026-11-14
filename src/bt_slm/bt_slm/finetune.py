@@ -81,6 +81,7 @@ def main(args=None):
     ap.add_argument('--max-len', type=int, default=1536)
     ap.add_argument('--eval-n', type=int, default=200)
     ap.add_argument('--max-new', type=int, default=1024, help='tokens the evaluation may generate (heavy plans need 3000+)')
+    ap.add_argument('--optim', choices=['adamw', 'adafactor'], default='adamw', help='adafactor: almost no optimizer state (4 GB GPUs)')
     ap.add_argument('--grad-ckpt', action='store_true', help='gradient checkpointing: slower, but long rows fit a 4 GB GPU')
     ap.add_argument('--seed', type=int, default=0)
     a = ap.parse_args(args)
@@ -105,7 +106,11 @@ def main(args=None):
     dirs = [d.partition(':')[::2] for d in a.data_dir.split(',')]          # [(dir, 'N' or '')]
     rows = [r for d, n in dirs for r in load_rows(os.path.join(d, 'train.jsonl'), tok, a.max_len, int(n or 0))]
     steps = a.epochs * ((len(rows) + a.batch_size - 1) // a.batch_size)
-    opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=0.01)
+    if a.optim == 'adafactor':
+        from transformers.optimization import Adafactor
+        opt = Adafactor(model.parameters(), lr=a.lr, scale_parameter=False, relative_step=False, warmup_init=False)
+    else:
+        opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=0.01)
     sched = torch.optim.lr_scheduler.LambdaLR(
         opt, lambda s: min(1.0, (s + 1) / 50) * max(0.0, 1 - s / max(1, steps)))
     amp = torch.autocast(device, dtype=torch.bfloat16, enabled=device == 'cuda')
@@ -123,7 +128,7 @@ def main(args=None):
             sched.step()
             opt.zero_grad(set_to_none=True)
             step += 1
-            if step % 50 == 0:
+            if step % 10 == 0:
                 print(f'epoch {ep + 1} step {step}/{steps} loss {loss.item():.4f}')
     model.save_pretrained(a.out)
     tok.save_pretrained(a.out)
