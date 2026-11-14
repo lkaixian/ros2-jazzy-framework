@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.8)
 project(dstar_lite_planner)
+# colcon passes no build type; without this the plugin was compiled with no optimisation (about 6x slower)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -15,6 +19,9 @@ find_package(tf2_ros REQUIRED)
 find_package(pluginlib REQUIRED)
 
 add_library(dstar_lite_core src/core.cpp)
+# a STATIC library linked into the SHARED plugin must be position independent. Without -fPIC it only links because
+# Ubuntu's GCC defaults to PIE, and the optimised plugin then segfaulted planner_server (Core::reset -> insert).
+set_target_properties(dstar_lite_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(dstar_lite_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)

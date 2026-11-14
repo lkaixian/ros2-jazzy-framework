@@ -167,7 +167,7 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
 - **SLM (2026-11-14), `--max-len 768`, 2392 of 4000 rows:** held-out valid 0.975 / exact 0.915 vs the rule generator on 200 rows (`models/bt-slm-v3`,
   not wired into any launch default; it never sees `repeat` yet because it was trained before that grammar change). 512 tokens (12 % of rows) gave 0.895 / 0.795.
 - **Planner crash incident (2026-11-14):** an experiment that built `dstar_lite_planner` with optimisation was installed into the shared `install/`
-  and `planner_server` crashed for everyone using the workspace. Reverted. Lesson: try builds with `colcon build --build-base X --install-base Y` and
+  and `planner_server` crashed for everyone using the workspace. Reverted, then root-caused (static core library without -fPIC linked into the shared plugin, see B-11) and fixed properly. Lesson: try builds with `colcon build --build-base X --install-base Y` and
   source `Y/setup.bash` on top (as done for the investigation); never install an experimental binary into the shared `install/`.
 - **LLM re-check after the HRIC/doorbell/seat macros (31 whitelisted macros, 2026-11-14):** `llm_eval.py` 15/15 valid, right macro 8/10; the two "misses"
   were reasonable alternatives (`go_find_person` + `greet_person`; `go_find_person` + `guide_to`). Prompt growth is not hurting E2B so far.
