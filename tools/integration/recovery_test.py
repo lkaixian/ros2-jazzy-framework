@@ -64,7 +64,7 @@ def main():
         spin_until(lambda: False, 8)                   # manifests: validator and executor register them on the 3 s republish
 
         def scenario(spec, fail, answer=None):
-            box.update(repairs=0, answer=answer)
+            box.update(repairs=0, answer=answer, state={})      # forget the last scenario's 'done': the same goal text would match it at once
             box['spoken'].clear()
             pub['fake/fail'].publish(String(data=json.dumps(fail)))
             spin_until(lambda: False, 0.5)
