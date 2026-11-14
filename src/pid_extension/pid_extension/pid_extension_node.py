@@ -3,9 +3,12 @@ import time
 
 from bt_common.executor_node import (ExtensionExecutor, PortError, port_bool, port_float,
                                      port_str, run_executor)
+from bt_common.obstacle import ScanGuard
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from person_detection_msgr.msg import PersonArray
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import LaserScan
 
 from pid_extension.pid import MIN_STANDOFF_M, PID, range_speed
 
@@ -19,7 +22,9 @@ class PidExtension(ExtensionExecutor):
         super().__init__('pid_extension')
         for k, v in dict(odom_topic='odom', persons_topic='persons',
                          cmd_vel_topic='pid_extension/cmd_vel', max_linear=0.15,
-                         max_angular=0.6, stale_sec=0.5, lost_sec=1.0, rate_hz=20.0).items():
+                         max_angular=0.6, stale_sec=0.5, lost_sec=1.0, rate_hz=20.0,
+                         scan_topic='scan', stop_distance=0.40, guard_half_width_deg=35.0, scan_stale_sec=0.5,
+                         scan_required=False, scan_yaw_offset=0.0, blocked_give_up_sec=3.0).items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         ma, ml = p('max_angular'), p('max_linear')
@@ -27,6 +32,9 @@ class PidExtension(ExtensionExecutor):
                      'follow_range': PID(0.6, 0.0, 0.0, ml)}
         self.yaw, self.yaw_t = None, 0.0
         self.persons, self.persons_t = None, 0.0
+        self.guard = ScanGuard(p('stop_distance'), p('guard_half_width_deg'), p('scan_stale_sec'),
+                               p('scan_required'), p('scan_yaw_offset'))
+        self.create_subscription(LaserScan, p('scan_topic'), self.guard.update, qos_profile_sensor_data)
         self.create_subscription(Odometry, p('odom_topic'), self._on_odom, 10)
         self.create_subscription(PersonArray, p('persons_topic'), self._on_persons, 10)
         self.pub = self.create_publisher(Twist, p('cmd_vel_topic'), 10)
@@ -109,6 +117,7 @@ class PidExtension(ExtensionExecutor):
         rng.reset()
         dt, lost_sec = 1.0 / self.get_parameter('rate_hz').value, self.get_parameter('lost_sec').value
         end, last_seen, ok_since = time.monotonic() + timeout, time.monotonic(), None
+        blocked_since = None
         try:
             while True:
                 if ctl.cancelled:
@@ -133,6 +142,14 @@ class PidExtension(ExtensionExecutor):
                         v = rng.update(target_h, h, dt) if approach and h < target_h else 0.0
                         arrived = h >= target_h - 0.03
                     v = max(0.0, v)
+                    near = self.guard.blocked(v)          # never drive up to a person (or a wall) closer than stop_distance
+                    if near is not None:
+                        v = 0.0
+                        blocked_since = blocked_since or now
+                        if now - blocked_since > self.get_parameter('blocked_give_up_sec').value:
+                            return False, f'obstacle {near:.2f} m ahead: stopped'
+                    else:
+                        blocked_since = None
                     aligned = abs(ex) < 0.08 and (not approach or arrived)
                     ok_since = (ok_since or now) if aligned else None
                     if ok_since and now - ok_since >= 0.5:

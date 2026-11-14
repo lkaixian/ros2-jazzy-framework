@@ -3,8 +3,11 @@ import time
 
 from bt_common.executor_node import (ExtensionExecutor, PortError, port_float, port_str,
                                      run_executor)
+from bt_common.obstacle import ScanGuard
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import LaserScan
 
 from odom_extension.controllers import DriveDistance, Limits, RotateBy, goto_step, wrap  # noqa: F401
 
@@ -18,7 +21,9 @@ class OdomExtension(ExtensionExecutor):
         super().__init__('odom_extension')
         for k, v in dict(odom_topic='odom', cmd_vel_topic='odom_extension/cmd_vel',
                          max_linear=0.2, max_angular=0.6, kv=0.8, kw=1.5,
-                         default_timeout_sec=60.0, stale_sec=0.5, rate_hz=20.0).items():
+                         default_timeout_sec=60.0, stale_sec=0.5, rate_hz=20.0,
+                         scan_topic='scan', stop_distance=0.30, guard_half_width_deg=35.0,
+                         scan_stale_sec=0.5, scan_required=False, scan_yaw_offset=0.0).items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         self.lim = Limits(p('max_linear'), p('max_angular'), p('kv'), p('kw'))
@@ -26,6 +31,9 @@ class OdomExtension(ExtensionExecutor):
         self.frame = ''
         self.stamp = 0.0
         self.create_subscription(Odometry, p('odom_topic'), self._on_odom, 10)
+        self.guard = ScanGuard(p('stop_distance'), p('guard_half_width_deg'), p('scan_stale_sec'),
+                               p('scan_required'), p('scan_yaw_offset'))
+        self.create_subscription(LaserScan, p('scan_topic'), self.guard.update, qos_profile_sensor_data)
         self.pub = self.create_publisher(Twist, p('cmd_vel_topic'), 10)
         self.handlers = {'NavigateTo': self._navigate, 'DriveDistance': self._drive,
                          'RotateBy': self._rotate, 'IsAtGoal': self._at_goal}
@@ -34,6 +42,9 @@ class OdomExtension(ExtensionExecutor):
         q = m.pose.pose.orientation
         self.pose = (m.pose.pose.position.x, m.pose.pose.position.y, yaw_of(q))
         self.frame, self.stamp = m.header.frame_id, time.monotonic()
+
+    def _blocked(self, v):
+        return self.guard.blocked(v)
 
     def _fresh(self):
         stale = self.get_parameter('stale_sec').value
@@ -67,6 +78,9 @@ class OdomExtension(ExtensionExecutor):
                     return True, 'done'
                 if time.monotonic() > end:
                     return False, 'timeout'
+                near = self._blocked(v)
+                if near is not None:
+                    return False, f'obstacle {near:.2f} m {"ahead" if v > 0 else "behind"}: stopped'
                 self._cmd(v, w)
                 ctl.sleep(1.0 / rate)
         finally:
