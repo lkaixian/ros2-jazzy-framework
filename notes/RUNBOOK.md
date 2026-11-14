@@ -191,3 +191,9 @@ Data `bt_dataset_v3` (12000 rows, 1724 with Parallel, 1302 with Repeat); first 6
 including the evaluation. Held-out valid **0.995** / exact **0.935** (200 rows, against the rule generator on synthetic specs). Promoted to
 `models/bt-slm` (auto-discovered by `bt_slm_node`, CPU, only used on retries); the earlier models are `models/bt-slm-v1..v3`. The public Hugging Face repo
 still holds the first version (v3).
+
+## GPSR-style baseline (2026-11-14): E2B + schema + SLM v4, 100 generated commands (`llm_eval.py --gen 100 --seed 1`)
+100/100 plans valid; **86 % meet what the command asked** (navigation 30/35, people 36/41, refuse 10/12, vision 10/12). Misses seen: the doorbell command
+planned `WaitForTranscript` (60 ms timeout) instead of `DetectSound`, "patrol N times" and "come with me" phrasings, one refusal that drove somewhere.
+The command templates are ours (`tools/gpsr/commands.py`), not the official GPSR sentences. Next: look at all misses (`MISS` lines), fix prompt/examples/macro
+descriptions first; fine-tune E2B on Colab (free T4) only if misses persist: the generator's gold plans are the training data.
