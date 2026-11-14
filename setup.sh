@@ -23,6 +23,8 @@ SLM_BASE="${SLM_BASE:-LiquidAI/LFM2.5-230M-Base}"
 MIN_LLAMA_BUILD=8637          # first llama.cpp build with Gemma 4 support
 LLAMA_TAG="${LLAMA_TAG:-b12375}"   # the llama.cpp release this was tested with (CUDA 12.8 prebuilt); LLAMA_TAG=latest takes the newest
 PY=/usr/bin/python3           # ROS uses the system Python; never a venv/conda one
+DISTRO="${DISTRO:-jazzy}"     # jazzy (Ubuntu 24.04) or humble (Ubuntu 22.04, Python 3.10); setup_humble.sh sets it
+LOCK="$ROOT/requirements-lock.txt"; [[ $DISTRO == humble ]] && LOCK="$ROOT/requirements-lock-humble.txt"
 
 usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; cat <<EOF
 
@@ -78,10 +80,11 @@ done
 preflight() {
   log "Preflight"
   [[ $EUID -ne 0 ]] || die "run as your normal user (sudo is used where needed)"
-  [[ -f /opt/ros/jazzy/setup.bash ]] || die "ROS 2 Jazzy not found at /opt/ros/jazzy"
+  [[ -f /opt/ros/$DISTRO/setup.bash ]] || die "ROS 2 $DISTRO not found at /opt/ros/$DISTRO"
   [[ -x $PY ]] || die "$PY not found"
   . /etc/os-release
-  [[ "${VERSION_ID:-}" == "24.04" ]] || warn "tested on Ubuntu 24.04 (this is ${PRETTY_NAME:-unknown})"
+  local ubuntu=24.04; [[ $DISTRO == humble ]] && ubuntu=22.04
+  [[ "${VERSION_ID:-}" == "$ubuntu" ]] || warn "$DISTRO is for Ubuntu $ubuntu (this is ${PRETTY_NAME:-unknown})"
   if [[ "$(command -v python3)" != "$PY" ]]; then
     warn "'python3' on PATH is $(command -v python3), not $PY (a venv/~/pyvenv.cfg can hide system"
     warn "packages from ROS). This script and env.sh always use $PY first."
@@ -102,7 +105,7 @@ step_apt() {
   log "apt: build tools, audio, JSON/curl dev libraries, ROS helpers"
   local pk=(build-essential cmake git curl ca-certificates libcurl4-openssl-dev nlohmann-json3-dev
             alsa-utils espeak-ng python3-pip python3-yaml python3-numpy python3-opencv python3-pytest
-            python3-colcon-common-extensions python3-rosdep ros-jazzy-behaviortree-cpp)
+            python3-colcon-common-extensions python3-rosdep ros-$DISTRO-behaviortree-cpp)
   run sudo apt-get update
   run sudo apt-get install -y "${pk[@]}"
 }
@@ -111,14 +114,16 @@ step_rosdep() {
   log "rosdep: ROS dependencies of every package in src/"
   if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then run sudo rosdep init; fi
   run rosdep update
-  run rosdep install --from-paths "$ROOT/src" --ignore-src -r -y --rosdistro jazzy
+  run rosdep install --from-paths "$ROOT/src" --ignore-src -r -y --rosdistro "$DISTRO"
 }
 
 step_python() {
   log "python: ultralytics (YOLO11), transformers (SLM), huggingface_hub (+ STT/TTS extras)"
   # Ubuntu 24.04 marks the system Python as externally managed; ROS nodes run on it, so the
   # packages must live there. --user keeps them out of /usr.
-  local pip=("$PY" -m pip install --user --break-system-packages -c "$ROOT/requirements-lock.txt")   # tested versions
+  local pip=("$PY" -m pip install --user -c "$LOCK")   # tested versions
+  # Ubuntu 22.04's pip 22 does not know --break-system-packages (and has no externally-managed marker)
+  [[ $DISTRO == humble ]] || pip+=(--break-system-packages)
   # matplotlib: ROS's apt matplotlib is built for NumPy 1 but pip brings NumPy 2, and Ultralytics
   # training imports matplotlib, so install a NumPy-2-compatible build into ~/.local
   local core=(ultralytics transformers huggingface_hub 'matplotlib>=3.9')
@@ -244,12 +249,12 @@ PYEOF
 
 step_build() {
   log "colcon build (system Python first on PATH)"
-  run bash -c "cd '$ROOT' && export PATH=/usr/bin:\$PATH && . /opt/ros/jazzy/setup.bash && colcon build --symlink-install"
+  run bash -c "cd '$ROOT' && export PATH=/usr/bin:\$PATH && . /opt/ros/$DISTRO/setup.bash && colcon build --symlink-install"
   if [[ $DRY -eq 0 ]]; then
     cat >"$ROOT/env.sh" <<EOF
 # source this: system Python first, ROS, this workspace, and ~/.local/bin (llama-server)
 export PATH=/usr/bin:\$HOME/.local/bin:\$PATH
-. /opt/ros/jazzy/setup.bash
+. /opt/ros/$DISTRO/setup.bash
 . "$ROOT/install/setup.bash"
 EOF
     echo "  wrote $ROOT/env.sh   ->  source it in every new terminal"

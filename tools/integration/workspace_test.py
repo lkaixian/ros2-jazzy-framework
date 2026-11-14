@@ -90,7 +90,12 @@ def main():
         bad = ws('join', 'itest', '--token', 'wrong-token', '--host-name', 'hostb', check=False)
         res['join with a wrong token is refused'] = bad.returncode != 0 and not os.path.isdir(
             f'{HOME}/joined/itest')
-        ok = ws('join', 'itest', '--token', token, '--host-name', 'hostb', check=False)
+        for _ in range(3):                  # join finds the workspace by its UDP announcement: a loaded runner can miss one
+            ok = ws('join', 'itest', '--token', token, '--host-name', 'hostb', '--timeout', '8', check=False)
+            if ok.returncode == 0:
+                break
+        if ok.returncode:
+            print(f'--- join failed; stderr:\n{ok.stderr[-600:]}', file=sys.stderr)
         res['join with the token succeeds'] = ok.returncode == 0 and os.path.isdir(
             f'{HOME}/joined/itest/keystore/enclaves/itest/hostb')
         members = ws('members', 'itest').stdout

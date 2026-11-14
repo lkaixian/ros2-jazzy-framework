@@ -19,6 +19,14 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/trigger.hpp"
+#include "rclcpp/version.h"
+
+// Humble (rclcpp 16) takes rmw_qos_profile_t for services; newer distros take rclcpp::QoS.
+#if RCLCPP_VERSION_MAJOR >= 21
+#define SERVICE_QOS rclcpp::ServicesQoS()
+#else
+#define SERVICE_QOS rmw_qos_profile_services_default
+#endif
 
 using bt_pipeline_msgs::msg::ExtensionManifest;
 using bt_pipeline_msgs::srv::GetCatalog;
@@ -195,7 +203,7 @@ public:
         res->text = r.chat.text;
         res->error = r.chat.error;
         report(r);
-      }, rclcpp::ServicesQoS(), work_group_);
+      }, SERVICE_QOS, work_group_);
     for (const auto & u : static_urls_) {
       RCLCPP_INFO(get_logger(), "llm_bridge static endpoint -> %s", u.c_str());
     }
