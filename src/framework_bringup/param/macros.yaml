@@ -16,7 +16,7 @@ whitelist:
   - approach_person
   - wave_back
   - report_object
-  - go_home
+  - return_home
   - look_around
   - find_person
   - find_object
@@ -125,8 +125,8 @@ macros:
           - {node: Speak, ports: {text: "I cannot see a ${label}"}}
 
   # ---- batch A: built only from nodes that exist today (see notes/MACROS_PLAN.md) ----
-  go_home:
-    description: "Drive back to the start place"
+  return_home:
+    description: "Drive back to the start place (only when asked to go home or return)"
     steps:
       - {macro: go_to_place, args: {place: start}}
 

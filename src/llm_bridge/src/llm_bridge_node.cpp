@@ -76,7 +76,7 @@ public:
     declare_parameter("model", "default");
     declare_parameter("temperature", 0.1);
     declare_parameter("max_tokens", 512);
-    declare_parameter("repeat_penalty", 1.1);   // 0 = leave to the server; small models loop on repeated steps without it
+    declare_parameter("repeat_penalty", 0.0);   // > 0 is sent to the server; off: the earlier loops were a schema key-order bug, not sampling
     declare_parameter("timeout_sec", 60.0);
     declare_parameter("task_system_prompt", "");
     std::vector<std::string> urls;

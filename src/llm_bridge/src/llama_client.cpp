@@ -24,7 +24,7 @@ void curl_init_once()
 
 std::string build_body(const ChatRequest & req)
 {
-  nlohmann::json j;
+  nlohmann::ordered_json j;    // ordered: the schema's property order (macro before args) shapes the grammar
   j["model"] = req.model;
   j["temperature"] = req.temperature;
   j["max_tokens"] = req.max_tokens;
@@ -36,7 +36,7 @@ std::string build_body(const ChatRequest & req)
   }
   j["messages"].push_back({{"role", "user"}, {"content", req.prompt}});
   if (req.json_mode) {
-    auto schema = nlohmann::json::parse(req.schema, nullptr, false);   // constrained decoding when valid
+    auto schema = nlohmann::ordered_json::parse(req.schema, nullptr, false);   // constrained decoding when valid
     if (!req.schema.empty() && !schema.is_discarded()) {
       j["response_format"] = {{"type", "json_schema"},
         {"json_schema", {{"name", "task_spec"}, {"schema", schema}}}};

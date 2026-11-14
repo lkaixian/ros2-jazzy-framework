@@ -10,7 +10,7 @@ IsPersonPointing, MoveArmToPose, OpenGripper, CloseGripper, Sleep, AlwaysFailure
 ## A. Basic (exist: say, go_to_place, go_and_say, patrol, turn_around, greet_person, approach_person, wave_back, report_object)
 | Macro | Steps | Status | For |
 |---|---|---|---|
-| go_home | go_to_place(start) | now | all |
+| return_home | go_to_place(start) | now | all |
 | look_around | RotateBy x4 (pi/2) | now | G,F |
 | find_object(label) | Detect; else rotate+Detect up to 4x; say not found | now | G,P,F |
 | find_person | same with DetectPerson | now | G,H,F |
@@ -224,7 +224,7 @@ STILL UNCONFIRMED: exact servo count, servo model, camera model. Ask the teammat
 - **Arm: everything above about the arm is UNCERTAIN** (user: "i totally not sure about it"). Servo count, model and camera are
   unconfirmed; the photos and the video conflict with each other. Do not design or build arm code until the hardware is read off
   and confirmed. Work on what exists now: P1 and P0.
-- **P1 done:** 13 macros added to `param/macros.yaml` (go_home, look_around, find_person, find_object, go_find_object,
+- **P1 done:** 13 macros added to `param/macros.yaml` (return_home, look_around, find_person, find_object, go_find_object,
   go_find_person, go_find_and_say, meet_and_remember, follow_person, guide_to, escort_person_to, wait_for_wave, stop_and_wait);
   `test_macro_library.py` validates each against the real catalog. Total 22. Not tried against a real LLM or robot.
 - **P0 done:** `ExecuteNode` result has `output_names/output_values`; extension handlers may return `(ok, msg, {"out_x": v})`; the C++ `ExtNode` registers `out_*` manifest ports as BT output ports and writes them to the blackboard when the XML names them. `tools/integration/outputs_test.py` (fake extension -> live bt_executor -> next node) passes locally and is in CI. In dry-run outputs are not produced (the downstream port is just omitted).
@@ -239,3 +239,16 @@ STILL UNCONFIRMED: exact servo count, servo model, camera model. Ask the teammat
   `charging`. Verified on this laptop: cpu 2% x12, ram 7.1G/15.0G, gpu 9% 0.4G/4.0G, 75C, battery 100% charging.
 - Next in P2: LookAtPerson, FollowTarget recovery, DescribePerson, FindFreeSeat, DetectSound. Then: macro whitelist for the LLM/SLM
   (an allow-list in `macros.yaml`/launch so only listed macros are offered and accepted), P3 grammar, P5 rehearsals, P6 preflight.
+
+## STATUS 2026-11-14 (later)
+- **Macro whitelist done:** `whitelist:` at the top of `param/macros.yaml` (all 27 macros today). The validator's catalog, the JSON
+  schema sent to the LLM and the orchestrator's `expand(..., allowed)` honour it; a test checks whitelist == defined macros.
+- **Constrained decoding done** (see `RUNBOOK.md` "Local LLM + voice"): E2B can only emit whitelisted macros/nodes with real ports.
+- **New:** `ExtractAnswer(kind=name|drink, text, out_value)` (rule-based, no model), macros `meet_guest(slot)`,
+  `introduce_guest(slot)`, `look_at_person`, `acknowledge_person`, improved `follow_person` (lost-target retry via Fallback), and
+  `ask_and_repeat`. `LookAtPerson` is NOT a node: it is `FollowTarget` without `approach` (macro `look_at_person`).
+- **LLM measurements on E2B** (`tools/integration/llm_eval.py`, 10-15 commands): before schema 1/10 valid; schema + `--reasoning off`
+  8/10; adding the macro-first prompt made E2B repeat `return_home` (looping); `repeat_penalty 1.1` and worked examples in
+  `llm_knowledge.md` (guarded by a test that each example is a valid plan) are the fix being measured.
+- Still open in P2: DescribePerson, FindFreeSeat, DetectSound (need real data/camera). P4 (arm) blocked on the hardware. P3 grammar,
+  P5 rehearsal scripts, P6 preflight extensions, B-03..B-12 not started.

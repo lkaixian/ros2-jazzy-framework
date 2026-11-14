@@ -137,3 +137,10 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
 - **STT**: faster-whisper `base.en` int8 on CPU (`models/stt`): 2.2 s of speech -> 0.6 s; Piper -> Whisper round trip returned the
   exact sentences (3/3). Keep STT on the CPU: the GPU is shared with the LLM.
 - Disk is tight (about 8 GB free on `/`): do not add the E4B model here.
+- **Gotcha that cost an afternoon (2026-11-14): JSON-schema key order.** llama.cpp emits object properties in the order the schema lists
+  them. `nlohmann::json` sorts keys alphabetically, so `args` came before `macro` and E2B had to write the arguments before choosing the
+  macro: it picked macros without arguments (`go_home` x12, `greet_person` for "go to the door"). Fixed with `nlohmann::ordered_json` in
+  `llama_client.cpp` (gtest `SchemaKeepsPropertyOrderAndRepeatPenalty`). After the fix: 15/15 valid and sensible plans in 1-2 s
+  (`tools/integration/llm_eval.py`); sampler settings (repeat/DRY penalty, temperature) made no difference, the cause was never sampling.
+  `tools/integration/prompt_lab.py --body <captured request>` replays the bridge's exact prompt+schema (capture with a tiny logging proxy
+  in front of llama-server); rebuilt prompts are only an approximation (the bridge adds e.g. "Known places" to NavigateToPlace).

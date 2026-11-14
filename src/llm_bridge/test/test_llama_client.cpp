@@ -17,6 +17,21 @@ TEST(LlamaClient, BuildBody)
   EXPECT_FALSE(j["stream"].get<bool>());
 }
 
+TEST(LlamaClient, SchemaKeepsPropertyOrderAndRepeatPenalty)
+{
+  // the property order shapes llama.cpp's grammar: "macro" must come before "args" (sorted keys put args first)
+  llm_bridge::ChatRequest r;
+  r.json_mode = true;
+  r.repeat_penalty = 1.1;
+  r.schema = R"({"type":"object","properties":{"macro":{"type":"string"},"args":{"type":"object"}}})";
+  const std::string body = llm_bridge::build_body(r);
+  EXPECT_NE(body.find("\"json_schema\""), std::string::npos);
+  EXPECT_LT(body.find("\"macro\":{\"type\""), body.find("\"args\":{\"type\""));
+  EXPECT_NEAR(nlohmann::json::parse(body)["repeat_penalty"].get<double>(), 1.1, 1e-9);
+  r.schema = "{broken";                       // an unparsable schema falls back to plain JSON mode
+  EXPECT_EQ(nlohmann::json::parse(llm_bridge::build_body(r))["response_format"]["type"], "json_object");
+}
+
 TEST(LlamaClient, ParseOk)
 {
   auto r = llm_bridge::parse_response(

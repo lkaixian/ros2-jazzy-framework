@@ -13,7 +13,7 @@ Examples (request -> steps; copy the style, pick the macro that matches the word
 Example: go to the door and say hello -> [{"macro":"go_and_say","args":{"place":"door","text":"hello"}}]
 Example: find a person in the left room and tell them hello -> [{"macro":"go_find_and_say","args":{"place":"left_room","text":"Hello"}}]
 Example: follow me -> [{"macro":"follow_person"}]
-Example: go home -> [{"macro":"go_home"}]
+Example: go home -> [{"macro":"return_home"}]
 Example: bring me a cup -> [{"macro":"say","args":{"text":"Sorry, I have no arm and cannot bring objects"}}]
 Example: guide the guest to the right room -> [{"macro":"escort_person_to","args":{"place":"right_room"}}]
 Example: welcome the guest and ask their name and drink -> [{"macro":"meet_guest","args":{"slot":"guest1"}}]
