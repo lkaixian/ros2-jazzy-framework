@@ -47,3 +47,15 @@ class ScanGuard:
         d = min_range_in_sector(s.ranges, s.angle_min, s.angle_increment, (0.0 if v > 0 else math.pi) - self.yaw_offset,
                                 self.half, max(s.range_min, 0.05), s.range_max or 12.0)
         return d if d is not None and d < self.stop else None
+
+    def too_close(self, clearance):
+        """Turning in place sweeps the whole footprint: the nearest valid beam in ANY direction closer than `clearance` m
+        (None = clear, or guard off with clearance <= 0, or no fresh scan and not required)."""
+        if clearance <= 0:
+            return None
+        if self.scan is None or self.clock() - self.t > self.stale:
+            return 0.0 if self.required else None
+        s = self.scan
+        lo, hi = max(s.range_min, 0.05), s.range_max or 12.0
+        d = min((r for r in s.ranges if lo <= r <= hi), default=None)
+        return d if d is not None and d < clearance else None

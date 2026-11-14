@@ -34,6 +34,7 @@ import tty
 from urllib.parse import urlparse
 
 import rclpy
+from bt_common.battery_guard import battery_level
 from cluster_msgs.msg import ClusterStatus
 from rcl_interfaces.msg import Log
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -118,17 +119,14 @@ def check_link(url):
 
 
 def battery_state(raw, charger=0):
-    """Kobuki SensorState.battery (0.1 V units) -> (level, text). shortcut: the 14.0 V low / 13.2 V critical thresholds
-    are the Kobuki driver's documented defaults for the 4-cell pack, not measured on this robot; recheck with its pack."""
-    if raw <= 0:
-        return 'OFFLINE', 'base battery unknown'
+    """Kobuki SensorState.battery (0.1 V units) -> (dash colour key, text); levels come from bt_common.battery_guard."""
+    level = battery_level(raw, charger)
     v = raw / 10.0
     note = ' (charging)' if charger else ''
-    if v < 13.2:
-        return 'ERROR', f'base battery {v:.1f} V CRITICAL{note}'
-    if v < 14.0:
-        return 'WARN', f'base battery {v:.1f} V low{note}'
-    return 'ONLINE', f'base battery {v:.1f} V{note}'
+    return {'unknown': ('OFFLINE', 'base battery unknown'),
+            'critical': ('ERROR', f'base battery {v:.1f} V CRITICAL{note}'),
+            'low': ('WARN', f'base battery {v:.1f} V low{note}'),
+            'ok': ('ONLINE', f'base battery {v:.1f} V{note}')}[level]
 
 
 TREE_GLYPH = {'R': ('>', '36'), 'S': ('+', '32'), 'F': ('x', '31'), 'K': ('-', '90'), None: ('.', '90')}

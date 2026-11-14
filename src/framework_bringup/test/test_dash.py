@@ -146,3 +146,23 @@ def test_render_tree_status_and_window():
     big = [{'uid': i, 'depth': 0, 'name': f'N{i}', 'parent': -1} for i in range(60)]
     win = dash.render_tree(big, {'30': 'R'}, color=False, max_lines=10)
     assert len(win) == 10 and any('N30' in l for l in win) and 'more above' in win[0] and 'more below' in win[-1]
+
+
+def test_preflight_chrony_offset():
+    import pytest
+    from types import SimpleNamespace as N
+    spec = importlib.util.spec_from_file_location(
+        'preflight3', os.path.join(os.path.dirname(__file__), '..', 'scripts', 'preflight.py'))
+    pf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pf)
+    fast = 'Reference ID : C0A8010A\nSystem time     : 0.000123456 seconds fast of NTP time\n'
+    assert pf.parse_chrony_offset(fast) == pytest.approx(0.000123456)
+    assert pf.parse_chrony_offset(fast.replace('fast', 'slow')) == pytest.approx(-0.000123456)
+    assert pf.parse_chrony_offset('garbage') is None
+
+    def chrony(sec, direction='fast'):
+        return lambda cmd, **k: N(stdout=f'System time     : {sec} seconds {direction} of NTP time\n' if cmd[0] == 'chronyc' else 'yes\n')
+    ok = pf.local_checks(chrony(0.002), lambda p: N(free=50e9))
+    assert ok[0][0] == 'PASS' and 'ms (chrony)' in ok[0][1] and len(ok) == 2        # chrony replaces the NTP-flag line
+    assert pf.local_checks(chrony(0.2, 'slow'), lambda p: N(free=50e9))[0][0] == 'WARN'
+    assert pf.local_checks(chrony(2.0), lambda p: N(free=50e9))[0][0] == 'FAIL'

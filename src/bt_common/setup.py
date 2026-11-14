@@ -19,6 +19,7 @@ setup(
     entry_points={
         'console_scripts': [
             'cmd_vel_mux_node = bt_common.cmd_vel_mux:main',
+            'battery_guard_node = bt_common.battery_guard:main',
         ],
     },
 )

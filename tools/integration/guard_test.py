@@ -22,7 +22,7 @@ from sensor_msgs.msg import LaserScan  # noqa: E402
 N = 360
 
 
-def scan(front_m, rear_m=3.0):
+def scan(front_m, rear_m=3.0, side_m=3.0):
     s = LaserScan(angle_min=-math.pi, angle_max=math.pi - 2 * math.pi / N, angle_increment=2 * math.pi / N,
                   range_min=0.05, range_max=12.0)
     s.ranges = [3.0] * N
@@ -32,6 +32,8 @@ def scan(front_m, rear_m=3.0):
             s.ranges[i] = front_m
         elif abs(abs(a) - math.pi) < 0.3:
             s.ranges[i] = rear_m
+        elif abs(a - math.pi / 2) < 0.3:
+            s.ranges[i] = side_m
     return s
 
 
@@ -41,25 +43,25 @@ def main():
     try:
         rclpy.init()
         n = rclpy.create_node('guard_probe')
-        state = {'front': 3.0, 'rear': 3.0}
+        state = {'front': 3.0, 'rear': 3.0, 'side': 3.0}
+        cmds_w = []
         odom_pub = n.create_publisher(Odometry, 'odom', 10)
         scan_pub = n.create_publisher(LaserScan, 'scan', qos_profile_sensor_data)
         cmds = []
-        n.create_subscription(Twist, 'odom_extension/cmd_vel', lambda m: cmds.append(m.linear.x), 10)
+        n.create_subscription(Twist, 'odom_extension/cmd_vel', lambda m: (cmds.append(m.linear.x), cmds_w.append(m.angular.z)), 10)
 
         def tick():
             o = Odometry()
             o.header.frame_id = 'odom'
             o.pose.pose.orientation.w = 1.0
             odom_pub.publish(o)
-            scan_pub.publish(scan(state['front'], state['rear']))
+            scan_pub.publish(scan(state['front'], state['rear'], state['side']))
         n.create_timer(0.05, tick)
         ac = ActionClient(n, ExecuteNode, 'odom_extension/execute')
         assert ac.wait_for_server(timeout_sec=15), 'odom_extension/execute not up'
 
-        def drive(meters, wait=6.0, cancel_after=None):
-            fut = ac.send_goal_async(ExecuteNode.Goal(node_id='DriveDistance', port_names=['meters'],
-                                                      port_values=[str(meters)]))
+        def run(node_id, port, value, wait, cancel_after):
+            fut = ac.send_goal_async(ExecuteNode.Goal(node_id=node_id, port_names=[port], port_values=[str(value)]))
             rclpy.spin_until_future_complete(n, fut, timeout_sec=5)
             gh = fut.result()
             rfut = gh.get_result_async()
@@ -70,6 +72,12 @@ def main():
                     gh.cancel_goal_async()
                     cancel_after = None
             return rfut.result().result if rfut.done() else None
+
+        def drive(meters, wait=6.0, cancel_after=None):
+            return run('DriveDistance', 'meters', meters, wait, cancel_after)
+
+        def turn(radians, wait=6.0, cancel_after=None):
+            return run('RotateBy', 'radians', radians, wait, cancel_after)
 
         def settle(sec=0.6):                    # keep the fake odom/scan flowing so the node sees the new state
             t0 = time.monotonic()
@@ -94,6 +102,15 @@ def main():
         settle()
         r = drive(-0.5)
         res['blocked behind: reversing refuses'] = bool(r) and not r.success and 'behind' in r.message
+        state.update(front=3.0, rear=3.0, side=0.15)
+        settle()
+        r = turn(1.0)
+        res['something at 15 cm beside the robot: RotateBy refuses'] = bool(r) and not r.success and 'not turning' in r.message
+        state.update(side=3.0)
+        settle()
+        cmds_w.clear()
+        turn(1.0, wait=2.5, cancel_after=1.0)
+        res['clear all round: RotateBy turns'] = any(abs(c) > 0.05 for c in cmds_w)
     finally:
         os.killpg(os.getpgid(proc.pid), 15)
         rclpy.try_shutdown()

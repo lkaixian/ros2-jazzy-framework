@@ -13,7 +13,8 @@ F = 'extensions.yaml'
 
 def _nodes(context):
     n = lambda *a, **k: make_node(context, *a, **k)  # noqa: E731
-    out = [n('bt_common', 'cmd_vel_mux_node', 'cmd_vel_mux_node', F,
+    out = [n('bt_common', 'battery_guard_node', 'battery_guard_node', F),
+           n('bt_common', 'cmd_vel_mux_node', 'cmd_vel_mux_node', F,
              {'cmd_vel_topic': 'output', 'cmd_vel_stamped': 'stamped',
               'max_linear': 'max_linear', 'max_angular': 'max_angular'})]
     if flag(context, 'enable_odom'):

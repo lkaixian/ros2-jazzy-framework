@@ -45,3 +45,11 @@ def test_scan_guard_blocks_by_direction_and_staleness():
     now[0] = 1.0                                        # scan went stale
     assert g.blocked(0.2) is None
     assert ScanGuard(required=True, clock=lambda: 0.0).blocked(0.2) == 0.0    # required: no scan = blocked
+
+
+def test_scan_guard_turning_clearance_looks_in_every_direction():
+    g = ScanGuard(clock=lambda: 0.0)
+    g.update(Scan(r(i6=0.15)))                       # something 15 cm away at the side
+    assert g.too_close(0.22) == 0.15 and g.too_close(0.1) is None and g.too_close(0.0) is None
+    g.update(Scan(r(i6=float('inf'), i0=0.0)))       # no echo / zero returns are not obstacles
+    assert g.too_close(0.22) is None

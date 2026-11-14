@@ -23,7 +23,8 @@ class OdomExtension(ExtensionExecutor):
                          max_linear=0.2, max_angular=0.6, kv=0.8, kw=1.5,
                          default_timeout_sec=60.0, stale_sec=0.5, rate_hz=20.0,
                          scan_topic='scan', stop_distance=0.30, guard_half_width_deg=35.0,
-                         scan_stale_sec=0.5, scan_required=False, scan_yaw_offset=0.0).items():
+                         scan_stale_sec=0.5, scan_required=False, scan_yaw_offset=0.0,
+                         turn_clearance=0.22).items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         self.lim = Limits(p('max_linear'), p('max_angular'), p('kv'), p('kw'))
@@ -81,6 +82,10 @@ class OdomExtension(ExtensionExecutor):
                 near = self._blocked(v)
                 if near is not None:
                     return False, f'obstacle {near:.2f} m {"ahead" if v > 0 else "behind"}: stopped'
+                if v == 0.0 and w != 0.0:
+                    near = self.guard.too_close(self.get_parameter('turn_clearance').value)
+                    if near is not None:
+                        return False, f'obstacle {near:.2f} m from the robot: not turning'
                 self._cmd(v, w)
                 ctl.sleep(1.0 / rate)
         finally:

@@ -26,6 +26,7 @@ NODES = {
     'orchestrator_node': ('bt_orchestrator', 'orchestrator_node', 'pipeline.yaml', {}),
     'scene_summarizer_node': ('bt_orchestrator', 'scene_summarizer_node', 'pipeline.yaml', {}),
     'bt_executor_node': ('bt_executor', 'bt_executor_node', 'pipeline.yaml', {}),
+    'battery_guard_node': ('bt_common', 'battery_guard_node', 'extensions.yaml', {}),
     'cmd_vel_mux_node': ('bt_common', 'cmd_vel_mux_node', 'extensions.yaml', {}),
     'odom_extension_node': ('odom_extension', 'odom_extension_node', 'extensions.yaml', {}),
     'pid_extension_node': ('pid_extension', 'pid_extension_node', 'extensions.yaml', {}),

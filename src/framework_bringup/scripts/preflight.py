@@ -36,17 +36,33 @@ def llm_verdict(status):
             f"LLM {status.get('state')}, {len(up)}/{len(status['endpoints'])} endpoints up")
 
 
+def parse_chrony_offset(text):
+    """`chronyc tracking` output -> signed offset in seconds (positive = this clock is fast), None if not parseable."""
+    import re
+    m = re.search(r'System time\s*:\s*([0-9.eE+-]+) seconds (fast|slow)', text or '')
+    return None if not m else float(m.group(1)) * (1 if m.group(2) == 'fast' else -1)
+
+
 def local_checks(run=subprocess.run, usage=shutil.disk_usage):
     """Machine checks that need no ROS graph: clock sync (matters once two machines share a task, B-06) and disk space."""
     out = []
+    try:                                     # chrony gives the real offset; without it fall back to the NTP-sync flag
+        off = parse_chrony_offset(run(['chronyc', 'tracking'], capture_output=True, text=True, timeout=3).stdout)
+    except (OSError, subprocess.SubprocessError):
+        off = None
+    if off is not None:
+        lvl = 'PASS' if abs(off) < 0.05 else 'WARN' if abs(off) < 0.5 else 'FAIL'
+        out.append((lvl, f'clock offset {off * 1000:+.1f} ms (chrony)' + ('' if lvl == 'PASS' else
+                    ': machines that share a task need < 50 ms, see tools/net/timesync.sh')))
     try:
         ntp = run(['timedatectl', 'show', '-p', 'NTPSynchronized', '--value'], capture_output=True, text=True,
                   timeout=3).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         ntp = ''
-    out.append(('PASS', 'clock NTP-synchronised') if ntp == 'yes' else
-               ('WARN', 'clock not NTP-synchronised' + (' (timedatectl unavailable)' if not ntp else '')
-                + ': timestamps drift between machines'))
+    if off is None:
+        out.append(('PASS', 'clock NTP-synchronised') if ntp == 'yes' else
+                   ('WARN', 'clock not NTP-synchronised' + (' (timedatectl unavailable)' if not ntp else '')
+                    + ': timestamps drift between machines (tools/net/timesync.sh)'))
     free_gb = usage('/').free / 1e9
     out.append(('PASS', f'{free_gb:.0f} GB free on /') if free_gb >= 5 else
                ('WARN' if free_gb >= 1 else 'FAIL', f'only {free_gb:.1f} GB free on /: logs, bags and models need room'))
