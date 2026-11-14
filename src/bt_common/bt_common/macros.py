@@ -39,6 +39,8 @@ def _check_steps(name, steps):
     if not isinstance(steps, list) or not steps:
         raise MacroError(f'macro {name}: steps must be a non-empty list')
     for s in steps:
+        if isinstance(s, dict) and 'foreach' in s:
+            raise MacroError(f'macro {name}: foreach is for task specs, not macro bodies (use a macro parameter)')
         if not isinstance(s, dict) or sum(k in s for k in ('node', 'group', 'macro')) != 1:
             raise MacroError(f"macro {name}: every step needs exactly one of node/group/macro: {s!r}")
         if 'group' in s:
@@ -75,10 +77,34 @@ def _subst(value, args, macro):
     return value
 
 
+_VAR = re.compile(r'[a-z][a-z0-9_]*')
+MAX_FOREACH = 8
+
+
+def _unroll(step, lib, stack):
+    """{"foreach": [v1, v2], "as": "x", "steps": [... ${x} ...]} -> the steps once per value (unrolled at plan time)."""
+    vals, var, body = step.get('foreach'), step.get('as'), step.get('steps')
+    extra = set(step) - {'foreach', 'as', 'steps'}
+    if extra:
+        raise MacroError(f'foreach: unexpected keys {sorted(extra)} (only foreach, as, steps)')
+    if not isinstance(vals, list) or not 1 <= len(vals) <= MAX_FOREACH or not all(isinstance(v, (str, int, float)) for v in vals):
+        raise MacroError(f'foreach needs a list of 1 to {MAX_FOREACH} plain values')
+    if not isinstance(var, str) or not _VAR.fullmatch(var):
+        raise MacroError("foreach needs 'as': a lower-case variable name, used as ${name} inside steps")
+    if not isinstance(body, list) or not body:
+        raise MacroError('foreach needs a non-empty steps list')
+    out = []
+    for v in vals:
+        out.extend(_expand_steps(_subst(copy.deepcopy(body), {var: str(v)}, 'foreach'), lib, stack))
+    return out
+
+
 def _expand_steps(steps, lib, stack):
     out = []
     for s in steps:
-        if 'macro' in s:
+        if 'foreach' in s:
+            out.extend(_unroll(s, lib, stack))
+        elif 'macro' in s:
             out.extend(_call(s, lib, stack))
         elif 'group' in s:
             out.append(dict(s, steps=_expand_steps(s.get('steps', []), lib, stack)))
@@ -126,7 +152,7 @@ def expand(spec, lib, allowed=None):
         bad = sorted(_macro_names(spec) - set(allowed))
         if bad:
             raise MacroError(f'macro {bad[0]!r} is not available; use one of: {", ".join(sorted(allowed))}')
-    if not any('macro' in ks for ks in _key_sets(spec)):
+    if not any('macro' in ks or 'foreach' in ks for ks in _key_sets(spec)):
         return spec
     out = dict(spec)
     out['steps'] = _expand_steps(spec.get('steps', []), lib, [])
@@ -175,10 +201,15 @@ def spec_schema(nodes, lib):
         mac.append({'type': 'object', 'required': ['macro'] + (['args'] if req else []), 'additionalProperties': False,
                     'properties': {'macro': {'const': name}, 'args': obj(list(m['params']), req)}})
     group = {'type': 'object', 'required': ['group', 'steps'], 'additionalProperties': False,
-             'properties': {'group': {'enum': ['Sequence', 'Fallback', 'ReactiveSequence', 'ReactiveFallback']},
+             'properties': {'group': {'enum': ['Sequence', 'Fallback', 'ReactiveSequence', 'ReactiveFallback', 'Parallel']},
                             'retry': {'type': 'integer'}, 'repeat': {'type': 'integer'},
+                            'success_count': {'type': 'integer'}, 'failure_count': {'type': 'integer'},
                             'steps': {'type': 'array', 'minItems': 1, 'maxItems': 12, 'items': {'$ref': '#/$defs/step'}}}}
-    return {'$defs': {'step': {'anyOf': mac + leaf + [group]}}, 'type': 'object', 'required': ['goal', 'steps'],
+    each = {'type': 'object', 'required': ['foreach', 'as', 'steps'], 'additionalProperties': False,
+            'properties': {'foreach': {'type': 'array', 'minItems': 1, 'maxItems': MAX_FOREACH, 'items': {'type': 'string'}},
+                           'as': {'type': 'string'},
+                           'steps': {'type': 'array', 'minItems': 1, 'maxItems': 12, 'items': {'$ref': '#/$defs/step'}}}}
+    return {'$defs': {'step': {'anyOf': mac + leaf + [group, each]}}, 'type': 'object', 'required': ['goal', 'steps'],
             'properties': {'goal': {'type': 'string'}, 'retry': {'type': 'integer'},
                            'steps': {'type': 'array', 'minItems': 1, 'maxItems': 12, 'items': {'$ref': '#/$defs/step'}}}}
 

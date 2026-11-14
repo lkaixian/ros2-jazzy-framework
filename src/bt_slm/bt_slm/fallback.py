@@ -3,14 +3,15 @@
 task_spec JSON:
   {"goal": str, "retry": N?, "steps": [STEP, ...]}
   STEP = {"node": "DetectObject", "ports": {"label": "cup"}}
-       | {"group": "Sequence|Fallback|ReactiveSequence|ReactiveFallback",
-          "retry": N?, "repeat": N?, "steps": [STEP, ...]}
+       | {"group": "Sequence|Fallback|ReactiveSequence|ReactiveFallback|Parallel",
+          "retry": N?, "repeat": N?, "success_count": N? (Parallel), "failure_count": N? (Parallel), "steps": [STEP, ...]}
+  (macro and foreach steps are expanded by bt_common.macros before this module sees the spec)
 """
 import json
 import re
 from xml.sax.saxutils import quoteattr
 
-GROUPS = ('Sequence', 'Fallback', 'ReactiveSequence', 'ReactiveFallback')
+GROUPS = ('Sequence', 'Fallback', 'ReactiveSequence', 'ReactiveFallback', 'Parallel')
 
 
 def _slug(s):
@@ -30,7 +31,9 @@ def _render(step, pad):
     sp = ' ' * pad
     if 'group' in step:
         inner = [_render(c, pad + 2) for c in step.get('steps', [])]
-        body = f'{sp}<{step["group"]}>\n' + '\n'.join(inner) + f'\n{sp}</{step["group"]}>'
+        attrs = ''.join(f' {k}="{int(step[k])}"' for k in ('success_count', 'failure_count')
+                        if step['group'] == 'Parallel' and step.get(k) is not None)
+        body = f'{sp}<{step["group"]}{attrs}>\n' + '\n'.join(inner) + f'\n{sp}</{step["group"]}>'
         return _retry(step, body, pad)
     attrs = ''.join(f' {k}={quoteattr(str(v))}' for k, v in step.get('ports', {}).items())
     return f'{sp}<{step["node"]}{attrs}/>'

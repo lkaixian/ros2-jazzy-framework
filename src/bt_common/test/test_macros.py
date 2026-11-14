@@ -92,3 +92,21 @@ def test_load_rejects_malformed_files(tmp_path):
     with pytest.raises(MacroError, match='non-empty'):
         load_macros(str(f))
     assert load_macros(str(tmp_path / 'missing.yaml')) == {}
+
+
+def test_foreach_unrolls_once_per_value_and_expands_macros_inside():
+    import pytest as _pytest
+    from bt_common.macros import MacroError, expand
+    lib = {'go': {'params': {'place': {'required': True}}, 'description': '', 'example_args': {},
+                  'steps': [{'node': 'NavigateToPlace', 'ports': {'place': '${place}'}}]}}
+    spec = {'goal': 'tour', 'steps': [{'foreach': ['a', 'b'], 'as': 'p',
+                                       'steps': [{'macro': 'go', 'args': {'place': '${p}'}},
+                                                 {'node': 'Speak', 'ports': {'text': 'at ${p}'}}]}]}
+    got = expand(spec, lib)['steps']
+    assert [s['ports'].get('place') or s['ports'].get('text') for s in got] == ['a', 'at a', 'b', 'at b']
+    for bad in ({'foreach': [], 'as': 'p', 'steps': [{'node': 'X'}]},
+                {'foreach': list('abcdefghi'), 'as': 'p', 'steps': [{'node': 'X'}]},
+                {'foreach': ['a'], 'as': 'P!', 'steps': [{'node': 'X'}]},
+                {'foreach': ['a'], 'as': 'p', 'steps': [{'node': 'X', 'ports': {'t': '${nope}'}}]}):
+        with _pytest.raises(MacroError):
+            expand({'goal': 'g', 'steps': [bad]}, lib)

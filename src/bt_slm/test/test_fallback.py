@@ -52,3 +52,16 @@ def test_repeat_wraps_the_group_and_retry_is_outermost():
     from bt_common.catalog import Catalog
     from bt_validator.validate import validate_xml
     assert validate_xml(xml, Catalog()) == []
+
+
+def test_parallel_group_carries_its_counts_and_validates():
+    import json
+
+    from bt_common.catalog import Catalog
+    from bt_slm.fallback import build_xml
+    from bt_validator.validate import validate_xml
+    spec = {'goal': 'par', 'steps': [{'group': 'Parallel', 'success_count': 1, 'failure_count': 2, 'steps': [
+        {'node': 'Sleep', 'ports': {'msec': '10'}}, {'node': 'Sleep', 'ports': {'msec': '20'}}]}]}
+    xml = build_xml(json.dumps(spec))
+    assert '<Parallel success_count="1" failure_count="2">' in xml
+    assert validate_xml(xml, Catalog()) == []

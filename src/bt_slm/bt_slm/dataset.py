@@ -66,12 +66,14 @@ def sample_steps(leaves, rng, depth=0, labels=None):
     for _ in range(rng.randint(1, 5 if depth == 0 else 3)):
         if depth < 2 and rng.random() < 0.2:
             g = {'group': rng.choice(['Sequence', 'Fallback', 'ReactiveSequence',
-                                      'ReactiveFallback']),
+                                      'ReactiveFallback', 'Parallel']),
                  'steps': sample_steps(leaves, rng, depth + 1, labels)}
             if rng.random() < 0.3:
                 g['retry'] = rng.randint(2, 4)
             if rng.random() < 0.15:
                 g['repeat'] = rng.randint(2, 4)
+            if g['group'] == 'Parallel' and rng.random() < 0.5:
+                g['success_count'] = rng.randint(1, 2)
             steps.append(g)
             continue
         n = rng.choice(leaves)
