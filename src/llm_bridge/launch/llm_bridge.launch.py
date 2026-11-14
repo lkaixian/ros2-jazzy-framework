@@ -13,6 +13,6 @@ def generate_launch_description():
     cfg = os.path.join(share('llm_bridge'), 'config', 'llm_bridge.yaml')
     return LaunchDescription([
         DeclareLaunchArgument('server_url', default_value='http://127.0.0.1:8080'),
-        Node(package='llm_bridge', executable='llm_bridge_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='llm_bridge', executable='llm_bridge_node', output='screen',
              parameters=[cfg, {'server_url': ParameterValue(LC('server_url'), value_type=str)}]),
     ])

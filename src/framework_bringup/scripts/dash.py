@@ -10,7 +10,11 @@ Node states: ONLINE (in the ROS graph), BUSY (bt_executor running a tree), ERROR
 error in the last 30 s, or llm_bridge reports `down`), OFFLINE (expected but not in the graph).
 Expected nodes = the table in check_params. Each LLM endpoint line also shows the link to it: local / wired / wireless (the interface this
 machine routes through) and the TCP connect time in ms, measured every 3 s in the background.
-Read-only: it publishes nothing.
+
+Keys (status view, on a terminal): j/k or arrows select a node; r restart it (SIGINT), R force (SIGKILL);
+the launch file respawns it. s stop the whole system (SIGINT to `ros2 launch`), S force; w restart the whole
+system (stop, then relaunch the same command line, output in /tmp/robocup_launch.log), W force; h halt the
+running task (bt_executor/halt). s/S/w/W ask y/n first. Without keys it only reads.
 """
 import argparse
 import importlib.machinery
@@ -18,11 +22,15 @@ import json
 import ipaddress
 import os
 import re
+import select
+import signal
 import socket
 import subprocess
 import sys
 import threading
+import termios
 import time
+import tty
 from urllib.parse import urlparse
 
 import rclpy
@@ -30,6 +38,7 @@ from cluster_msgs.msg import ClusterStatus
 from rcl_interfaces.msg import Log
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
+from std_srvs.srv import Trigger
 
 ERR_WINDOW = 30.0
 COL = {'ONLINE': '32', 'BUSY': '36', 'ERROR': '31', 'OFFLINE': '90', 'WARN': '33'}
@@ -107,6 +116,33 @@ def paint(text, code, color=True):
     return f'\033[{code}m{text}\033[0m' if color else text
 
 
+def cmdlines():
+    for d in os.listdir('/proc'):
+        if d.isdigit() and int(d) != os.getpid():
+            try:
+                with open(f'/proc/{d}/cmdline', 'rb') as f:
+                    yield int(d), f.read().decode(errors='replace').split('\0')[:-1]
+            except OSError:
+                pass
+
+
+def find_pids(name):
+    # shortcut: matches the executable name, so a node renamed at launch is not found
+    return [p for p, a in cmdlines() if any(os.path.basename(x) == name for x in a[:3])]
+
+
+def launch_pids():
+    return [p for p, a in cmdlines()
+            if len(a) > 2 and os.path.basename(a[1]) == 'ros2' and a[2] == 'launch']
+
+
+def kill(pid, force):
+    if force:   # whole group so a force stop leaves no children, unless it is dash's own group
+        pg = os.getpgid(pid)
+        return os.killpg(pg, signal.SIGKILL) if pg != os.getpgid(0) else os.kill(pid, signal.SIGKILL)
+    os.kill(pid, signal.SIGINT)
+
+
 def expected_nodes():
     try:
         here = os.path.dirname(os.path.abspath(__file__))
@@ -120,8 +156,8 @@ def expected_nodes():
 
 
 class Dash:
-    def __init__(self, node, color):
-        self.n, self.color = node, color
+    def __init__(self, node, color, keys=False):
+        self.n, self.color, self.keys = node, color, keys
         self.err = {}          # node name -> (monotonic time, message)
         self.llm = {}
         self.bt = {}
@@ -129,6 +165,8 @@ class Dash:
         self.links = {}      # endpoint url -> check_link() result, refreshed by a thread
         threading.Thread(target=self._probe_links, daemon=True).start()
         self.cluster = None
+        self.names, self.sel, self.msg, self.pending = [], 0, '', None
+        self.halt = node.create_client(Trigger, 'bt_executor/halt')
         node.create_subscription(Log, '/rosout', self._log, 100)
         node.create_subscription(String, 'llm/status', lambda m: self._js('llm', m), TL)
         node.create_subscription(String, 'bt/status', lambda m: self._js('bt', m), 10)
@@ -151,6 +189,69 @@ class Dash:
     def _log(self, m):
         if m.level >= 40:
             self.err[m.name] = (time.monotonic(), m.msg)
+
+    def say(self, text):
+        self.msg = text
+
+    def key(self, k):
+        """Returns True when the frame should be redrawn now."""
+        if self.pending:
+            act, force = self.pending
+            self.pending = None
+            if k == 'y':
+                threading.Thread(target=self._system, args=(act, force), daemon=True).start()
+            else:
+                self.say('cancelled')
+            return True
+        if k in ('j', '\x1b[B', 'k', '\x1b[A') and self.names:
+            self.sel = (self.sel + (1 if k in ('j', '\x1b[B') else -1)) % len(self.names)
+        elif k in 'rR':
+            self._node(self.names[self.sel] if self.names else '', k == 'R')
+        elif k in ('s', 'S', 'w', 'W'):
+            self.pending = ('stop' if k in 'sS' else 'restart', k.isupper())
+            self.say(f"{'FORCE ' if k.isupper() else ''}{self.pending[0]} the whole system? y/n")
+        elif k == 'h':
+            ok = self.halt.service_is_ready()
+            self.say('halt requested' if ok else 'bt_executor/halt not available')
+            if ok:
+                self.halt.call_async(Trigger.Request())
+        else:
+            return False
+        return True
+
+    def _node(self, name, force):
+        pids = find_pids(name)
+        if not pids:
+            return self.say(f'{name}: no running process found')
+        for p in pids:
+            kill(p, force)    # the launch file's respawn starts it again
+        self.say(f"{name}: {'killed' if force else 'asked to stop'}, respawns in ~3 s")
+
+    def _system(self, act, force):
+        lp = launch_pids()
+        if len(lp) != 1:
+            return self.say(f'{len(lp)} `ros2 launch` processes found, need exactly 1')
+        pid = lp[0]
+        try:
+            with open(f'/proc/{pid}/environ', 'rb') as f:
+                env = dict(x.split('=', 1) for x in f.read().decode().split('\0') if '=' in x)
+            argv, cwd = dict(cmdlines())[pid], os.readlink(f'/proc/{pid}/cwd')
+            kill(pid, force)
+        except (OSError, KeyError) as e:
+            return self.say(f'cannot stop launch: {e}')
+        self.say('stopping...')
+        for _ in range(150):    # graceful stop of the whole tree can take a while
+            if not os.path.exists(f'/proc/{pid}'):
+                break
+            time.sleep(0.1)
+        else:
+            return self.say(f'launch {pid} still running; press S to force')
+        if act == 'stop':
+            return self.say('system stopped')
+        with open('/tmp/robocup_launch.log', 'ab') as log:
+            subprocess.Popen(argv, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT,
+                             stdin=subprocess.DEVNULL, start_new_session=True)
+        self.say('system relaunched, output in /tmp/robocup_launch.log')
 
     def frame(self, expected):
         c, now = self.color, time.monotonic()
@@ -201,14 +302,20 @@ class Dash:
         # nodes
         out += ['', 'nodes']
         busy_node = 'bt_executor_node' if self.bt.get('state') == 'running' else None
-        for name in names:
+        self.names = names
+        self.sel = min(self.sel, max(len(names) - 1, 0))
+        for i, name in enumerate(names):
             err = self.err.get(name)
             s = classify(name in online, now - err[0] if err else None,
                          busy=name == busy_node,
                          down=name == 'llm_bridge_node' and self.llm.get('state') == 'down')
             note = (err[1][:70] if err and s == 'ERROR' else
                     self.bt.get('message', '') if s == 'BUSY' else '')
-            out.append(f'   {name:<30}' + paint(f'{s:<8}', COL[s], c) + note)
+            out.append(('>> ' if i == self.sel and self.keys else '   ') + f'{name:<30}' + paint(f'{s:<8}', COL[s], c) + note)
+        if self.keys:
+            out += ['', paint(self.msg, COL['WARN'], c) if self.msg else '',
+                    'j/k select  r/R restart node (graceful/force)  s/S stop system  '
+                    'w/W restart system  h halt task']
         return '\n'.join(out)
 
 
@@ -235,11 +342,16 @@ def main(argv=None):
     color = sys.stdout.isatty() and not os.environ.get('NO_COLOR')
     rclpy.init()
     node = rclpy.create_node('framework_dash')
+    keys = False
     try:
         if a.logs:
             logs(node, a, color)
             return 0
-        d, exp = Dash(node, color), expected_nodes()
+        keys = sys.stdin.isatty() and sys.stdout.isatty() and not a.once
+        d, exp = Dash(node, color, keys), expected_nodes()
+        if keys:
+            old_tty = termios.tcgetattr(sys.stdin)
+            tty.setcbreak(sys.stdin)
         end = time.monotonic() + 2.5      # let latched topics and the graph arrive
         while time.monotonic() < end:
             rclpy.spin_once(node, timeout_sec=0.1)
@@ -255,10 +367,16 @@ def main(argv=None):
                 return 0
             t = time.monotonic() + 1.0
             while time.monotonic() < t:
-                rclpy.spin_once(node, timeout_sec=0.1)
+                rclpy.spin_once(node, timeout_sec=0.05)
+                if keys and select.select([sys.stdin], [], [], 0)[0]:
+                    k = os.read(sys.stdin.fileno(), 8).decode(errors='replace')
+                    if d.key(k):
+                        break
     except KeyboardInterrupt:
         return 0
     finally:
+        if keys:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_tty)
         node.destroy_node()
         rclpy.try_shutdown()
 

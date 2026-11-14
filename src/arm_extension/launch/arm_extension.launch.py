@@ -13,7 +13,7 @@ def generate_launch_description():
         DeclareLaunchArgument('arm_base_frame', default_value=''),
         DeclareLaunchArgument('move_group_action', default_value='move_action'),
         DeclareLaunchArgument('gripper_action', default_value=''),
-        Node(package='arm_extension', executable='arm_extension_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='arm_extension', executable='arm_extension_node', output='screen',
              parameters=[{'group': ParameterValue(LC('arm_group'), value_type=str), 'ee_link': ParameterValue(LC('arm_ee_link'), value_type=str), 'base_frame': ParameterValue(LC('arm_base_frame'), value_type=str),
                           'move_group_action': ParameterValue(LC('move_group_action'), value_type=str), 'gripper_action': ParameterValue(LC('gripper_action'), value_type=str)}]),
     ])

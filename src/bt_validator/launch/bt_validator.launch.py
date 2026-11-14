@@ -8,6 +8,6 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     return LaunchDescription([
-        Node(package='bt_validator', executable='bt_validator_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='bt_validator', executable='bt_validator_node', output='screen',
              parameters=[]),
     ])

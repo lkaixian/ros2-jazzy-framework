@@ -7,5 +7,5 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     cfg = os.path.join(get_package_share_directory('person_detection'), 'config', 'person_detection.yaml')
-    return LaunchDescription([Node(package='person_detection', executable='person_detection_node',
+    return LaunchDescription([Node(respawn=True, respawn_delay=3.0, package='person_detection', executable='person_detection_node',
                                    parameters=[cfg], output='screen')])

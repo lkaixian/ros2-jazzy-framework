@@ -14,6 +14,6 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('dry_run', default_value='true'),
         DeclareLaunchArgument('auto_run', default_value='false'),
-        Node(package='bt_executor', executable='bt_executor_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='bt_executor', executable='bt_executor_node', output='screen',
              parameters=[cfg, {'dry_run': ParameterValue(LC('dry_run'), value_type=bool), 'auto_run': ParameterValue(LC('auto_run'), value_type=bool)}]),
     ])

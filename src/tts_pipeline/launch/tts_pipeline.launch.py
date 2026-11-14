@@ -14,8 +14,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('engine', default_value='espeak'),
         DeclareLaunchArgument('voice', default_value=''),
-        Node(package='tts_pipeline', executable='tts_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='tts_pipeline', executable='tts_node', output='screen',
              parameters=[cfg, {'engine': ParameterValue(LC('engine'), value_type=str), 'voice': ParameterValue(LC('voice'), value_type=str)}]),
-        Node(package='tts_pipeline', executable='plan_announcer_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='tts_pipeline', executable='plan_announcer_node', output='screen',
              parameters=[cfg]),
     ])

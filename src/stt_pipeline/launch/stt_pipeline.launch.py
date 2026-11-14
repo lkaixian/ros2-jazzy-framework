@@ -15,10 +15,10 @@ def generate_launch_description():
         DeclareLaunchArgument('engine', default_value='faster_whisper'),
         DeclareLaunchArgument('model', default_value='base.en'),
         DeclareLaunchArgument('wake_word', default_value=''),
-        Node(package='stt_pipeline', executable='vad_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='stt_pipeline', executable='vad_node', output='screen',
              parameters=[cfg]),
-        Node(package='stt_pipeline', executable='stt_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='stt_pipeline', executable='stt_node', output='screen',
              parameters=[cfg, {'engine': ParameterValue(LC('engine'), value_type=str), 'model': ParameterValue(LC('model'), value_type=str)}]),
-        Node(package='stt_pipeline', executable='transcript_to_task_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='stt_pipeline', executable='transcript_to_task_node', output='screen',
              parameters=[cfg, {'wake_word': ParameterValue(LC('wake_word'), value_type=str)}]),
     ])

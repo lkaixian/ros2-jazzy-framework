@@ -13,8 +13,8 @@ def generate_launch_description():
     cfg = os.path.join(share('bt_orchestrator'), 'config', 'bt_orchestrator.yaml')
     return LaunchDescription([
         DeclareLaunchArgument('max_attempts', default_value='3'),
-        Node(package='bt_orchestrator', executable='orchestrator_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='bt_orchestrator', executable='orchestrator_node', output='screen',
              parameters=[cfg, {'max_attempts': ParameterValue(LC('max_attempts'), value_type=int)}]),
-        Node(package='bt_orchestrator', executable='scene_summarizer_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='bt_orchestrator', executable='scene_summarizer_node', output='screen',
              parameters=[cfg]),
     ])

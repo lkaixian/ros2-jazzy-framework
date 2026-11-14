@@ -15,6 +15,6 @@ def generate_launch_description():
         DeclareLaunchArgument('source', default_value='arecord'),
         DeclareLaunchArgument('device', default_value=''),
         DeclareLaunchArgument('file', default_value=''),
-        Node(package='audio_capture', executable='audio_capture_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='audio_capture', executable='audio_capture_node', output='screen',
              parameters=[cfg, {'source': ParameterValue(LC('source'), value_type=str), 'device': ParameterValue(LC('device'), value_type=str), 'file': ParameterValue(LC('file'), value_type=str)}]),
     ])

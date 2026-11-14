@@ -13,6 +13,6 @@ def generate_launch_description():
     cfg = os.path.join(share('bt_slm'), 'config', 'bt_slm.yaml')
     return LaunchDescription([
         DeclareLaunchArgument('model_path', default_value=''),
-        Node(package='bt_slm', executable='bt_slm_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='bt_slm', executable='bt_slm_node', output='screen',
              parameters=[cfg, {'model_path': ParameterValue(LC('model_path'), value_type=str)}]),
     ])

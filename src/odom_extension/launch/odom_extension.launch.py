@@ -9,6 +9,6 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('odom_topic', default_value='odom'),
-        Node(package='odom_extension', executable='odom_extension_node', output='screen',
+        Node(respawn=True, respawn_delay=3.0, package='odom_extension', executable='odom_extension_node', output='screen',
              parameters=[{'odom_topic': ParameterValue(LC('odom_topic'), value_type=str)}]),
     ])

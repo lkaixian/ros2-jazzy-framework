@@ -4,5 +4,5 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    return LaunchDescription([Node(package='social_extension',
+    return LaunchDescription([Node(respawn=True, respawn_delay=3.0, package='social_extension',
                                    executable='social_extension_node', output='screen')])

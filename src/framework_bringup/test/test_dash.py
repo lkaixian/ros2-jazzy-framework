@@ -74,3 +74,28 @@ def test_check_link_unreachable_has_no_ms():
     srv.close()                                      # nothing listens: connection refused
     r = dash.check_link(f'http://127.0.0.1:{port}')
     assert r['ms'] is None and r['kind'] == 'local'
+
+
+def test_find_pids_and_kill():
+    import subprocess
+    import time
+    p = subprocess.Popen(['sleep', '60'])
+    try:
+        assert p.pid in dash.find_pids('sleep')
+        dash.kill(p.pid, False)
+        assert p.wait(5) != 0
+        assert p.pid not in dash.find_pids('sleep')
+    finally:
+        p.kill()
+
+
+def test_preflight_llm_verdict():
+    spec = importlib.util.spec_from_file_location(
+        'preflight', os.path.join(os.path.dirname(__file__), '..', 'scripts', 'preflight.py'))
+    pf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pf)
+    assert pf.llm_verdict(None)[0] == 'FAIL'
+    assert pf.llm_verdict({'state': 'down', 'endpoints': []})[0] == 'FAIL'
+    up = {'state': 'ok', 'endpoints': [{'available': True}]}
+    assert pf.llm_verdict(up)[0] == 'PASS'
+    assert pf.llm_verdict({**up, 'state': 'degraded'})[0] == 'WARN'
