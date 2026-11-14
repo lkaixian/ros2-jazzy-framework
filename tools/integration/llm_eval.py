@@ -5,7 +5,8 @@ stack started with `llama_url:=...`, e.g. (own DDS domain):
   ROS_DOMAIN_ID=82 ros2 launch framework_bringup extensions.launch.py enable_arm:=false enable_pose:=false &
   ROS_DOMAIN_ID=82 ros2 launch framework_bringup pipeline.launch.py llama_url:=http://127.0.0.1:8081 &
   ROS_DOMAIN_ID=82 python3 tools/integration/llm_eval.py [--commands FILE] [--timeout 120]
-FILE = one command per line. Exit 0 if at least 70 % of the plans are valid (a measurement, not a guarantee).
+FILE = one command per line. Commands with a known right macro (GOLD below) are also scored on choosing it. Exit 0 if at least
+70 % of the plans are valid and at least 70 % of the GOLD commands got their macro (a measurement, not a guarantee).
 """
 import argparse
 import json
@@ -15,6 +16,13 @@ import time
 import rclpy
 from bt_pipeline_msgs.msg import BtPlan
 from std_msgs.msg import String
+
+# command -> macro a good plan contains (same list as prompt_lab.py)
+GOLD = {'go to the door and say hello': 'go_and_say', 'find a person in the left room and tell them hello': 'go_find_and_say',
+        'bring me a cup': 'say', 'follow me': 'follow_person', 'go home': 'return_home',
+        'guide the guest to the right room': 'escort_person_to',
+        'greet the new guest and ask for their name and favorite drink': 'meet_guest', 'look at me and say hello': 'look_at_person',
+        'patrol between the left room and the right room': 'patrol', 'if somebody waves, wave back and greet them': 'wave_back'}
 
 COMMANDS = [
     'go to the door and say hello',
@@ -49,7 +57,7 @@ def main():
     end = time.monotonic() + 60
     while time.monotonic() < end and pub.get_subscription_count() < 2:
         rclpy.spin_once(n, timeout_sec=0.2)
-    ok = 0
+    ok = hit = gold = 0
     for c in filter(None, cmds):
         plans.clear()
         t0 = time.monotonic()
@@ -62,12 +70,16 @@ def main():
             continue
         p = plans[-1]
         ok += bool(p.valid)
+        if c in GOLD:
+            gold += 1
+            hit += GOLD[c] in p.task_spec
         steps = json.loads(p.task_spec).get('steps') if p.task_spec.startswith('{') else p.task_spec[:80]
         print(f"{'VALID  ' if p.valid else 'INVALID'} {dt:5.1f}s tries={p.attempts}  {c}\n         {json.dumps(steps)[:300]}"
               + ('' if p.valid else f"\n         errors: {list(p.errors)[:2]}"))
-    print(f'{ok}/{len([c for c in cmds if c])} valid')
+    n = len([c for c in cmds if c])
+    print(f'{ok}/{n} valid; right macro {hit}/{gold}')
     rclpy.try_shutdown()
-    return 0 if ok >= 0.7 * len([c for c in cmds if c]) else 1
+    return 0 if ok >= 0.7 * n and (not gold or hit >= 0.7 * gold) else 1
 
 
 if __name__ == '__main__':

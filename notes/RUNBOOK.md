@@ -156,3 +156,10 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
 - `ros2 run framework_bringup dash`: keys j/k select, r/R restart node, s/S stop system, w/W restart system, h halt task; shows Kobuki battery.
 - `ros2 run cluster_core host_info`: CPU/RAM/GPU/VRAM/temperature/battery of each machine with a cluster agent.
 - `tools/record_run.sh NAME [--images]`: rosbag2 recording of a run; `tools/systemd/install.sh [--enable]`: restart-always user units.
+
+## SLM re-train on the 42-node catalog (2026-11-14)
+- Data: `ros2 run bt_slm make_bt_dataset --out-dir bt_dataset_v2 --n 12000` (2 s). Rows are long now (median 737 tokens, 92 % <= 1024).
+- GTX 1650 4 GB, batch 1: `--max-len 1024` runs out of memory; `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` + `--max-len 512`
+  trains on only 12 % of the rows (472 of 4000): held-out valid 0.895 / exact 0.795 (old 3000-row run on the smaller catalog: 0.99 / 0.985).
+  `--max-len 768` keeps ~60 % of the rows; result in the next entry if it finished. The LLM server and training cannot share the GPU
+  (stop `llama-server` first, restart it afterwards). The SLM only runs on retries / odd specs (`rules_first`), so none of this blocks planning.
