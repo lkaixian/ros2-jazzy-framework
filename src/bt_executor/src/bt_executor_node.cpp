@@ -1,5 +1,6 @@
 #include <atomic>
 #include <chrono>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
@@ -9,6 +10,8 @@
 
 #include "behaviortree_cpp/bt_factory.h"
 #include "behaviortree_cpp/loggers/abstract_logger.h"
+#include "behaviortree_cpp/loggers/groot2_publisher.h"
+#include "behaviortree_cpp/xml_parsing.h"
 #include "bt_executor/registry.hpp"
 #include "bt_pipeline_msgs/msg/bt_plan.hpp"
 #include "nlohmann/json.hpp"
@@ -83,6 +86,11 @@ public:
     declare_parameter("tick_hz", 20.0);
     declare_parameter("max_runtime_sec", 300.0);
     declare_parameter("perception_max_age_sec", 1.0);
+    declare_parameter("mode_gate", false);       // refuse to start a run unless a fresh robot/mode says run_ok (fails closed)
+    declare_parameter("mode_gate_max_age_sec", 3.0);
+    declare_parameter("groot2", false);          // serve the running tree to Groot2 (Monitor tab, port groot2_port)
+    declare_parameter("groot2_port", 1667);
+    declare_parameter("nodes_model_path", "");   // when set, write the node palette (all registered nodes) there for Groot2
     cache_ = std::make_shared<bt_executor::PerceptionCache>();
     status_pub_ = create_publisher<std_msgs::msg::String>("bt/status", 10);
     rclcpp::QoS latched_tree(1);
@@ -111,6 +119,14 @@ public:
       "faces", rclcpp::SensorDataQoS(),
       [this](face_recognition_msgr::msg::FaceArray::ConstSharedPtr m) {
         cache_->on_faces(*m, bt_executor::Clock::now());
+      });
+    mode_sub_ = create_subscription<std_msgs::msg::String>(
+      "robot/mode", latched, [this](std_msgs::msg::String::ConstSharedPtr m) {
+        const auto j = nlohmann::json::parse(m->data, nullptr, false);
+        std::lock_guard<std::mutex> lk(mu_);
+        mode_ok_ = j.is_object() && j.value("run_ok", false);
+        mode_why_ = j.is_object() ? j.value("mode", std::string("?")) : std::string("unreadable");
+        mode_t_ = std::chrono::steady_clock::now();
       });
     plan_sub_ = create_subscription<BtPlan>(
       "bt/plan", 10, [this](BtPlan::ConstSharedPtr p) {on_plan(*p);});
@@ -179,6 +195,15 @@ private:
       manifests = manifests_;
     }
     if (xml.empty()) {msg = "no valid plan received yet"; return false;}
+    if (get_parameter("mode_gate").as_bool()) {
+      std::lock_guard<std::mutex> lk(mu_);
+      const auto age = std::chrono::duration<double>(std::chrono::steady_clock::now() - mode_t_).count();
+      if (!mode_seen() || age > get_parameter("mode_gate_max_age_sec").as_double()) {
+        msg = "mode gate: no fresh robot/mode (is robot_mode_node running?)";
+        return false;
+      }
+      if (!mode_ok_) {msg = "mode gate: robot mode is " + mode_why_; return false;}
+    }
     if (running_.exchange(true)) {msg = "a plan is already running"; return false;}
     if (worker_.joinable()) {worker_.join();}
     halt_ = false;
@@ -202,6 +227,18 @@ private:
         factory, cache_, get_parameter("perception_max_age_sec").as_double());
       bt_executor::register_extensions(factory, manifests, ctx);
       auto tree = factory.createTreeFromText(xml);
+      const auto model_path = get_parameter("nodes_model_path").as_string();
+      if (!model_path.empty()) {
+        std::ofstream(model_path) << BT::writeTreeNodesModelXML(factory);
+      }
+      std::unique_ptr<BT::Groot2Publisher> groot;     // lives for this run only: Groot2 reconnects for each plan
+      if (get_parameter("groot2").as_bool()) {
+        try {
+          groot = std::make_unique<BT::Groot2Publisher>(tree, static_cast<unsigned>(get_parameter("groot2_port").as_int()));
+        } catch (const std::exception & e) {
+          RCLCPP_WARN(get_logger(), "Groot2 publisher not started: %s", e.what());   // e.g. port busy: the run goes on
+        }
+      }
       FailureTracker tracker(tree.rootNode());
       {
         std_msgs::msg::String t;
@@ -264,6 +301,11 @@ private:
   std::map<std::string, ExtensionManifest> manifests_;
   std::thread worker_;
   std::atomic<bool> running_{false}, halt_{false};
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr mode_sub_;
+  bool mode_ok_{false};
+  std::string mode_why_;
+  std::chrono::steady_clock::time_point mode_t_{};     // default (epoch) = never heard
+  bool mode_seen() const {return mode_t_ != std::chrono::steady_clock::time_point{};}
 };
 
 int main(int argc, char ** argv)
