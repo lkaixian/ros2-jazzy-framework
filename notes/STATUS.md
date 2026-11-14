@@ -1,7 +1,7 @@
 # Status
 
-Snapshot: branch `main`, 28 ROS packages, ~780 Python tests + 13 C++ gtests passing, `check_params`
-23/23 nodes consistent. Update this file when you change the picture.
+Snapshot (2026-11-14, later): branch `main`, 28 ROS packages, ~900 Python tests + 14 C++ gtests passing, `check_params`
+23/23 nodes consistent. The two `object_detection` lint tests fail (they lint `build/`; T-19). Update this file when you change the picture.
 
 Verification levels used below:
 - **unit** = automated tests pass; **sim** = run end-to-end against a simulator or fake inputs on
@@ -14,7 +14,7 @@ Verification levels used below:
 | Object detection (YOLO11 boxes) | `object_detection`, `yolo11_common`, `object_detection_msgr` | yes | real photo + real model: yes | no camera | boxes identical to Ultralytics; announces its classes; `train_detector` wrapper smoke-trained on GTX 1650 (peak 1.6 GB) |
 | Person detect/track/pose | `person_detection`(+`_msgr`) | partly | no (needs weights/video) | no | `Person.distance_m` added by depth ranging node |
 | Face detect + features + enroll | `face_recognition`(+`_msgr`) | gallery yes | stub only | no | needs user-supplied YOLO11 *face* weights; features are YOLO cls embeddings (weak, see debt) |
-| LLM bridge (C++) | `llm_bridge` | yes | fake llama server | no real llama-server | prompt = all nodes + descriptions + detector labels via `bt_validator/catalog` |
+| LLM bridge (C++) | `llm_bridge` | yes | **real llama-server + Gemma 4 E2B (CUDA, GTX 1650)**: 15/15 valid, sensible plans, 1-2 s each (`llm_eval.py`); fake servers for failover | no robot | prompt = macros + nodes + descriptions + labels via `bt_validator/catalog`; replies constrained by a JSON schema (macro whitelist, real ports); `--reasoning off` required; see RUNBOOK |
 | SLM | `bt_slm` | yes | rule-based fallback only | n/a | **never fine-tuned**; dataset generator + `finetune_bt_slm` exist, finetune never run |
 | Validator | `bt_validator` | yes | yes | n/a | label vocabulary gate, `validate_bt` CLI |
 | Orchestrator | `bt_orchestrator` | light | yes | n/a | generate -> validate -> retry loop; `submit_bt` for hand-written trees |
@@ -25,8 +25,8 @@ Verification levels used below:
 | Planner knowledge + scene | `llm_bridge`, `framework_bringup/param/llm_knowledge.md`, `bt_orchestrator` (`scene.py`) | yes | prompt captured over real HTTP | no | node list with sync/async tags + robot facts/places (drift-guarded by test) + per-person distance/waving/pointing + known faces. Face and pose models are NOT present here: the skeletons in the sim are synthetic |
 | Workspaces + SROS2 | `framework_bringup ws`, `dstar_lite_planner` is separate | yes | create/discover/join + secured pub/sub + 2 outsider kinds on one machine | no | token join over TLS with channel binding; no per-topic ACL; no revocation |
 | D* Lite planner | `dstar_lite_planner` | 9 gtests vs Dijkstra | Nav2 door route in nav_sim: same 45.5 s as NavFn | no | `planner:=dstar_lite`; incremental repair verified at core level only |
-| Macros | `bt_common/macros.py`, `param/macros.yaml`, orchestrator, validator | 27 tests + every macro validated | fake LLM -> macro spec -> executed in nav-less sim (turn_around: yaw 3.11) | no | 9 macros; LLM latency gain NOT measured (no real LLM here); SLM skipped by `rules_first` for in-grammar specs |
-| Terminal view | `framework_bringup dash` | yes | against sims | no | status table + `--logs` verbose |
+| Macros | `bt_common/macros.py`, `param/macros.yaml`, orchestrator, validator | every macro validated against the real catalog; whitelist + schema tests | real E2B chooses macros (e.g. `go_and_say`, `patrol`, `meet_guest`) | no | 27 whitelisted macros (`notes/MACROS_PLAN.md`); SLM skipped by `rules_first` for in-grammar specs |
+| Terminal view | `framework_bringup dash` | yes | against sims | no | status table + `--logs` verbose; keys for node/system restart, stop, halt; Kobuki battery line |
 | Safety mux | `bt_common/cmd_vel_mux_node` | yes | yes | no | priority + 0.5 s watchdog + clamps; Nav2 is the lowest-priority input; bumper/cliff latch + `safety_reset` service (fake events only) |
 | Audio | `audio_msgr`, `audio_capture`, `stt_pipeline`, `tts_pipeline` | yes | mock engines | no | no real STT engine installed; espeak works; Piper/Kokoro untested |
 | Navigation | `nav_sim`, `nav_extension`, launch+params in `framework_bringup` | yes | real Nav2+AMCL+slam_toolbox+Cartographer on a simulated lidar | no | RTAB-Map/RealSense only launch-checked |
