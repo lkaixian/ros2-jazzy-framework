@@ -197,3 +197,9 @@ still holds the first version (v3).
 planned `WaitForTranscript` (60 ms timeout) instead of `DetectSound`, "patrol N times" and "come with me" phrasings, one refusal that drove somewhere.
 The command templates are ours (`tools/gpsr/commands.py`), not the official GPSR sentences. Next: look at all misses (`MISS` lines), fix prompt/examples/macro
 descriptions first; fine-tune E2B on Colab (free T4) only if misses persist: the generator's gold plans are the training data.
+
+## Published dataset (2026-11-14)
+`larmkaixian/bt-sim-dataset` (public, Apache-2.0): config `slm` = `bt_dataset_v3` (11,760 train / 240 validation rows: task spec -> BehaviorTree.CPP XML, validator-labelled) and
+config `commands` = 1,000 GPSR-style commands with expectations and gold plans (`tools/gpsr/commands.py`, seed 1; plans stored as JSON strings). Re-publish with
+`python3 tools/slm/publish_dataset_hf.py --repo larmkaixian/bt-sim-dataset --data-dir <dir>` (an existing repo keeps its visibility; new uploads of a public repo are public). The card is
+neutral (no project name or links) and the data was grepped for paths/names before upload. Training used the first 6,000 train rows (2,835 under 768 tokens).
