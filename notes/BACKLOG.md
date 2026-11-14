@@ -4,7 +4,7 @@ Picked up from the end of a long session. Order inside each group is the suggest
 are new; T-xx point at `technical_debt.md`. Update this file as items are done (delete or tick).
 
 ## Start here
-- [ ] **CI check.** The last full GitHub run failed only in `Sim - workspaces (create, discover, join) +
+- [x] **CI check (latest run green, 2026-11-14).** The last full GitHub run failed only in `Sim - workspaces (create, discover, join) +
   SROS2 enforcement` (the secured DDS probes printed neither RECEIVED nor NOTHING in the container; it
   passes locally). Since then: `ros-jazzy-rmw-cyclonedds-cpp` added to the apt list and the probe now
   prints its stderr. Look at the newest run (`gh run list`), read the probe stderr, fix. Everything
@@ -12,13 +12,15 @@ are new; T-xx point at `technical_debt.md`. Update this file as items are done (
 - [ ] **Macro list (the user is thinking about it).** `src/framework_bringup/param/macros.yaml` has 9
   macros. Add yours: an entry + `example_args`; `test_macro_library.py` validates every macro against
   the real catalog. Remember a macro cannot use decorators (grammar = sequence/fallback groups + retry).
-- [ ] **Define the competition tasks.** Write the target tasks down (even 5 lines each); they decide the
+- [x] **Define the competition tasks** (GPSR, HRIC, PnPC, Laundry: see `notes/TASKS.md`; next: turn them into acceptance tests). Write the target tasks down (even 5 lines each); they decide the
   priorities below and become acceptance tests. Nothing in the repo defines them yet.
 
+- [ ] **Macros: execute `notes/MACROS_PLAN.md`** (work plan P0-P6; start with P1 macro batch A and P0 node outputs = B-01).
+
 ## Can be built and tested without the robot
-- [ ] **B-01 Node outputs (T-09).** Extension nodes cannot return values (no output ports, all ports are
+- [x] **B-01 Node outputs (T-09), DONE 2026-11-14:** extension handlers return `(ok, msg, {"out_x": v})`, manifests list `out_x` as an optional port, `bt_executor` writes it to the blackboard; round trip tested by `tools/integration/outputs_test.py` (also in CI). Nodes still to use it: see `MACROS_PLAN.md` P2. Original: Extension nodes cannot return values (no output ports, all ports are
   strings), e.g. `GetPersonPose` cannot hand keypoints on. Blocks genuinely complex tasks. Suggest first.
-- [ ] **B-02 Preflight check.** `ros2 run framework_bringup preflight`: lidar publishing, TF chain sane,
+- [x] **B-02 Preflight check.** `ros2 run framework_bringup preflight`: lidar publishing, TF chain sane,
   mux alive, `LLM_API_KEY` set, workspace/SROS2 state, LLM endpoints healthy, executor in dry-run.
 - [ ] **B-03 Richer task grammar (T-07).** Parallel, loops, SubTree/blackboard in the spec grammar AND
   `bt_slm/fallback.py` AND the dataset generator together (the SLM prompt format must stay in sync).
@@ -28,11 +30,11 @@ are new; T-xx point at `technical_debt.md`. Update this file as items are done (
 - [ ] **B-06 Time sync across machines** (chrony/NTP recipe + a check in preflight). Needed before two PCs.
 - [ ] **B-07 Manual override.** Teleop path into `cmd_vel_mux` at the highest priority (and a way to
   take control back during a run).
-- [ ] **B-08 Battery/health monitoring.** Kobuki publishes battery state; nothing consumes it. Show it in
+- [ ] **B-08 Battery/health monitoring** (laptop/PC side DONE: `host_info` service + CLI; still open: Kobuki battery topic, show in `dash`, warn/halt threshold). Kobuki publishes battery state; nothing consumes it. Show it in
   `dash`, warn/halt under a threshold.
 - [ ] **B-09 Process supervision on the robot.** systemd units (or the cluster agent as a service with
   `Restart=always`) so a reboot brings the stack back. Pairs with T-15.
-- [ ] **B-10 Hygiene.** `LICENSE` (package.xml says Apache-2.0, T-20), lint beyond `object_detection`
+- [ ] **B-10 Hygiene** (LICENSE added; rest open). `LICENSE` (package.xml says Apache-2.0, T-20), lint beyond `object_detection`
   (T-19), `setup.sh` version pins + a tested venv-or-pin story for NumPy 2 (T-17).
 - [ ] **B-11 Cheap D* Lite speedup (optional).** Reuse the cost-grid buffer and convert only changed
   regions; today it is ~6 ms for a new goal vs ~0.5 ms for NavFn on the sample map.

@@ -109,6 +109,9 @@ ros2 run framework_bringup dash --logs --level warn --node llm_bridge     # verb
 ```
 Read-only. The link type describes this machine's side of the route to each endpoint.
 
+## Machine health
+`ros2 run cluster_core host_info [host_id]` prints CPU, RAM, GPU utilisation and VRAM, temperature and battery of every machine that runs a `cluster_agent` (service `host_info/<host_id>`, type `cluster_msgs/srv/HostInfo`; the same numbers are in the ~2 Hz `cluster/node_info` heartbeat). A desktop PC reports battery `-`; no NVIDIA driver reports GPU `-`.
+
 ## Macros and the task lifecycle
 `param/macros.yaml` holds named, parameterised step lists (`go_to_place`, `go_and_say`, `patrol`, `greet_person`, `approach_person`, `report_object`, ...). The LLM can write `{"macro": "go_to_place", "args": {"place": "door"}}`; the orchestrator expands it to real nodes before the SLM/rule generator, and a test expands and validates every macro against the real node catalog. Bad calls refuse the plan with a message naming the problem. Add your own by adding an entry with `example_args`. The rule-based generator is exact for every spec in the grammar and was measured at 0.06 ms against 1.5 s for the fine-tuned 230M model (GTX 1650), so `bt_slm` tries the rules first and the model only handles retries or specs the rules cannot render. The spec grammar still has no Parallel/loops/blackboard planning.
 `task/state` (latched) follows planning -> ready -> running -> done/failed/halted. With `bt_orchestrator.max_repairs > 0` a failed run is re-planned through the LLM with the failing node (`failed_node` in `bt/status`); default 0. Every Action/Condition node is tagged `sync` or `async` in the LLM's node list (derived from how `bt_executor` really runs it).
