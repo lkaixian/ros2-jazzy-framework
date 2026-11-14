@@ -1,9 +1,32 @@
 """Pure-Python BT XML validation (no ROS needed, unit-testable)."""
+import math
 import re
 import xml.etree.ElementTree as ET
 
 BB_REF = re.compile(r'^\{[A-Za-z_][\w]*\}$')
 COMMON_ATTRS = {'name'}
+# shortcut: numeric ports are listed by name (manifests carry no port types); add a name here when an extension gets a new numeric port
+NUMERIC_PORTS = {'distance', 'kd', 'ki', 'kp', 'meters', 'min_conf', 'pitch', 'radians', 'roll', 'speed', 'target_height', 'timeout_ms',
+                 'tolerance', 'width', 'x', 'y', 'yaw', 'z', 'num_cycles', 'num_attempts', 'success_count', 'failure_count'}
+
+
+def _is_number(v):
+    try:
+        return math.isfinite(float(v))
+    except ValueError:
+        return False
+
+
+def _check_parallel_extensions(par, catalog, tid, errors):
+    """An extension runs one goal at a time and rejects the second: two branches of a Parallel must not both use one extension (T-25)."""
+    owner = {n: ext for ext, nodes in catalog.extensions.items() for n in nodes}
+    seen = {}
+    for i, child in enumerate(par):
+        for ext in {owner[e.tag] for e in child.iter() if e.tag in owner}:
+            if ext in seen and seen[ext] != i:
+                errors.append(f"[{tid}] <Parallel> starts two nodes of extension '{ext}' at once; it accepts one goal at a time "
+                              f"(put them in a Sequence)")
+            seen.setdefault(ext, i)
 
 
 def validate_xml(xml, catalog, max_depth=12, max_nodes=64, vocab=None):
@@ -75,6 +98,8 @@ def validate_xml(xml, catalog, max_depth=12, max_nodes=64, vocab=None):
             errors.append(f'[{tid}] decorator <{el.tag}> needs exactly 1 child, has {n}')
         elif spec.category in ('Action', 'Condition') and n:
             errors.append(f'[{tid}] leaf <{el.tag}> must not have children')
+        if el.tag == 'Parallel':
+            _check_parallel_extensions(el, catalog, tid, errors)
         allowed = set(spec.required) | set(spec.optional) | COMMON_ATTRS
         for p in spec.required:
             if p not in el.attrib:
@@ -86,6 +111,8 @@ def validate_xml(xml, catalog, max_depth=12, max_nodes=64, vocab=None):
                 errors.append(f"[{tid}] <{el.tag}> port '{a}' has malformed blackboard ref '{v}'")
             elif v == '':
                 errors.append(f"[{tid}] <{el.tag}> port '{a}' is empty")
+            elif a in NUMERIC_PORTS and not BB_REF.match(v) and not _is_number(v):
+                errors.append(f"[{tid}] <{el.tag}> port '{a}'='{v}' is not a number")
             elif vocab and (el.tag, a) in vocab and not BB_REF.match(v) \
                     and v not in vocab[(el.tag, a)]:
                 known = ', '.join(sorted(vocab[(el.tag, a)])[:30])

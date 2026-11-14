@@ -18,13 +18,11 @@ def _slug(s):
     return re.sub(r'\W+', '_', s).strip('_') or 'Main'
 
 
-def _keep(step, known_ids):
-    """On retry, drop unknown leaves (and groups left empty) so the validator can pass."""
+def _unknown(step, known_ids):
+    """Ids of the leaves a retry cannot keep: a plan with steps removed is not the plan that was asked for (T-22)."""
     if 'group' in step:
-        step = dict(step, steps=[s for s in (_keep(c, known_ids) for c in step.get('steps', []))
-                                 if s])
-        return step if step['steps'] else None
-    return step if step.get('node') in known_ids else None
+        return [u for c in step.get('steps', []) for u in _unknown(c, known_ids)]
+    return [] if step.get('node') in known_ids else [str(step.get('node'))]
 
 
 def _render(step, pad):
@@ -59,7 +57,9 @@ def build_xml(task_spec, known_ids=None, errors=()):
     spec = json.loads(task_spec)
     steps = spec.get('steps', [])
     if errors and known_ids is not None:
-        steps = [s for s in (_keep(c, known_ids) for c in steps) if s]
+        bad = [u for c in steps for u in _unknown(c, known_ids)]
+        if bad:
+            raise ValueError(f'plan uses unknown nodes {sorted(set(bad))}; refusing to drop them')
     tid = _slug(spec.get('goal', 'Main'))
     top = {'group': 'Sequence', 'steps': steps, 'retry': spec.get('retry')}
     body = _render(top, 4)

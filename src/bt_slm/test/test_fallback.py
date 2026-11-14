@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from bt_slm.fallback import build_xml
 from bt_slm.prompt import extract_xml
 
@@ -11,9 +13,9 @@ def test_fallback_keeps_unknown_first_pass():
     assert '<Fly/>' in build_xml(SPEC, {'DetectObject'})
 
 
-def test_fallback_drops_unknown_on_retry():
-    xml = build_xml(SPEC, {'DetectObject'}, errors=['unknown node <Fly>'])
-    assert '<Fly' not in xml and 'RetryUntilSuccessful' in xml
+def test_retry_fails_instead_of_dropping_unknown_steps():
+    with pytest.raises(ValueError, match='Fly'):
+        build_xml(SPEC, {'DetectObject'}, errors=['unknown node <Fly>'])
 
 
 def test_extract_xml():
@@ -35,10 +37,10 @@ def test_nested_groups_render_and_validate_structure():
     assert [c.tag for c in retry[0]] == ['DetectObject', 'Sequence']
 
 
-def test_retry_filter_prunes_empty_groups_recursively():
-    xml = build_xml(NESTED, {'DetectObject', 'Sleep'}, errors=['x'])
-    assert 'Fly' not in xml and xml.count('<Sequence>') == 1      # inner Sequence removed
-    assert '<Fallback>' in xml and 'Sleep' in xml
+def test_retry_finds_unknown_steps_inside_nested_groups():
+    with pytest.raises(ValueError, match='Fly'):
+        build_xml(NESTED, {'DetectObject', 'Sleep'}, errors=['x'])
+    assert 'Fly' in build_xml(NESTED, {'DetectObject', 'Sleep', 'Fly'}, errors=['x'])      # all known: kept whole
 
 
 def test_repeat_wraps_the_group_and_retry_is_outermost():

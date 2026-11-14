@@ -65,3 +65,31 @@ def test_checker_rejects_wrong_plans():
     two = {'goal': 'x', 'steps': [{'node': 'NavigateToPlace', 'ports': {'place': 'b'}},
                                   {'node': 'NavigateToPlace', 'ports': {'place': 'a'}}]}
     assert not gc.check(two, order, lambda s: s)                         # order matters
+
+
+def test_handwritten_commands_are_well_formed():
+    """tools/gpsr/handwritten.jsonl (scored by `llm_eval.py --jsonl`): known categories and `expect` keys, unique ids and sentences."""
+    rows = [json.loads(line) for line in open(os.path.join(ROOT, 'tools', 'gpsr', 'handwritten.jsonl')) if line.strip()]
+    keys = {'visit', 'says', 'macro', 'node', 'detects', 'any_node', 'laps', 'refuse'}
+    assert len(rows) >= 30 and len({r['id'] for r in rows}) == len(rows) == len({r['command'] for r in rows})
+    assert all(r['category'] in {'navigation', 'people', 'vision', 'refuse'} and r['expect'] and set(r['expect']) <= keys for r in rows)
+    assert all(m in LIB for r in rows for m in [r['expect'].get('macro')] if m)
+
+
+def test_no_arm_policy_matches_the_refuse_category():
+    """The orchestrator's arm guard (goal text) fires on exactly the commands that expect a refusal, generated and hand-written."""
+    from bt_orchestrator.policy import needs_arm
+    rows = [{'command': i['command'], 'category': i['category']} for i in gc.generate(600, seed=7)]
+    rows += [json.loads(line) for line in open(os.path.join(ROOT, 'tools', 'gpsr', 'handwritten.jsonl')) if line.strip()]
+    bad = [(r['command'], r['category']) for r in rows if needs_arm(r['command']) != (r['category'] == 'refuse')]
+    assert not bad, bad[:5]
+
+
+def test_no_arm_policy_ignores_nouns_in_restated_goals():
+    """The model restates the command as a goal ('Drive back to the start place'); nouns that look like arm verbs must not trigger it."""
+    from bt_orchestrator.policy import needs_arm, refuse_no_arm
+    for goal in ('Drive back to the start place', 'Go to the place where the guest waits', 'Make a lap between the door and the start',
+                 'Take the guest to the door', 'Show me the way to the left room'):
+        assert not needs_arm(goal), goal
+    assert needs_arm('Place the cup on the table') and needs_arm('Bring me a cup')
+    assert refuse_no_arm('{"goal": "Open the door", "steps": []}') and refuse_no_arm('not json') is None
