@@ -22,4 +22,17 @@ Table view of the left panel:
 - Loss panel: batch size 1, so each logged value is a single example; the bold line is a 5-point average.
 - Speed (measured earlier, GTX 1650): rule-based generator 0.06 ms, SLM about 1.5 s per spec.
 
+## v5: long plans ("heavy" and "max heavy")
+v4 only saw rows under 768 tokens, so long plans were never trained. v5 continues from v4 on a mix of normal, heavy (5-9 top-level steps, deeper groups) and max
+(close to the validator's 64-node limit) specs, up to 2560 tokens. Scored on 20 held-out rows per set (small: differences under about 10 points are noise):
+
+| set | v4 valid / exact | v5 valid / exact |
+|---|---|---|
+| normal | 1.00 / 0.90 | **1.00 / 1.00** |
+| heavy | 0.55 / 0.35 | **0.90 / 0.70** |
+| max | 0.80 / 0.50 | **0.90 / 0.80** |
+
+Same caveats as above (synthetic specs, rule-based generator as the reference). Generating a heavy plan on the CPU takes much longer than a normal one (about 2000 tokens),
+which is acceptable because the SLM only runs on retries and specs the rules cannot render. Local only so far: the public Hugging Face repo still holds the older version.
+
 Next version: add a row to `slm-benchmark.json` (and the loss points) after each fine-tune, then re-run the plot script.

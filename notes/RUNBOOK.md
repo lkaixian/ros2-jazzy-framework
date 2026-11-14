@@ -208,6 +208,18 @@ or leaving old nodes running exhausts the DDS participants of a domain (`error c
 use `-c 6144 -np 1` (unit, runbook and operator guide updated). (3) The model wrote `min_conf: ">0.5"` by itself; the validator now rejects non-numbers and a knowledge line says so.
 Not trained, so no HF update was needed.
 
+## Robot mode, recovery and mission policy (2026-11-14, later)
+`robot_mode_node` + `bt_orchestrator/mode.py`: init / safety / teleop / mission budget -> `robot/mode`; `RecoveryPolicy` picks retry / replan / go_home / ask_human / abort per failure
+(budget = `max_repairs`, still 0 by default); `mode_gate` in `bt_executor` (off by default) refuses runs unless `robot/mode` is fresh and `run_ok`. Real-node tests:
+`tools/integration/mode_test.py`, `tools/integration/recovery_test.py` (found two things: the executor's `bt/status` is only published once, so readiness is the `halt` service;
+`go_to_place` already retries once itself, so one run makes two goals). Groot2: `groot2:=true` (see operator guide). Details: `docs/operator-guide.md`.
+
+## SLM v5 (2026-11-14): long plans
+`bt_slm make_bt_dataset --profile heavy|max` (normal rows never exceeded 768 tokens, heavy median about 1.4k, max up to 3.8k). v5 = v4 + 860 rows (150 normal / 500 heavy / 250 max,
+`--max-len 2560`, Adafactor lr 2e-5, `--grad-ckpt`, about 40 minutes; AdamW + fp32 does not fit 4 GB at these lengths). 20 held-out rows per set, valid / exact:
+normal 1.00 / 1.00 (v4 1.00 / 0.90), heavy 0.90 / 0.70 (v4 0.55 / 0.35), max 0.90 / 0.80 (v4 0.80 / 0.50). Promoted to `models/bt-slm` (v4 kept as `models/bt-slm-v4`);
+`max_new_tokens` is now 3072. The public Hugging Face repo is NOT updated (needs a decision: `tools/slm/publish_hf.py`). Gotcha: training stdout is block-buffered into a log file, use `PYTHONUNBUFFERED=1`.
+
 ## Published dataset (2026-11-14)
 `larmkaixian/bt-sim-dataset` (public, Apache-2.0): config `slm` = `bt_dataset_v3` (11,760 train / 240 validation rows: task spec -> BehaviorTree.CPP XML, validator-labelled) and
 config `commands` = 1,000 GPSR-style commands with expectations and gold plans (`tools/gpsr/commands.py`, seed 1; plans stored as JSON strings). Re-publish with

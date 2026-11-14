@@ -32,7 +32,7 @@ class SlmNode(Node):
         super().__init__('bt_slm_node')
         self.declare_parameter('model_path', '')
         self.declare_parameter('device', 'cpu')
-        self.declare_parameter('max_new_tokens', 768)
+        self.declare_parameter('max_new_tokens', 3072)
         self.declare_parameter('temperature', 0.0)
         # the rule-based generator is exact for every spec in the grammar and ~25000x faster than the
         # model (0.06 ms vs 1.5 s on a GTX 1650), so the model only runs when rules cannot do it

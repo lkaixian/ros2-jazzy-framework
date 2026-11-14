@@ -21,7 +21,7 @@ latch (from `cmd_vel_mux`) or a critical battery; `init_failed` when `required` 
 **Recovery** (`max_repairs` = how many recoveries per task, 0 = none): after a failed run the policy picks by where it broke: navigation `retry, replan, go_home`;
 detection `retry, replan, ask_human`; speech `retry, ask_human`; anything else `replan, ask_human`; timeout `go_home` once; a crashed tree or a human halt = `abort`.
 `go_home`/`ask_human` run fixed specs (no LLM). The table is a starting point (`RecoveryPolicy.TABLE`): tune it with real runs.
-Tested: `test_mode.py` (logic), `tools/integration/mode_test.py` (real nodes, gate, latch). Not tried on the robot; the recovery enactment is covered only by the FSM tests.
+Tested: `test_mode.py` (logic), `tools/integration/mode_test.py` (real nodes, gate, latch) and `tools/integration/recovery_test.py` (a live executor with fake extensions that fail on command: retry, replan, go_home, ask_human). Not tried on the robot.
 
 ## Groot2 (the BehaviorTree.CPP GUI)
 `ros2 launch framework_bringup pipeline.launch.py groot2:=true` (or `groot2: true` in `param/pipeline.yaml`) serves each running tree on port 1667.

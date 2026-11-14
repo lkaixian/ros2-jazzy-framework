@@ -262,5 +262,42 @@
     0.0
    ]
   ]
+ },
+ "heavy_eval": {
+  "note": "n = 20 held-out rows per set, generated with the heavy / max profiles (bt_slm make_bt_dataset --profile); NOT comparable with the 200-row bars above",
+  "sets": {
+   "normal": {
+    "v4": [
+     1.0,
+     0.9
+    ],
+    "v5": [
+     1.0,
+     1.0
+    ]
+   },
+   "heavy": {
+    "v4": [
+     0.55,
+     0.35
+    ],
+    "v5": [
+     0.9,
+     0.7
+    ]
+   },
+   "max": {
+    "v4": [
+     0.8,
+     0.5
+    ],
+    "v5": [
+     0.9,
+     0.8
+    ]
+   }
+  },
+  "format": "[valid, exact]",
+  "v5": "continued from v4: 150 normal + 500 heavy + 250 max rows (860 trained, max_len 2560), 1 epoch, Adafactor lr 2e-5, gradient checkpointing, about 40 minutes on a 4 GB GPU"
  }
 }

@@ -4,5 +4,5 @@ bt_slm_node:
     # Empty -> deterministic rule-based fallback (no model needed).
     model_path: ""
     device: cpu
-    max_new_tokens: 768
+    max_new_tokens: 3072   # heavy plans (v5) need up to ~2000 tokens; it stops at the end of the tree
     temperature: 0.0

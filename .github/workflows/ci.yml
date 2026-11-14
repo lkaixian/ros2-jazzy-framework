@@ -118,6 +118,7 @@ jobs:
           python3 tools/integration/outputs_test.py
           python3 tools/integration/groot2_test.py
           python3 tools/integration/mode_test.py
+          python3 tools/integration/recovery_test.py
 
       - name: Sim - WaitForTranscript and the stt/capture flag
         timeout-minutes: 3
