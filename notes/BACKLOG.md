@@ -42,7 +42,7 @@ are new; T-xx point at `technical_debt.md`. Update this file as items are done (
   removing a member means creating a new workspace.
 
 ## Needs the robot or real assets
-- [ ] **B-20 Real hardware bring-up** (the order in STATUS "Suggested next steps" 1): Kobuki driver ->
+- [-] DEFERRED (user, 2026-11-14: cannot be done for now) **B-20 Real hardware bring-up** (the order in STATUS "Suggested next steps" 1): Kobuki driver ->
   RPLIDAR (`sllidar_ros2`) -> TF check -> slam_toolbox map -> measure lidar/camera mounts and robot
   radius (`param/navigation.yaml`, `nav2_params.yaml`) -> real `places.yaml` -> navigate dry-run, then
   live with a spotter. Re-map: `~/maps/my_map.yaml` is unusable. Verify the bumper/cliff latch with the
@@ -55,10 +55,10 @@ are new; T-xx point at `technical_debt.md`. Update this file as items are done (
   provide YOLO face weights and evaluate face accuracy (T-12); pose models for gestures (T-13).
 - [~] **B-23 Audio (PARTLY DONE 2026-11-14):** Piper voice + faster-whisper base.en downloaded (`setup.sh --only voice`); Piper->Whisper round trip exact; a spoken WAV went through capture -> VAD -> STT -> `bt/task` -> E2B -> valid plan. Still open: real microphone, VAD in noise, wake word, Kokoro, speaker playback, T-14. Original: Download model files (Whisper/Vosk model, Piper voice, Kokoro files), test the
   real microphone, VAD in noise, wake word (T-14).
-- [ ] **B-24 Two machines.** Cluster failover over WiFi/Ethernet (T-15), LLM failover to the E2B,
+- [-] DEFERRED (user, 2026-11-14: cannot be done for now) **B-24 Two machines.** Cluster failover over WiFi/Ethernet (T-15), LLM failover to the E2B,
   workspace join across the LAN (unicast discovery between the peers is unverified), dash link
   check against a real wired/wireless peer, SROS2 across hosts.
-- [ ] **B-25 Arm** (out of scope for now): model, MoveIt config, gripper action (T-11).
+- [-] DEFERRED (user, 2026-11-14: cannot be done for now) **B-25 Arm** (out of scope for now): model, MoveIt config, gripper action (T-11).
 
 ## Done in the last session (so it is not redone)
 Bumper/cliff latch in `cmd_vel_mux`; GitHub Actions CI; LLM bridge failover + emergency halt + hosts
