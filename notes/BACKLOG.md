@@ -38,7 +38,7 @@ are new; T-xx point at `technical_debt.md`. Update this file as items are done (
   (T-19), `setup.sh` version pins + a tested venv-or-pin story for NumPy 2 (T-17).
 - [ ] **B-11 Cheap D* Lite speedup (optional).** Reuse the cost-grid buffer and convert only changed
   regions; today it is ~6 ms for a new goal vs ~0.5 ms for NavFn on the sample map.
-- [ ] **B-12 Workspaces: per-topic permissions and revocation.** Members can use every topic today;
+- [x] **B-12 Workspaces: per-topic permissions and revocation (DONE 2026-11-14):** roles `full|operator|observer` with SROS2 permissions per enclave, per-role tokens/invites, `ws revoke` = remove + rekey (new CA) + rotate tokens and LLM key. Tested end to end on one machine in `tools/integration/workspace_test.py` (observer reads but cannot publish; revoked keys reach nothing; old token refused; a remaining member re-joins). Still one machine only; roles are fixed in code. Original: Members can use every topic today;
   removing a member means creating a new workspace.
 
 ## Needs the robot or real assets

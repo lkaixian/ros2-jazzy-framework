@@ -206,3 +206,28 @@ def test_discovery_finds_an_announcing_workspace(served):
     adm, port = served
     hits = ws.discover(timeout=4.0, port=47999, bind='127.0.0.1')
     assert any(h['name'] == 'lab' and h['port'] == port and h['fp'] == adm.fp for h in hits)
+
+
+def test_role_policies():
+    import re
+    full, op, obs = (ws.policy_xml('lab', 'h', r) for r in ('full', 'operator', 'observer'))
+
+    def pub(xml):
+        return set(re.findall(r'<topic>([^<]*)</topic>', re.search(r'<topics publish="ALLOW">(.*?)</topics>', xml).group(1)))
+    assert pub(full) == {'/*'}
+    assert '/bt/task' in pub(op) and '/teleop/cmd_vel' in pub(op) and '/cmd_vel' not in pub(op)
+    assert pub(obs) == {'/rosout', '/parameter_events'}                 # observers publish only housekeeping
+    assert 'path="/lab/h"' in obs
+    for r in ('operator', 'observer'):                                    # every role may serve its own parameter services
+        assert '/*/get_parameters' in ws.ROLES[r]['reply']
+    with pytest.raises(ws.WsError):
+        ws.issue_enclave('/nonexistent', 'lab', 40, 'h', 'root')
+
+
+def test_invite_roles_roundtrip():
+    inv = ws.make_invite('lab', '10.0.0.5', 47610, 'ab' * 32, 'tok', 'observer')
+    assert inv.endswith('~observer') and ws.parse_invite(inv)['role'] == 'observer'
+    assert ws.parse_invite(ws.make_invite('lab', '10.0.0.5', 47610, 'ab' * 32, 'tok'))['role'] == 'full'
+    with pytest.raises(ws.WsError):
+        ws.parse_invite(inv.replace('observer', 'root'))
+    assert ws.role_tokens({'token': 'T', 'tokens': {'observer': 'O'}}) == {'full': 'T', 'observer': 'O'}

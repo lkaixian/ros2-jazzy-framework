@@ -3,6 +3,9 @@
 
 create -> serve -> discover -> join (wrong token refused, right token admitted) -> two members talk
 over secured DDS; an unsecured outsider and an outsider holding another workspace's keys see nothing.
+Roles: an `observer` invite joins read-only (it receives, its publications are dropped by DDS Security).
+Revoke: `ws revoke` removes a member, rotates tokens and re-keys; the revoked member's old keys no longer
+reach the workspace, the old token is refused, and a remaining member can re-join and talk again.
 Uses a temp ROBOCUP_WS_HOME and port 47650. Exit code 0 only if every check passed.
 """
 import os
@@ -17,6 +20,7 @@ import time
 import yaml
 
 HOME = tempfile.mkdtemp(prefix='wstest_')
+HOME2 = tempfile.mkdtemp(prefix='wstest2_')       # a second machine's ~/.robocup (joined/<ws> is per workspace name)
 BASE = dict(os.environ, ROBOCUP_WS_HOME=HOME)
 BASE.pop('ROS_DOMAIN_ID', None)
 PEER = textwrap.dedent('''
@@ -25,7 +29,12 @@ PEER = textwrap.dedent('''
     role = sys.argv[1]
     rclpy.init(); n = rclpy.create_node('peer_' + role); got = []
     if role == 'pub':
-        p = n.create_publisher(String, 'chat', 10); end = time.monotonic() + 14
+        try:
+            p = n.create_publisher(String, 'chat', 10)
+        except Exception as e:           # DDS Security can refuse the writer right here
+            print('DENIED', flush=True); sys.exit(0)
+        end = time.monotonic() + 14
+        print('STARTED', flush=True)
         while time.monotonic() < end:
             p.publish(String(data='hi')); rclpy.spin_once(n, timeout_sec=0.1)
     else:
@@ -113,6 +122,49 @@ def main():
         res['a joined member receives over secured DDS'] = got['member'] == 'RECEIVED'
         res['an unsecured outsider receives nothing'] = got['unsecured'] == 'NOTHING'
         res['an outsider with another workspace\'s keys receives nothing'] = got['evil'] == 'NOTHING'
+
+        # ---- roles: an observer reads but cannot publish
+        base2 = dict(BASE, ROBOCUP_WS_HOME=HOME2)
+        inv = ws('invite', 'itest', '--role', 'observer', '--address', '127.0.0.1').stdout.strip().split('\n')[-1]
+        res['an observer invite carries the role'] = inv.endswith('~observer')
+        j2 = ws('join', '--invite', inv, '--host-name', 'hostc', env=base2, check=False)
+        res['an observer joins with its own token'] = j2.returncode == 0 and 'role observer' in j2.stdout
+        res['members lists the observer role'] = any(
+            'hostc' in l and 'observer' in l for l in ws('members', 'itest').stdout.splitlines())
+        ec = env_of(f'{HOME2}/joined/itest/env.sh')
+        pub = peer('pub', ea)
+        time.sleep(1)
+        obs_sub = peer('sub', ec)
+        res['an observer receives what a full member publishes'] = result('observer sub', obs_sub) == 'RECEIVED'
+        pub.kill()
+        pub = peer('pub', ec)                       # the observer tries to publish
+        state = pub.stdout.readline().strip()        # DENIED: the writer was refused locally; STARTED: it must not arrive
+        full_sub = peer('sub', ea)
+        seen = result('full sub', full_sub)
+        print(f'--- observer publish probe: publisher {state!r}, full member saw {seen!r}', file=sys.stderr)
+        res['an observer cannot publish (dropped by DDS Security)'] = state in ('DENIED', 'STARTED') and seen == 'NOTHING'
+        pub.kill()
+
+        # ---- revoke: hostb out, tokens rotated, workspace re-keyed
+        old_full = yaml.safe_load(open(f'{HOME}/workspaces/itest/secret.yaml'))['token']
+        rv = ws('revoke', 'itest', 'hostb', check=False)
+        res['revoke succeeds and says what to do'] = rv.returncode == 0 and 'must run `ws join` again' in rv.stdout
+        members = ws('members', 'itest').stdout
+        res['the revoked member is gone, the other must re-join'] = 'hostb' not in members and 'must re-join' in members
+        stale = ws('join', 'itest', '--token', old_full, '--host-name', 'hostd', check=False)
+        res['the old token is refused after revoke'] = stale.returncode != 0
+        pub = peer('pub', ea)                       # owner, new keystore
+        time.sleep(1)
+        old_b = peer('sub', eb)                     # hostb still holds the OLD keys
+        res['the revoked member\'s old keys reach nothing'] = result('revoked sub', old_b) == 'NOTHING'
+        pub.kill()
+        new_inv = ws('invite', 'itest', '--role', 'observer', '--address', '127.0.0.1').stdout.strip().split('\n')[-1]
+        j3 = ws('join', '--invite', new_inv, '--host-name', 'hostc', env=base2, check=False)
+        pub = peer('pub', ea)
+        time.sleep(1)
+        again = peer('sub', env_of(f'{HOME2}/joined/itest/env.sh'))
+        res['a remaining member re-joins and talks again'] = j3.returncode == 0 and result('rejoined sub', again) == 'RECEIVED'
+        pub.kill()
     finally:
         for k, v in res.items():
             print(('PASS ' if v else 'FAIL ') + k)
@@ -124,6 +176,7 @@ def main():
                     break
                 time.sleep(1)
         shutil.rmtree(HOME, ignore_errors=True)
+        shutil.rmtree(HOME2, ignore_errors=True)
     return 0 if res and all(res.values()) else 1
 
 

@@ -14,8 +14,14 @@ Join protocol (TLS, self-signed cert; both sides prove they know the token, boun
 the client actually saw, so a man in the middle that terminates TLS fails):
   C->S {op,host,nc}   S->C {ns, proof_s}   (client aborts here if proof_s is wrong)
   C->S {proof_c}      S->C {ok, domain, llm_key, peer, files{enclave files}}
-Authentication + encryption only: every member may publish/subscribe every topic (per-topic
-permissions are not generated), and removing one member means recreating the workspace.
+Roles (per-topic permissions): a member's enclave only allows what its role allows (ROLES below):
+  full      everything (the owner; the default)            ws invite lab
+  operator  read everything, publish only bt/task, teleop and ROS housekeeping, call services/actions
+  observer  read everything, publish only ROS housekeeping, call parameter/host-info services
+Each role has its own token (`ws invite lab --role observer` prints an invite for it; `ws join lab --token T --role observer`).
+The role is enforced by DDS Security permissions in the member's enclave, not by trusting the member.
+Revocation: `ws revoke lab HOST` removes the member, rotates every token and the LLM key and re-keys the workspace (new CA:
+the old keys no longer work against it); the other members re-run `ws join` to get new enclave files.
 """
 import argparse
 import base64
@@ -39,6 +45,20 @@ import yaml
 
 PORT, ANNOUNCE_PORT = 47610, 47611
 NAME_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,31}$')
+# role -> topics/services/actions the enclave may use ('/*' = anything). housekeeping = what every ROS node needs.
+HOUSEKEEPING = ['/rosout', '/parameter_events']
+# every rclpy/rclcpp node serves its own parameter services; a role that denies these cannot even start a node
+PARAM_SERVICES = [f'/*/{n}' for n in ('get_parameters', 'set_parameters', 'set_parameters_atomically', 'list_parameters',
+                                      'describe_parameters', 'get_parameter_types', 'get_type_description')]
+ROLES = {
+    'full': {'publish': ['/*'], 'subscribe': ['/*'], 'request': ['/*'], 'reply': ['/*'], 'call': ['/*'],
+             'execute': ['/*']},
+    'operator': {'publish': HOUSEKEEPING + ['/bt/task', '/teleop/cmd_vel'], 'subscribe': ['/*'],
+                 'request': ['/*'], 'reply': PARAM_SERVICES, 'call': ['/*'], 'execute': ['/__none__']},
+    'observer': {'publish': HOUSEKEEPING, 'subscribe': ['/*'],
+                 'request': ['/*/get_parameters', '/*/list_parameters', '/*/describe_parameters', '/host_info/*'],
+                 'reply': PARAM_SERVICES, 'call': ['/__none__'], 'execute': ['/__none__']},
+}
 ENCLAVE_FILES = ('cert.pem', 'key.pem', 'identity_ca.cert.pem', 'permissions_ca.cert.pem',
                  'governance.p7s', 'permissions.p7s', 'permissions.xml')
 CYCLONE_XML = """<?xml version="1.0" encoding="UTF-8" ?>
@@ -84,16 +104,34 @@ def proof(token, role, nc, ns, fp, host):
                     hashlib.sha256).hexdigest()
 
 
-def make_invite(name, host, port, fp, token):
-    return '~'.join(['rcw1', name, host, str(port), fp[:16], token])   # '~': IPs contain dots
+def make_invite(name, host, port, fp, token, role='full'):
+    parts = ['rcw1', name, host, str(port), fp[:16], token] + ([] if role == 'full' else [role])
+    return '~'.join(parts)                                     # '~': IPs contain dots
 
 
 def parse_invite(text):
-    parts = (text or '').strip().split('~', 5)
-    if len(parts) != 6 or parts[0] != 'rcw1':
-        raise WsError('not an invite string (expected rcw1~<name>~<host>~<port>~<fp>~<token>)')
-    _, name, host, port, fp, token = parts
-    return {'name': check_name(name), 'host': host, 'port': int(port), 'fp': fp, 'token': token}
+    parts = (text or '').strip().split('~', 6)
+    if len(parts) not in (6, 7) or parts[0] != 'rcw1':
+        raise WsError('not an invite string (expected rcw1~<name>~<host>~<port>~<fp>~<token>[~<role>])')
+    _, name, host, port, fp, token = parts[:6]
+    role = parts[6] if len(parts) == 7 else 'full'
+    if role not in ROLES:
+        raise WsError(f'invite names an unknown role {role!r}')
+    return {'name': check_name(name), 'host': host, 'port': int(port), 'fp': fp, 'token': token, 'role': role}
+
+
+def role_tokens(secret):
+    """{role: token}: `full` is the original workspace token, the others are created by `ws invite --role`."""
+    return {'full': secret['token'], **(secret.get('tokens') or {})}
+
+
+def ensure_role_token(wdir, role):
+    path = os.path.join(wdir, 'secret.yaml')
+    secret = yaml.safe_load(open(path))
+    if role != 'full' and role not in (secret.get('tokens') or {}):
+        secret.setdefault('tokens', {})[role] = secrets.token_urlsafe(16)
+        write_private(path, yaml.safe_dump(secret))
+    return role_tokens(secret)[role]
 
 
 def fingerprint(der):
@@ -136,11 +174,34 @@ def ros2_security(args, domain, cwd):
         raise WsError(f"ros2 security {' '.join(args)} failed: {r.stderr.strip()[-300:]}")
 
 
-def issue_enclave(wdir, ws, domain, host):
-    """Create (or reuse) the enclave /<ws>/<host>; returns {filename: base64}."""
+def policy_xml(ws, host, role):
+    """Real policy: publish and subscribe lists differ per role, so they are separate <topics> elements."""
+    r = ROLES[role]
+
+    def block(tag, attr, items):
+        return f'<{tag} {attr}="ALLOW">' + ''.join(f'<{tag[:-1]}>{i}</{tag[:-1]}>' for i in items) + f'</{tag}>'
+    body = (block('topics', 'publish', r['publish']) + block('topics', 'subscribe', r['subscribe'])
+            + block('services', 'request', r['request']) + block('services', 'reply', r['reply'])
+            + block('actions', 'call', r['call']) + block('actions', 'execute', r['execute']))
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n<policy version="0.2.0"><enclaves>'
+            f'<enclave path="/{ws}/{host}"><profiles><profile ns="/" node="*">{body}</profile></profiles>'
+            '</enclave></enclaves></policy>\n')
+
+
+def issue_enclave(wdir, ws, domain, host, role='full'):
+    """Create (or reuse) the enclave /<ws>/<host> with the permissions of `role`; returns {filename: base64}."""
+    if role not in ROLES:
+        raise WsError(f'unknown role {role!r}; choose {sorted(ROLES)}')
     edir = os.path.join(wdir, 'keystore', 'enclaves', ws, host)
+    marker = os.path.join(edir, 'role.txt')            # not part of the bundle
     if not os.path.isdir(edir):
         ros2_security(['create_enclave', 'keystore', f'/{ws}/{host}'], domain, wdir)
+    if not os.path.exists(marker) or open(marker).read().strip() != role:
+        pol = os.path.join(wdir, f'policy_{host}.xml')
+        open(pol, 'w').write(policy_xml(ws, host, role))
+        ros2_security(['create_permission', 'keystore', f'/{ws}/{host}', pol], domain, wdir)
+        os.remove(pol)
+        open(marker, 'w').write(role)
     return {n: base64.b64encode(open(os.path.join(edir, n), 'rb').read()).decode()
             for n in ENCLAVE_FILES}
 
@@ -234,8 +295,12 @@ class Admitter:
             nc = str(req.get('nc', ''))[:64]
             if req.get('op') != 'join' or not re.fullmatch(r'[0-9a-f]{8,64}', nc):
                 raise WsError('bad request')
+            role = str(req.get('role', 'full'))
+            secret = yaml.safe_load(open(os.path.join(self.wdir, 'secret.yaml')))      # re-read: `revoke` rotates it
+            token = role_tokens(secret).get(role) if role in ROLES else None
+            if token is None:
+                raise WsError(f'role {role!r} is not available in this workspace')
             ns = secrets.token_hex(16)
-            token = self.secret['token']
             send_json(f, {'ns': ns, 'proof_s': proof(token, 'S', nc, ns, self.fp, host)})
             got = str(recv_json(f, 4096).get('proof_c', ''))
             if not hmac.compare_digest(got, proof(token, 'C', nc, ns, self.fp, host)):
@@ -244,13 +309,15 @@ class Admitter:
                 self.log.append(('refused', host))
                 return
             with self.lock:
-                files = issue_enclave(self.wdir, self.meta['name'], self.meta['domain'], host)
+                files = issue_enclave(self.wdir, self.meta['name'], self.meta['domain'], host, role)
                 members = yaml.safe_load(open(os.path.join(self.wdir, 'members.yaml'))) or []
-                if host not in [m['host'] for m in members]:
-                    members.append({'host': host, 'joined': time.strftime('%F %T'),
-                                    'role': 'member'})
-                    open(os.path.join(self.wdir, 'members.yaml'), 'w').write(yaml.safe_dump(members))
-            send_json(f, {'ok': True, 'domain': self.meta['domain'], 'llm_key': self.secret['llm_key'],
+                known = [m for m in members if m['host'] == host]
+                if known:                           # re-join: new role and/or fresh keys after a revoke
+                    known[0].update(role=role, rejoin=False)
+                else:
+                    members.append({'host': host, 'joined': time.strftime('%F %T'), 'role': role})
+                open(os.path.join(self.wdir, 'members.yaml'), 'w').write(yaml.safe_dump(members))
+            send_json(f, {'ok': True, 'domain': self.meta['domain'], 'llm_key': secret['llm_key'], 'role': role,
                           'peer': self.meta.get('address') or local_address(), 'files': files})
             self.log.append(('admitted', host))
         except (WsError, ValueError, OSError, KeyError) as e:
@@ -332,7 +399,7 @@ def discover(timeout=4.0, port=ANNOUNCE_PORT, bind='0.0.0.0'):
     return list(found.values())
 
 
-def join_remote(host, port, token, me, expect_fp=None, timeout=10):
+def join_remote(host, port, token, me, expect_fp=None, timeout=10, role='full'):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE          # identity comes from the token proof, bound to this cert
@@ -343,7 +410,7 @@ def join_remote(host, port, token, me, expect_fp=None, timeout=10):
             raise WsError('the server certificate is not the one announced/invited: not joining')
         f = tls.makefile('rwb')
         nc = secrets.token_hex(16)
-        send_json(f, {'op': 'join', 'host': me, 'nc': nc})
+        send_json(f, {'op': 'join', 'host': me, 'nc': nc, 'role': role})
         r = recv_json(f, 4096)
         if not hmac.compare_digest(str(r.get('proof_s', '')), proof(token, 'S', nc, r.get('ns', ''), fp, me)):
             raise WsError('the server does not know the token (wrong token, or not the real '
@@ -378,7 +445,8 @@ def cmd_join(a):
     me = host_label(a.host_name or socket.gethostname())
     if a.invite:
         inv = parse_invite(a.invite)
-        ws, host, port, fp, token = inv['name'], inv['host'], inv['port'], inv['fp'], inv['token']
+        ws, host, port, fp, token, role = (inv['name'], inv['host'], inv['port'], inv['fp'], inv['token'],
+                                           inv['role'])
     else:
         ws = check_name(a.name)
         hits = [h for h in discover(a.timeout) if h['name'] == ws]
@@ -387,9 +455,10 @@ def cmd_join(a):
                           f'running there? same subnet?) - or use --invite')
         host, port, fp = hits[0]['host'], hits[0]['port'], hits[0]['fp']
         token = a.token or getpass.getpass('workspace token: ')
-    bundle = join_remote(host, port, token, me, fp)
+        role = a.role
+    bundle = join_remote(host, port, token, me, fp, role=role)
     d = install_joined(ws, me, bundle)
-    print(f'joined {ws} as {me} (domain {bundle["domain"]}); source {d}/env.sh')
+    print(f'joined {ws} as {me} role {bundle.get("role", "full")} (domain {bundle["domain"]}); source {d}/env.sh')
 
 
 def cmd_discover(a):
@@ -419,12 +488,40 @@ def cmd_env(a):
 def cmd_members(a):
     wdir, _, _, _ = load_ws(a.name)
     for m in yaml.safe_load(open(os.path.join(wdir, 'members.yaml'))) or []:
-        print(f"{m['host']:<24} {m['role']:<7} {m['joined']}")
+        print(f"{m['host']:<24} {m['role']:<9} {m['joined']}" + ('  (must re-join: keys rotated)' if m.get('rejoin') else ''))
 
 
 def cmd_invite(a):
-    _, meta, secret, fp = load_ws(a.name)
-    print(make_invite(meta['name'], a.address or local_address(), meta['port'], fp, secret['token']))
+    wdir, meta, _, fp = load_ws(a.name)
+    token = ensure_role_token(wdir, a.role)
+    print(make_invite(meta['name'], a.address or local_address(), meta['port'], fp, token, a.role))
+
+
+def cmd_revoke(a):
+    """Remove a member and re-key: new keystore (new CA), new tokens, new LLM key. The other members must re-join."""
+    wdir, meta, secret, _ = load_ws(a.name)
+    ws, domain = meta['name'], meta['domain']
+    host = host_label(a.host)
+    path = os.path.join(wdir, 'members.yaml')
+    members = yaml.safe_load(open(path)) or []
+    if host not in [m['host'] for m in members]:
+        raise WsError(f'{host} is not a member of {ws}')
+    if host == meta.get('owner_host'):
+        raise WsError('the owner cannot be revoked (create a new workspace instead)')
+    keep = [dict(m, rejoin=m['host'] != meta.get('owner_host')) for m in members if m['host'] != host]
+    os.rename(os.path.join(wdir, 'keystore'), os.path.join(wdir, 'keystore.old.' + time.strftime('%Y%m%d%H%M%S')))
+    ros2_security(['create_keystore', 'keystore'], domain, wdir)
+    issue_enclave(wdir, ws, domain, meta['owner_host'], 'full')
+    secret = {'token': secrets.token_urlsafe(16), 'llm_key': secrets.token_urlsafe(24),
+              'tokens': {r: secrets.token_urlsafe(16) for r in (secret.get('tokens') or {})}}
+    write_private(os.path.join(wdir, 'secret.yaml'), yaml.safe_dump(secret))
+    write_private(os.path.join(wdir, 'llm.key'), secret['llm_key'])
+    open(path, 'w').write(yaml.safe_dump(keep))
+    print(f'revoked {host}: keystore re-created (the old CA is useless against it), tokens and LLM key rotated.')
+    print('  - the running `ws serve` picks up the new tokens by itself;')
+    print('  - restart llama-server with the new key (ws env prints llm.key) so the old one stops working;')
+    print(f'  - the other members ({", ".join(m["host"] for m in keep if m.get("rejoin")) or "none"}) must run `ws join` again '
+          '(new invite: `ws invite ' + ws + '`); the old keystore is kept next to the new one.')
 
 
 def main(argv=None):
@@ -440,12 +537,14 @@ def main(argv=None):
     d.set_defaults(fn=cmd_discover)
     j = sub.add_parser('join'); j.add_argument('name', nargs='?'); j.add_argument('--invite')  # noqa: E702
     j.add_argument('--token'); j.add_argument('--host-name'); j.add_argument('--timeout', type=float, default=5.0)  # noqa: E702
+    j.add_argument('--role', default='full', choices=sorted(ROLES))
     j.set_defaults(fn=cmd_join)
     sub.add_parser('list').set_defaults(fn=cmd_list)
     for nm, fn in (('env', cmd_env), ('members', cmd_members), ('invite', cmd_invite)):
         p = sub.add_parser(nm); p.add_argument('name'); p.set_defaults(fn=fn)  # noqa: E702
         if nm == 'invite':
-            p.add_argument('--address')
+            p.add_argument('--address'); p.add_argument('--role', default='full', choices=sorted(ROLES))  # noqa: E702
+    rv = sub.add_parser('revoke'); rv.add_argument('name'); rv.add_argument('host'); rv.set_defaults(fn=cmd_revoke)  # noqa: E702
     a = ap.parse_args(argv)
     try:
         a.fn(a)
