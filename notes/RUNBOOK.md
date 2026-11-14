@@ -181,6 +181,7 @@ need your decision and your login (nothing is uploaded automatically):
   when you are happy. Extract with `tar -xzf bt-slm-<tag>.tar.gz -C models`.
 - **License:** the base model is under the LFM Open License v1.0: redistribution of a fine-tune is allowed if you ship the license, mark the files as
   modified and keep the attribution (both scripts do), and commercial use is restricted above 10 M USD annual revenue. Check it fits your use.
+- **Benchmark chart:** `docs/slm-benchmark.md` (table + `docs/img/slm-benchmark.png`, redraw with `tools/slm/plot_benchmark.py`); `publish_hf.py` puts the chart on the model card.
 - **Published (2026-11-14):** the first fine-tuned SLM (`bt-slm-v3`, valid 0.975 / exact 0.915, older catalog) is on the Hugging Face Hub as **public**
   `larmkaixian/bt-sim-slm` (made public the same day at the owner's request; it was uploaded private first). Update it any time by running `publish_hf.py` again (each run is a new commit; old versions stay in the repo history and can
   be fetched with `--revision`). Visibility is changed on the repo's settings page.

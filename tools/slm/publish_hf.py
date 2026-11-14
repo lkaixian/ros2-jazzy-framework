@@ -26,7 +26,7 @@ tags: [text-generation, fine-tuned]
 ---
 # {title}
 
-A small causal LM fine-tuned from [{base}](https://huggingface.co/{base}) (**modified: fine-tuned, files changed**) to turn a JSON task spec
+{chart}A small causal LM fine-tuned from [{base}](https://huggingface.co/{base}) (**modified: fine-tuned, files changed**) to turn a JSON task spec
 (plus a node catalog, the previous XML and validator errors on a retry) into BehaviorTree.CPP v4 XML.
 
 - Training data: synthetic (task spec, XML) pairs labelled by a validator; rows longer than {max_len} tokens were skipped; 1 epoch.
@@ -45,6 +45,8 @@ def main():
     ap.add_argument('--exact', default='n/a')
     ap.add_argument('--max-len', default='768')
     ap.add_argument('--public', action='store_true')
+    ap.add_argument('--chart', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'docs', 'img', 'slm-benchmark.png'),
+                    help='benchmark chart shown on the card (default docs/img/slm-benchmark.png if it exists)')
     ap.add_argument('--note', default='', help='one line about this version, shown on the model card')
     ap.add_argument('--project-url', help='optional: link the model card to the project that uses it (default: no link, nothing identifying)')
     ap.add_argument('--dry-run', action='store_true')
@@ -59,12 +61,15 @@ def main():
         shutil.copytree(a.model, stage)
         with urllib.request.urlopen(f'https://huggingface.co/{BASE}/raw/main/LICENSE', timeout=30) as r:
             open(os.path.join(stage, 'LICENSE'), 'wb').write(r.read())
+        has_chart = os.path.exists(a.chart)
+        if has_chart:
+            shutil.copy(a.chart, os.path.join(stage, 'benchmark.png'))
         open(os.path.join(stage, 'README.md'), 'w').write(CARD.format(
-            base=BASE, title=a.repo.split('/')[-1], valid=a.valid, exact=a.exact, max_len=a.max_len,
+            base=BASE, title=a.repo.split('/')[-1], chart='![benchmark: held-out accuracy per run and training loss](benchmark.png)\n\n' if has_chart else '', valid=a.valid, exact=a.exact, max_len=a.max_len,
             note=f'- This version: {a.note}\n' if a.note else '',
             project=f'- Used by: {a.project_url}\n' if a.project_url else ''))
         files = sorted(os.listdir(stage))
-        print(f"{'would upload' if a.dry_run else 'uploading'} to {a.repo} ({'public' if a.public else 'private'}): {files}")
+        print(f"{'would upload' if a.dry_run else 'uploading'} to {a.repo} (new repos: {'public' if a.public else 'private'}; an existing repo keeps its visibility): {files}")
         if a.dry_run:
             return
         api = HfApi()
