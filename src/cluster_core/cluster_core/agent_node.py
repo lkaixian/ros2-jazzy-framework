@@ -10,7 +10,6 @@ Safety properties (see docs/cluster.md):
   (hardware-bound) jobs keep running (fail-static) until a scheduler says otherwise.
 """
 import os
-import re
 import socket
 import time
 
@@ -24,7 +23,7 @@ from cluster_core.catalog import CatalogError, expand, load_catalog
 from cluster_core.endpoints import advertised, local_address
 from cluster_core.qos import INFO_QOS, LATCHED_QOS, TOPIC_ASSIGN, TOPIC_INFO
 from cluster_core.supervisor import Supervisor
-from cluster_core.sysinfo import Sampler
+from cluster_core.sysinfo import host_service_name, Sampler
 
 
 def split_csv(text):
@@ -76,7 +75,7 @@ class AgentNode(Node):
         self.info_pub = self.create_publisher(NodeInfo, TOPIC_INFO, INFO_QOS)
         self.last_info = None
         # one service per machine (names cannot clash across hosts); `ros2 run cluster_core host_info` reads them
-        self.create_service(HostInfo, 'host_info/' + re.sub(r'\W', '_', self.host), self._host_info)
+        self.create_service(HostInfo, host_service_name(self.host), self._host_info)
         self.create_subscription(AssignmentSet, TOPIC_ASSIGN, self._on_assign, LATCHED_QOS)
         self.create_timer(1.0 / p('heartbeat_hz'), self._heartbeat)
         self.create_timer(1.0 / p('poll_hz'), self._tick)

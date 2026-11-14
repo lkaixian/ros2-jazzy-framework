@@ -5,11 +5,11 @@
 Reads the `host_info/<host_id>` service each agent serves; values are the agent's latest ~2 Hz sample.
 """
 import argparse
-import re
 import sys
 import time
 
 import rclpy
+from cluster_core.sysinfo import host_service_name
 from cluster_msgs.srv import HostInfo
 
 TYPE = 'cluster_msgs/srv/HostInfo'
@@ -38,7 +38,7 @@ def main(argv=None):
         end = time.monotonic() + 2.5               # let discovery find the agents
         while time.monotonic() < end:
             rclpy.spin_once(n, timeout_sec=0.1)
-        want = 'host_info/' + re.sub(r'\W', '_', a.host) if a.host else None
+        want = host_service_name(a.host) if a.host else None
         names = sorted(nm for nm, ts in n.get_service_names_and_types()
                        if TYPE in ts and (want is None or nm.lstrip('/') == want))
         if not names:

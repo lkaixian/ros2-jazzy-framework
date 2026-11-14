@@ -5,6 +5,7 @@ Parsers take text so they can be unit-tested with fake files. Every reader degra
 """
 import glob
 import os
+import re
 import subprocess
 import time
 
@@ -94,6 +95,13 @@ def parse_battery(capacity, status):
         return -1.0, -1
     st = (status or '').strip().lower()
     return pct, 1 if st in ('charging', 'full') else 0 if st == 'discharging' else -1
+
+
+def host_service_name(host):
+    """`host_info/<host>`: a ROS name token may only hold [A-Za-z0-9_] and must not start with a digit (a container
+    id like 11e1efbe9d79 does), so other characters become '_' and a leading digit gets an 'h' prefix."""
+    token = re.sub(r'\W', '_', host or '') or 'host'
+    return 'host_info/' + ('h' + token if token[0].isdigit() else token)
 
 
 def read_text(path):

@@ -134,3 +134,10 @@ def test_read_battery_from_fake_sysfs(tmp_path):
     (b / 'capacity').write_text('55\n')
     (b / 'status').write_text('Discharging\n')
     assert sysinfo.read_battery(str(tmp_path)) == (55.0, 0)
+
+
+def test_host_service_name_is_a_valid_ros_name():
+    f = sysinfo.host_service_name
+    assert f('laptop-a') == 'host_info/laptop_a'
+    assert f('11e1efbe9d79') == 'host_info/h11e1efbe9d79'      # container ids start with a digit (CI failure)
+    assert f('') == 'host_info/host' and f('a.b c') == 'host_info/a_b_c'
