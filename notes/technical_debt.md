@@ -38,3 +38,18 @@ Severity: **S1** can hurt people/hardware or invalidate results; **S2** likely t
 | T-22 | Test coverage is thin for ROS node wiring (most node classes are exercised only by the integration scripts, which are not part of `colcon test`). Integration scripts live in `tools/integration/` and are run manually. |
 | T-23 | Python packages copy files on install, so "edit, relaunch" needs a rebuild (documented, still friction); consider `--symlink-install` + `develop` setup.cfg for dev. |
 | T-24 | Version skew risks: ultralytics 8.4.211, torch 2.15, numpy 2.4 in `~/.local`, apt cv/matplotlib; kobuki driver is a source build in `~/ros2_ws` with pinned submodules. |
+
+## Added 2026-11-14
+| ID | Debt | Next step |
+|---|---|---|
+| T-21 | **E2B is prompt-sensitive:** wording/catalog changes flipped its macro choice until the schema key-order bug was fixed; only 15 commands are evaluated and the validator checks structure, not meaning (`min_conf: ">0.5"` passes). | Grow `llm_eval.py`'s gold set; add value checks per port type to the validator; compare E4B. |
+| T-22 | **Retry path drops unknown steps** (`bt_slm.fallback._keep`) and can accept a shorter plan when the validator has not yet seen every manifest. | Fail the retry instead of dropping, or require manifests before accepting tasks. |
+| T-23 | **PIE-in-shared-object crash is explained but not traced to the exact instruction.** Fixed with `-fPIC`. | None needed unless it reappears; keep the scratch-overlay recipe. |
+| T-24 | **Guards are tested with fake data:** lidar yaw (`scan_yaw_offset`), Kobuki radius margin (0.22 m), battery thresholds (14.0/13.2 V) are defaults/guesses; the battery guard halts the plan but not teleop/Nav2. | Measure on the robot; decide whether low battery should also stop Nav2. |
+| T-25 | **`Parallel` can start two actions on one extension**, which rejects the second; no static check. | Validator rule or serialize per extension. |
+| T-26 | **Doorbell detector tuned on synthetic tones**, `FindFreeSeat` on synthetic boxes, `CountPeople` on a helper test only. | Record real bells/rooms; evaluate (B-23). |
+| T-27 | **SLM held-out numbers are against the rule generator on synthetic specs**; trained on at most 60 % of rows (768-token cap, batch 1 on 4 GB). | Evaluate on real LLM output; try gradient checkpointing for longer rows. |
+| T-28 | **Workspace roles are fixed in code (`ROLES`)**, tested on one machine; revoke needs members to re-join and llama-server restarted by hand. | Role file per workspace; two-machine test. |
+| T-29 | **Two `object_detection` ament lint tests lint the whole tree from the repo root** (they pass from the package dir). | Run them via `colcon test` or scope them. |
+| T-30 | **Chrony is not installed here**; `timesync.sh`/preflight offset only unit-tested. | Run on two machines. |
+| T-31 | **`DescribePerson` is missing**: perception messages carry no pixels (clothes colour, hair). | Add colour features in `person_detection`, then a node. |

@@ -67,3 +67,24 @@
 - Mid-task user messages are refinements; acknowledge, fold in, and keep the verified/unverified
   split honest. Earlier summaries were wrong twice (audio include, republish); the correction
   was stated plainly. Keep doing that.
+
+## Added 2026-11-14
+- **JSON-schema key order:** llama.cpp emits properties in schema order; `nlohmann::json` sorts keys alphabetically (args before macro = the model
+  picks macros without args). Use `ordered_json` for anything sent as a schema. Test: `LlamaClient.SchemaKeepsPropertyOrderAndRepeatPenalty`.
+- **Gemma 4 thinking:** run `llama-server --reasoning off`, or replies are cut off by `max_tokens` ("not a JSON object").
+- **Static library in a shared plugin needs `-fPIC`:** `dstar_lite_core` without it only worked unoptimised (Ubuntu defaults to PIE). Set
+  `POSITION_INDEPENDENT_CODE ON`. The symptom was `planner_server` exit code -11 on the first goal.
+- **Never install an experimental build into the shared `install/`:** it breaks everyone using the workspace. Overlay: `colcon build
+  --build-base B --install-base I --packages-select X`, then `source I/setup.bash` after `install/setup.bash`.
+- **Background jobs ignore SIGINT:** `cmd &` from a non-interactive shell cannot be stopped with Ctrl-C/`kill -INT`; use SIGTERM, and select
+  processes by `ROS_DOMAIN_ID` in `/proc/<pid>/environ` (never `pkill -f <pattern>`: it can match your own shell).
+- **Core dumps:** `core_pattern` pipes to apport; a crash lands in `/var/crash/*.crash` (one per executable until removed): `apport-unpack` it, then
+  `gdb -batch -ex bt <exe> crashdir/CoreDump`.
+- **ROS names:** a service/topic token must not start with a digit (a container id as host id broke `host_info/<id>`); sanitise with `host_service_name`.
+- **Restricted SROS2 roles still need parameter-service replies**, or no rclpy node starts.
+- **A denied DDS writer raises at `create_publisher`**, not silently later.
+- **Extensions must be up before tasks are sent:** if the validator misses a manifest, the retry path drops unknown steps and can accept a shorter plan.
+- **Latched `bt/tree`:** `dash` started after a run still shows the last tree; statuses are sticky (S/F stay) by design.
+- **Python edits need `colcon build`** (symlink-install copies Python files here), including for `bt_common`; a stale install shows "cannot import name".
+- **`python3` on PATH may be a different interpreter:** use `/usr/bin/python3` for scripts that import `yaml`/rclpy.
+- **Disk is tight (about 8 GB free on `/`):** models live in `models/` (gitignored); do not add the E4B model here.

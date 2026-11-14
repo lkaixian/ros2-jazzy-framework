@@ -1,7 +1,7 @@
 # Status
 
-Snapshot (2026-11-14, later): branch `main`, 28 ROS packages, ~900 Python tests + 14 C++ gtests passing, `check_params`
-23/23 nodes consistent. The two `object_detection` lint tests fail (they lint `build/`; T-19). Update this file when you change the picture.
+Snapshot (2026-11-14, evening): branch `main`, 28 ROS packages, ~940 Python tests + 14 gtests passing, `check_params`
+25/25 nodes consistent. The two `object_detection` lint tests fail (they lint `build/`; T-19). Update this file when you change the picture.
 
 Verification levels used below:
 - **unit** = automated tests pass; **sim** = run end-to-end against a simulator or fake inputs on
@@ -28,6 +28,12 @@ Verification levels used below:
 | Macros | `bt_common/macros.py`, `param/macros.yaml`, orchestrator, validator | every macro validated against the real catalog; whitelist + schema tests | real E2B chooses macros (e.g. `go_and_say`, `patrol`, `meet_guest`) | no | 27 whitelisted macros (`notes/MACROS_PLAN.md`); SLM skipped by `rules_first` for in-grammar specs |
 | Terminal view | `framework_bringup dash` | yes | against sims | no | status table + `--logs` verbose; keys for node/system restart, stop, halt; Kobuki battery line |
 | Safety mux | `bt_common/cmd_vel_mux_node` | yes | yes | no | priority + 0.5 s watchdog + clamps; Nav2 is the lowest-priority input; bumper/cliff latch + `safety_reset` service (fake events only) |
+| Dashboard + executor feed | `framework_bringup dash`, `bt_executor` (`bt/tree`, `bt/node_status`) | yes | live tree against a real executor; 3-check feed test in CI | no | keys for restart/stop/halt, plan tree, Kobuki battery |
+| Task-spec grammar | `bt_common/macros.py`, `bt_slm/fallback.py`, `bt_validator`, `llm_bridge` | yes | `rehearsal.sh`: 9 task rehearsals in dry-run | no | macros, `retry`, `repeat`, `Parallel`, `foreach`; docs/task-spec-grammar.md |
+| Guards | `bt_common` (`ScanGuard`, `battery_guard_node`), `odom_extension`, `pid_extension` | yes | fake scans / fake battery, CI | no | lidar stop distances, turn clearance, battery halt: thresholds unverified on the robot |
+| Speech nodes | `social_extension` (`WaitForTranscript`, `ExtractAnswer`, `DetectSound`), `stt_pipeline` | yes | synthetic WAVs through the real audio path | no | real doorbell/microphone untested |
+| Workspace roles | `framework_bringup ws` | yes | observer reads/cannot publish, revoke re-keys (one machine) | no | no second machine |
+| Operations | `tools/record_run.sh`, `tools/systemd/`, `tools/net/timesync.sh`, `preflight`, `teleop` | parsers/keys | rosbag record+info; units verified with systemd-analyze, not enabled | no | chrony not installed here |
 | Audio | `audio_msgr`, `audio_capture`, `stt_pipeline`, `tts_pipeline` | yes | mock engines | no | no real STT engine installed; espeak works; Piper/Kokoro untested |
 | Navigation | `nav_sim`, `nav_extension`, launch+params in `framework_bringup` | yes | real Nav2+AMCL+slam_toolbox+Cartographer on a simulated lidar | no | RTAB-Map/RealSense only launch-checked |
 | Cluster | `cluster_msgs`, `cluster_core` | 621 tests | scheduler + 3 simulated hosts, one machine | no 2nd machine | failover ~5.2 s, restart blackout 1.6 s |
@@ -51,14 +57,14 @@ Verification levels used below:
 - **Placeholders that must be measured** (`param/navigation.yaml`): lidar mount, camera mount; robot
   radius (0.18) in `param/nav2_params.yaml`; `param/places.yaml` coordinates (sample map only).
 - `~/maps/my_map.yaml` is unusable for planning (2.6 m^2 connected free space): re-map with slam_toolbox.
-- SLM: a 3000-row fine-tune ran (held-out valid 0.99 / exact 0.985, measured against the rule-based generator, so it only shows the model learned the rules). Not evaluated on real LLM output; `models/bt-slm` is not wired into any launch default (pass `slm_model_path`). LLM -> spec -> XML quality with a real model: not evaluated.
-- Real llama-server / Gemma 4 E4B (needs llama.cpp build >= b8637; model may be gated).
-- Real STT (faster-whisper/Vosk), Piper, Kokoro, live microphone.
+- SLM: re-trained on the 45-node catalog with the new grammar (see RUNBOOK for the held-out score vs the rule generator); wired by auto-discovery of `models/bt-slm` (`ROBOCUP_SLM_MODEL` overrides, `model_path: none` = rules only); never evaluated on real LLM output.
+- Gemma 4 E4B on the big PC and `LLAMA_API_KEY` support (E2B + llama.cpp b12375 DO run here: see RUNBOOK); no comparison against E4B.
+- Live microphone and speaker, VAD in noise, wake word, Kokoro; (faster-whisper + Piper work on synthetic audio).
 - Detector trained on the user's items (dataset does not exist yet); YOLO face weights; face accuracy.
 - Arm: model unknown (ask the user's teammate), MoveIt config, gripper action, pick/place.
 - Two physical machines / WiFi for the cluster; half-partition behaviour; SROS2.
-- `setup.sh` apt/rosdep/pip/llama.cpp/models steps (dry-run only).
-- Bumper/cliff latch exists in the mux but is untested with the real Kobuki driver (topic names, event timing); no scan-based obstacle check for extension motion; no hardware e-stop.
+- `setup.sh`: the `prebuilt` llama.cpp and `voice` steps were reproduced by hand and dry-run; apt/rosdep and a clean-machine run were not executed.
+- Bumper/cliff latch, lidar guards and the battery guard are tested with fake events only (real Kobuki topics, lidar mounting yaw and battery thresholds unverified); no hardware e-stop.
 
 ## Suggested next steps (in order)
 1. Bring up the real robot step by step with the user present: Kobuki driver -> lidar -> TF check ->
@@ -68,7 +74,7 @@ Verification levels used below:
 3. Collect images of the user's items, train the detector (`train_detector`), then regenerate SLM
    data with `--labels`.
 4. Decide the face-recognition approach (technical_debt T-12), install STT/TTS engines, test audio.
-5. Fine-tune the SLM, compare against the rule-based generator on held-out specs, then add the
+5. Compare the SLM with the rule generator on real LLM specs; consider a runtime failure -> SLM repair loop (T-06).
    runtime failure -> SLM repair loop (the "fast brain" idea, T-06).
 6. Pick the arm model; fill `arm_*` params; test MoveIt in its simulator.
 7. Two-machine cluster test; set real job costs in `param/cluster_jobs.yaml`.

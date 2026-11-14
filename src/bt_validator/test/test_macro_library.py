@@ -55,3 +55,15 @@ def test_whitelist_names_only_existing_macros():
     assert wl, 'macros.yaml has no whitelist'
     assert set(wl) <= set(LIB), f'whitelisted but not defined: {sorted(set(wl) - set(LIB))}'
     assert set(LIB) <= set(wl), f'defined but not whitelisted (hidden from the LLM): {sorted(set(LIB) - set(wl))}'
+
+
+def test_macro_docs_are_up_to_date():
+    import importlib.util
+    root = os.path.join(os.path.dirname(__file__), '..', '..', '..')
+    spec = importlib.util.spec_from_file_location('gen_macro_docs', os.path.join(root, 'tools', 'gen_macro_docs.py'))
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    from bt_common.macros import load_whitelist
+    want = gen.render(LIB, load_whitelist(os.path.join(PARAM, 'macros.yaml')))
+    have = open(os.path.join(root, 'docs', 'macros.md')).read()
+    assert have == want, 'docs/macros.md is stale: run python3 tools/gen_macro_docs.py'

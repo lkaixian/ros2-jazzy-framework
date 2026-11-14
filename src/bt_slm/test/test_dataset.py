@@ -139,3 +139,17 @@ def test_dataset_uses_the_users_detector_labels(cat):
         used |= set(re.findall(r'<DetectObject label="([^"]+)"', r['completion']))
     assert used and used <= set(labels)
     assert not (used & set(dataset.LABELS))          # no stale default labels leak in
+
+
+def test_default_model_path_finds_the_repo_models_folder(tmp_path):
+    from bt_slm.slm_node import default_model_path
+    deep = tmp_path / 'repo' / 'src' / 'bt_slm' / 'bt_slm'
+    deep.mkdir(parents=True)
+    f = deep / 'slm_node.py'
+    f.write_text('')
+    assert default_model_path(str(f), {}) == ''                                     # no model: rules only
+    m = tmp_path / 'repo' / 'models' / 'bt-slm'
+    m.mkdir(parents=True)
+    (m / 'config.json').write_text('{}')
+    assert default_model_path(str(f), {}) == str(m)
+    assert default_model_path(str(f), {'ROBOCUP_SLM_MODEL': '/x/y'}) == '/x/y'     # the env var wins

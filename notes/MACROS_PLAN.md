@@ -265,3 +265,12 @@ STILL UNCONFIRMED: exact servo count, servo model, camera model. Ask the teammat
   tone, short blip, gliding pitch, one Piper speech clip), and a synthetic ding-dong WAV through `audio_capture` -> `sound_event_node`
   -> `audio/events` (883 Hz). NOT verified: real doorbell recordings, the BT handler through the executor, noisy rooms. Heuristic
   thresholds are guesses until real recordings exist (B-23).
+
+## STATUS 2026-11-14 (final for this round)
+- **36 macros**, all whitelisted (`docs/macros.md` is generated from `macros.yaml`). New since the last status: `wander`, `wander_until_person`, `scout_room`,
+  `announce_and_go` (Parallel), `receive_guest`, `hric_round`, `offer_seat`, `wait_for_doorbell`, `patrol_laps` (repeat).
+- **P3 done:** `repeat`, `Parallel`, `foreach` in the grammar (`docs/task-spec-grammar.md`); `SubTree` dropped because macros expand inline.
+- **P5 done:** 9 rehearsals in `tools/integration/rehearsal.sh` (GPSR go_and_say/patrol_laps/refuse, HRIC meet_guest/receive_guest, walk_wander, foreach_tour,
+  announce_and_go, scout_room), all in CI; the real-LLM counterpart is `llm_eval.py`.
+- **P6 done:** preflight checks LLM, mux, executor dry-run, lidar/TF, clock offset (chrony) and disk.
+- **Open:** `DescribePerson` (needs pixels), P4 arm (deferred by the user), HRIC door opening/handover, PnPC/Laundry rehearsals.

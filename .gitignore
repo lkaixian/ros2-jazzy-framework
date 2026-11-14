@@ -18,3 +18,5 @@ bt_dataset_small/
 finetune.log
 bt_dataset_v2/
 bt_dataset_v2_small/
+bt_dataset_v3/
+bt_dataset_v3_small/

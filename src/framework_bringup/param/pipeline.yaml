@@ -34,7 +34,7 @@ llm_bridge_node:
 
 bt_slm_node:
   ros__parameters:
-    model_path: ""          # fine-tuned SLM dir; "" = rule-based fallback
+    model_path: ""          # fine-tuned SLM dir; "" = $ROBOCUP_SLM_MODEL or the repo's models/bt-slm if present, else the rule-based generator; "none" = rules only
     device: cpu
     max_new_tokens: 768
     temperature: 0.0

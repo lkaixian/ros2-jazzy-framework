@@ -194,3 +194,8 @@ and leftover-process checks fail as they must (a SIGKILLed agent left 2 live cop
 behaviour), real GPU/Jetson metrics, load-based rebalancing on live hosts (unit-tested only, the
 simulated hosts share one CPU), SROS2, and any real robot hardware. Failover time on a real network
 is the same 5 s plus detection noise; discovery time of a joining machine is network dependent.
+
+## Machine health service
+Every `cluster_agent` serves `host_info/<host_id>` (`cluster_msgs/srv/HostInfo`, the host id is sanitised into a valid ROS name: other characters
+become `_`, a leading digit gets an `h` prefix) and `cluster/node_info` carries the same numbers (CPU load, RAM, GPU util/VRAM, temperature, laptop
+battery) at about 2 Hz. `ros2 run cluster_core host_info [host_id]` prints one line per machine. Time sync between hosts: `tools/net/timesync.sh`.

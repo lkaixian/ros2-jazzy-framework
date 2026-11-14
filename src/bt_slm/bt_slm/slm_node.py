@@ -1,4 +1,5 @@
 import json
+import os
 
 import rclpy
 from bt_common.catalog import Catalog
@@ -10,6 +11,20 @@ from rclpy.node import Node
 
 from bt_slm.fallback import build_xml
 from bt_slm.prompt import prompt_for
+
+
+def default_model_path(start=__file__, env=os.environ):
+    """The fine-tuned SLM to use when `model_path` is empty: $ROBOCUP_SLM_MODEL, else the nearest `models/bt-slm` (with a
+    config.json) above this file, i.e. the repository's models folder. '' = none found (the rule-based generator is used)."""
+    if env.get('ROBOCUP_SLM_MODEL'):
+        return env['ROBOCUP_SLM_MODEL']
+    d = os.path.dirname(os.path.realpath(start))
+    for _ in range(8):
+        cand = os.path.join(d, 'models', 'bt-slm')
+        if os.path.exists(os.path.join(cand, 'config.json')):
+            return cand
+        d = os.path.dirname(d)
+    return ''
 
 
 class SlmNode(Node):
@@ -31,8 +46,12 @@ class SlmNode(Node):
 
     def _load(self):
         path = self.get_parameter('model_path').value
+        if path == 'none':
+            self.get_logger().info('model_path: none -> rule-based generator only')
+            return
+        path = path or default_model_path()
         if not path:
-            self.get_logger().warn('model_path empty: using rule-based fallback generator')
+            self.get_logger().warn('no SLM found (model_path empty, no models/bt-slm): using rule-based fallback generator')
             return
         try:
             from transformers import AutoModelForCausalLM, AutoTokenizer

@@ -111,3 +111,10 @@ RealSense stream, RTAB-Map actually mapping (no RGB-D data was available), depth
 costmaps, Nav2 tuning on the real robot (speeds, footprint, inflation), CPU load on a Pi/Jetson,
 real sensor noise and wheel slip (the simulator's lidar is nearly ideal, odometry only has a
 heading scale error). The base->laser / base->camera_link transforms are **placeholders**.
+
+## Build notes for the D* Lite plugin
+The package builds as **Release** by default and its static core library with `-fPIC` (`CMakeLists.txt`). Both matter: colcon passes no build type
+(no optimisation: a fresh search on a 240x160 grid took 50 ms, now 8.4 ms), and an optimised build whose static core was not position independent
+segfaulted `planner_server` on the first goal. Try experimental builds in a scratch overlay (`colcon build --build-base B --install-base I`), not in
+`install/`. `test_core` prints the timing (`FreshSearchTiming`); `tools/integration/nav_planner_test.py dstar_lite` drives the sample map end to end.
+Obstacle checks for plain motion (not Nav2) are in the README ("Executing plans (safety)").

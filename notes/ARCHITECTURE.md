@@ -30,7 +30,8 @@ The "harness" = validator (nothing unvalidated runs), dry-run/manual-run default
 watchdog, halt service, extension executors that reject bad ports, cluster fencing.
 Hand-written BTs enter at `submit_bt` and take the same validator -> executor path.
 
-Not built yet: runtime failure of a BT node feeding back to the SLM for fast repair (see debt T-06).
+Runtime failure of a BT node can feed back to the LLM (`max_repairs`, off by default); an LLM that gives no usable reply produces an invalid plan with the
+reason (`llm/error` -> orchestrator) instead of silence.
 
 ## Key interfaces
 - Topics: `bt/task`, `scene/summary`, `bt/task_spec`, `bt/plan`, `bt/status` (JSON string),
@@ -45,8 +46,15 @@ Not built yet: runtime failure of a BT node feeding back to the SLM for fast rep
   `DetectObject`, `DetectPerson`, `RecognizeFace`, `ExtractFaceFeature`. Everything else is an
   **extension node** declared in `<pkg>/config/<pkg>.yaml` and implemented by that extension.
   Catalog of core nodes: `bt_common/config/core_nodes.yaml`.
-- Velocity chain: odom_ext/pid_ext/nav2 publish to `*/cmd_vel` -> `cmd_vel_mux_node` (priority order
-  odom > pid > nav2, clamp, 0.5 s watchdog, one zero Twist when all stale) -> `cmd_vel_topic`
+- Dashboard feed (`bt_executor`): `bt/tree` (latched JSON: uid, depth, parent, type, name, ports per node) at plan start and `bt/node_status`
+  (`{"s": {uid: R|S|F|K|I}}` on change, sticky: S/F stay after a Sequence resets its children; K = halted while running).
+- Voice: `stt/capture` (latched Bool; `WaitForTranscript` sets it so `transcript_to_task` does not turn the answer into a task), `audio/events`
+  (`sound_event_node` -> `{"kind": "doorbell"}`), `llm/error`, `safety/battery`.
+- Node outputs: an extension handler may return `(ok, msg, {"out_x": v})`; `ExecuteNode` results carry `output_names/values`; `bt_executor` writes them to
+  the blackboard when the XML names that `out_` port.
+- Machine health: each `cluster_agent` serves `host_info/<host_id>` (`cluster_msgs/srv/HostInfo`, sanitised name); `cluster/node_info` carries battery too.
+- Velocity chain: teleop/odom_ext/pid_ext/nav2 publish to `*/cmd_vel` -> `cmd_vel_mux_node` (priority order
+  teleop > odom > pid > nav2, clamp, 0.5 s watchdog, one zero Twist when all stale) -> `cmd_vel_topic`
   (`commands/velocity` on the Kobuki, which itself stops after 0.6 s).
 
 ## Package map (28)
@@ -89,3 +97,13 @@ Not built yet: runtime failure of a BT node feeding back to the SLM for fast rep
   timeout 4 s).
 - **Parallel agents**: big independent work was done in git worktrees on separate DDS domains
   (41 nav, 42 cluster) and merged; tests use isolated domains and `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`.
+
+## Added 2026-11-14 (decisions and why)
+- **Macros + grammar, not bigger prompts:** the LLM calls whitelisted macros (`param/macros.yaml`), loops (`repeat`, `foreach`), `Parallel`; everything is
+  expanded in plain code before the SLM/validator, so the SLM prompt format never changed. `docs/task-spec-grammar.md`.
+- **Constrained decoding:** the validator builds a JSON schema (`GetCatalog.schema`) from the catalog + whitelist; `llm_bridge` sends it as
+  `response_format`; property order is part of the contract (`ordered_json`). Source of truth stays the catalog.
+- **Safety stays outside the planner:** guards live in the nodes that move the robot (`ScanGuard` in `odom_extension`/`pid_extension`, `battery_guard_node`,
+  the mux latch), not in the LLM prompt; the executor stays dry-run by default.
+- **Workspace roles** are enforced by DDS Security permissions in each member's enclave; revocation = re-key (new CA).
+- **Experiments never go into the shared `install/`:** use `colcon --build-base X --install-base Y` and source `Y/setup.bash` on top.
