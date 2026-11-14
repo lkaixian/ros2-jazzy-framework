@@ -138,6 +138,13 @@ jobs:
           source install/setup.bash
           bash tools/integration/rehearsal.sh
 
+      - name: Sim - BT tree feed for the dashboard (bt/tree + bt/node_status)
+        timeout-minutes: 3
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          python3 tools/integration/tree_feed_test.py
+
       - name: Sim - LLM failover and emergency halt
         timeout-minutes: 5
         run: |

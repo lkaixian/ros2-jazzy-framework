@@ -14,7 +14,7 @@ machine routes through) and the TCP connect time in ms, measured every 3 s in th
 Keys (status view, on a terminal): j/k or arrows select a node; r restart it (SIGINT), R force (SIGKILL);
 the launch file respawns it. s stop the whole system (SIGINT to `ros2 launch`), S force; w restart the whole
 system (stop, then relaunch the same command line, output in /tmp/robocup_launch.log), W force; h halt the
-running task (bt_executor/halt). s/S/w/W ask y/n first. Without keys it only reads.
+running task (bt_executor/halt); t shows/hides the plan tree (live node status from bt_executor). s/S/w/W ask y/n first. Without keys it only reads.
 """
 import argparse
 import importlib.machinery
@@ -131,6 +131,33 @@ def battery_state(raw, charger=0):
     return 'ONLINE', f'base battery {v:.1f} V{note}'
 
 
+TREE_GLYPH = {'R': ('>', '36'), 'S': ('+', '32'), 'F': ('x', '31'), 'K': ('-', '90'), None: ('.', '90')}
+
+
+def render_tree(tree, state, color=True, max_lines=22, width=100):
+    """bt/tree (list of {uid, depth, name, ports}) + bt/node_status ({uid: R|S|F|K}) -> text lines.
+    R running (cyan >), S done (green +), F failed (red x), . not reached yet. Long trees show a window around the
+    running node."""
+    lines = []
+    for n in tree:
+        g, code = TREE_GLYPH.get(state.get(str(n['uid'])), TREE_GLYPH[None])
+        ports = ','.join(f'{k}={v}' for k, v in (n.get('ports') or {}).items())
+        label = n['name'] + (f'({ports})' if ports else '')
+        lines.append('  ' * n['depth'] + paint(g, code, color) + ' ' + label[:max(10, width - 2 * n['depth'])])
+    if len(lines) <= max_lines:
+        return lines
+    run = next((i for i, n in enumerate(tree) if state.get(str(n['uid'])) == 'R'), None)
+    if run is None:
+        run = max((i for i, n in enumerate(tree) if state.get(str(n['uid']))), default=0)
+    start = min(max(0, run - max_lines // 2), len(lines) - max_lines)
+    out = lines[start:start + max_lines]
+    if start:
+        out[0] = f'  ... {start} more above'
+    if start + max_lines < len(lines):
+        out[-1] = f'  ... {len(lines) - start - max_lines + 1} more below'
+    return out
+
+
 def paint(text, code, color=True):
     return f'\033[{code}m{text}\033[0m' if color else text
 
@@ -189,6 +216,9 @@ class Dash:
             node.create_subscription(SensorState, 'sensors/core', lambda m: setattr(
                 self, 'battery', (m.battery, m.charger, time.monotonic())), 5)
         self.names, self.sel, self.msg, self.pending = [], 0, '', None
+        self.tree, self.nstate, self.show_tree = [], {}, True
+        node.create_subscription(String, 'bt/tree', self._on_tree, TL)
+        node.create_subscription(String, 'bt/node_status', self._on_node_status, 10)
         self.halt = node.create_client(Trigger, 'bt_executor/halt')
         node.create_subscription(Log, '/rosout', self._log, 100)
         node.create_subscription(String, 'llm/status', lambda m: self._js('llm', m), TL)
@@ -213,6 +243,18 @@ class Dash:
         if m.level >= 40:
             self.err[m.name] = (time.monotonic(), m.msg)
 
+    def _on_tree(self, m):
+        try:
+            self.tree, self.nstate = json.loads(m.data), {}
+        except ValueError:
+            pass
+
+    def _on_node_status(self, m):
+        try:
+            self.nstate.update(json.loads(m.data).get('s', {}))
+        except ValueError:
+            pass
+
     def say(self, text):
         self.msg = text
 
@@ -233,6 +275,8 @@ class Dash:
         elif k in ('s', 'S', 'w', 'W'):
             self.pending = ('stop' if k in 'sS' else 'restart', k.isupper())
             self.say(f"{'FORCE ' if k.isupper() else ''}{self.pending[0]} the whole system? y/n")
+        elif k == 't':
+            self.show_tree = not self.show_tree
         elif k == 'h':
             ok = self.halt.service_is_ready()
             self.say('halt requested' if ok else 'bt_executor/halt not available')
@@ -315,6 +359,10 @@ class Dash:
                              COL['BUSY'] if ts in ('running', 'repairing') else COL['ONLINE'], c) +
                        f"   repairs {t.get('repairs', 0)}/{t.get('max_repairs', 0)}  "
                        f"{t.get('detail', '') or t.get('task', '')[:50]}")
+        if self.tree and self.show_tree:
+            done = sum(1 for n in self.tree if self.nstate.get(str(n['uid'])) in ('S', 'F'))
+            out += ['', f'plan tree  ({done}/{len(self.tree)} nodes finished; t hides)']
+            out += ['  ' + ln for ln in render_tree(self.tree, self.nstate, c)]
         # cluster
         if self.cluster:
             cs = self.cluster
@@ -341,7 +389,7 @@ class Dash:
         if self.keys:
             out += ['', paint(self.msg, COL['WARN'], c) if self.msg else '',
                     'j/k select  r/R restart node (graceful/force)  s/S stop system  '
-                    'w/W restart system  h halt task']
+                    'w/W restart system  h halt task  t plan tree']
         return '\n'.join(out)
 
 

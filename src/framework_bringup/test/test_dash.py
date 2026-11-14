@@ -134,3 +134,15 @@ def test_battery_state():
     assert dash.battery_state(130)[0] == 'ERROR' and 'CRITICAL' in dash.battery_state(130)[1]
     assert dash.battery_state(150, charger=2)[1].endswith('(charging)')
     assert dash.battery_state(0)[0] == 'OFFLINE'
+
+
+def test_render_tree_status_and_window():
+    tree = [{'uid': 1, 'depth': 0, 'name': 'Sequence', 'parent': -1},
+            {'uid': 2, 'depth': 1, 'name': 'NavigateToPlace', 'parent': 1, 'ports': {'place': 'door'}},
+            {'uid': 3, 'depth': 1, 'name': 'Speak', 'parent': 1, 'ports': {'text': 'hi'}}]
+    lines = dash.render_tree(tree, {'1': 'R', '2': 'S', '3': 'F'}, color=False)
+    assert lines == ['> Sequence', '  + NavigateToPlace(place=door)', '  x Speak(text=hi)']
+    assert dash.render_tree(tree, {}, color=False)[1].startswith('  . ')            # not reached yet
+    big = [{'uid': i, 'depth': 0, 'name': f'N{i}', 'parent': -1} for i in range(60)]
+    win = dash.render_tree(big, {'30': 'R'}, color=False, max_lines=10)
+    assert len(win) == 10 and any('N30' in l for l in win) and 'more above' in win[0] and 'more below' in win[-1]

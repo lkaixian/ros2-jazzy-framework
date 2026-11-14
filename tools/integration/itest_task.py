@@ -47,7 +47,7 @@ end = time.monotonic() + 120
 while time.monotonic() < end and not (pub.get_subscription_count() >= 2 and halt.service_is_ready()
                                       and all(c.server_is_ready() for c in servers)):
     spin(0.2)
-spin(1.0)
+spin(float(os.environ.get('ITEST_SETTLE', '1.0')))     # manifests are republished every 3 s: wait so the validator knows every node
 for _ in range(3):
     pub.publish(String(data='do it'))
     t = time.monotonic() + 15

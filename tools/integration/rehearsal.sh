@@ -5,6 +5,10 @@
 #   tools/integration/rehearsal.sh            # exit 0 only if every case produced the expected sequence
 TOOLS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export OUT="${OUT:-/tmp/robocup_rehearsal}"; mkdir -p "$OUT"
+# every extension up + one manifest republish before a task is sent: otherwise the validator may not know all nodes yet and the
+# retry path silently drops the unknown steps (seen once: scout_room ran only its CountPeople steps)
+export ITEST_ACTION_SERVERS="odom_extension/execute,social_extension/execute,nav_extension/execute,pose_extension/execute"
+export ITEST_SETTLE=5
 fails=0
 # case NAME SPEC_JSON "expected node ids, space separated, in execution order"
 case_() {
@@ -33,5 +37,17 @@ case_ gpsr_refuse_bring '{"goal":"bring","steps":[{"macro":"say","args":{"text":
 # HRIC: one guest at the door (doorbell -> door -> name + drink); find_person is left out: DetectPerson cannot succeed in dry-run
 case_ hric_receive_guest '{"goal":"rg","steps":[{"macro":"receive_guest","args":{"slot":"guest1"}}]}' \
   "DetectSound Speak NavigateToPlace Speak WaitForTranscript ExtractAnswer Speak Speak WaitForTranscript ExtractAnswer EnrollFace"
+# walking around: legs of DriveDistance + RotateBy (the lidar guard turns away at run time; dry-run drives happily)
+case_ walk_wander '{"goal":"w","steps":[{"macro":"wander","args":{"legs":"2"}}]}' \
+  "DriveDistance RotateBy DriveDistance RotateBy"
+# a loop written by the LLM: foreach unrolled at plan time, macros expanded inside
+case_ foreach_tour '{"goal":"tour","steps":[{"foreach":["left_room","door"],"as":"p","steps":[{"macro":"go_and_say","args":{"place":"${p}","text":"hi"}}]}]}' \
+  "NavigateToPlace Speak NavigateToPlace Speak"
+# driving and speaking at the same time (Parallel)
+case_ announce_and_go '{"goal":"a","steps":[{"macro":"announce_and_go","args":{"place":"door","text":"On my way"}}]}' \
+  "NavigateToPlace Speak"
+# look-around report: 4 stops, each counts and speaks
+case_ scout_room '{"goal":"s","steps":[{"macro":"scout_room"}]}' \
+  "RotateBy CountPeople Speak RotateBy CountPeople Speak RotateBy CountPeople Speak RotateBy CountPeople Speak"
 echo "$fails case(s) failed"
 exit $((fails > 0))

@@ -19,3 +19,6 @@ Example: guide the guest to the right room -> [{"macro":"escort_person_to","args
 Example: welcome the guest and ask their name and drink -> [{"macro":"meet_guest","args":{"slot":"guest1"}}]
 Example: look at me -> [{"macro":"look_at_person"}]
 Example: tell me how many people you see -> [{"node":"CountPeople","ports":{"out_count":"{n}"}},{"node":"Speak","ports":{"text":"I see {person} people","person":"{n}"}}]
+Example: visit the left room, then the right room, then the door, saying hello in each -> [{"foreach":["left_room","right_room","door"],"as":"p","steps":[{"macro":"go_and_say","args":{"place":"${p}","text":"hello"}}]}]
+Example: walk around for a while -> [{"macro":"wander","args":{"legs":"6"}}]
+Example: look around the room and tell me how many people are there -> [{"macro":"scout_room"}]

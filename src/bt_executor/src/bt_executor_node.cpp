@@ -1,11 +1,13 @@
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 
+#include "behaviortree_cpp/bt_factory.h"
 #include "behaviortree_cpp/loggers/abstract_logger.h"
 #include "bt_executor/registry.hpp"
 #include "bt_pipeline_msgs/msg/bt_plan.hpp"
@@ -24,8 +26,16 @@ class FailureTracker : public BT::StatusChangeLogger
 public:
   explicit FailureTracker(BT::TreeNode * root)
   : BT::StatusChangeLogger(root) {}
-  void callback(BT::Duration, const BT::TreeNode & n, BT::NodeStatus, BT::NodeStatus st) override
+  void callback(BT::Duration, const BT::TreeNode & n, BT::NodeStatus prev, BT::NodeStatus st) override
   {
+    // sticky for the dashboard: Sequence/Fallback reset finished children to IDLE, which would erase what happened
+    if (st != BT::NodeStatus::IDLE) {
+      state[n.UID()] = st;
+      dirty = true;
+    } else if (prev == BT::NodeStatus::RUNNING) {   // halted while running (e.g. a Parallel finished first)
+      state[n.UID()] = BT::NodeStatus::SKIPPED;
+      dirty = true;
+    }
     const auto t = n.type();
     if (st == BT::NodeStatus::FAILURE && t != BT::NodeType::CONTROL &&
       t != BT::NodeType::DECORATOR && t != BT::NodeType::SUBTREE)
@@ -36,7 +46,31 @@ public:
   }
   void flush() override {}
   std::string last;
+  std::map<uint16_t, BT::NodeStatus> state;
+  bool dirty = false;
 };
+
+// The tree as JSON for the dashboard: [{uid, depth, parent, type, name, ports{}}] in depth-first order.
+static nlohmann::ordered_json describe_tree(const BT::TreeNode * root)
+{
+  nlohmann::ordered_json out = nlohmann::ordered_json::array();
+  std::function<void(const BT::TreeNode *, int, int)> walk = [&](const BT::TreeNode * n, int depth, int parent) {
+      nlohmann::ordered_json j = {{"uid", n->UID()}, {"depth", depth}, {"parent", parent},
+        {"type", BT::toStr(n->type())}, {"name", n->registrationName()}};
+      nlohmann::ordered_json ports = nlohmann::ordered_json::object();
+      for (const auto & [k, v] : n->config().input_ports) {ports[k] = v;}
+      for (const auto & [k, v] : n->config().output_ports) {ports[k] = v;}
+      if (!ports.empty()) {j["ports"] = ports;}
+      out.push_back(j);
+      if (auto * c = dynamic_cast<const BT::ControlNode *>(n)) {
+        for (const auto * ch : c->children()) {walk(ch, depth + 1, n->UID());}
+      } else if (auto * d = dynamic_cast<const BT::DecoratorNode *>(n)) {
+        if (d->child()) {walk(d->child(), depth + 1, n->UID());}
+      }
+    };
+  walk(root, 0, -1);
+  return out;
+}
 
 class BtExecutorNode : public rclcpp::Node
 {
@@ -51,6 +85,10 @@ public:
     declare_parameter("perception_max_age_sec", 1.0);
     cache_ = std::make_shared<bt_executor::PerceptionCache>();
     status_pub_ = create_publisher<std_msgs::msg::String>("bt/status", 10);
+    rclcpp::QoS latched_tree(1);
+    latched_tree.reliable().transient_local();
+    tree_pub_ = create_publisher<std_msgs::msg::String>("bt/tree", latched_tree);   // structure of the running tree
+    node_status_pub_ = create_publisher<std_msgs::msg::String>("bt/node_status", 10);   // {uid: R|S|F|I}, on change
 
     rclcpp::QoS latched(1);
     latched.reliable().transient_local();
@@ -165,6 +203,26 @@ private:
       bt_executor::register_extensions(factory, manifests, ctx);
       auto tree = factory.createTreeFromText(xml);
       FailureTracker tracker(tree.rootNode());
+      {
+        std_msgs::msg::String t;
+        t.data = describe_tree(tree.rootNode()).dump();
+        tree_pub_->publish(t);
+      }
+      auto last_pub = std::chrono::steady_clock::now();
+      auto publish_nodes = [&](bool force) {
+          const auto now = std::chrono::steady_clock::now();
+          if (!tracker.dirty || (!force && now - last_pub < std::chrono::milliseconds(100))) {return;}
+          nlohmann::ordered_json j = nlohmann::ordered_json::object();
+          for (const auto & [uid, st] : tracker.state) {
+            j[std::to_string(uid)] = st == BT::NodeStatus::RUNNING ? "R" : st == BT::NodeStatus::SUCCESS ? "S" :
+              st == BT::NodeStatus::FAILURE ? "F" : st == BT::NodeStatus::SKIPPED ? "K" : "I";
+          }
+          std_msgs::msg::String m;
+          m.data = nlohmann::ordered_json{{"s", j}}.dump();
+          node_status_pub_->publish(m);
+          tracker.dirty = false;
+          last_pub = now;
+        };
       status("running", dry ? "dry run" : "LIVE");
       const auto period = std::chrono::duration<double>(1.0 / get_parameter("tick_hz").as_double());
       const auto deadline = std::chrono::steady_clock::now() +
@@ -174,6 +232,7 @@ private:
         if (halt_) {result = "HALTED"; break;}
         if (std::chrono::steady_clock::now() > deadline) {result = "TIMEOUT"; break;}
         st = tree.tickOnce();
+        publish_nodes(false);
         if (st == BT::NodeStatus::RUNNING) {
           tree.sleep(std::chrono::duration_cast<std::chrono::milliseconds>(period));
         }
@@ -183,6 +242,7 @@ private:
       } else {
         result = BT::toStr(st);
       }
+      publish_nodes(true);
       if (result == "FAILURE") {failed = tracker.last;}
     } catch (const std::exception & e) {
       result = std::string("ERROR: ") + e.what();
@@ -192,7 +252,7 @@ private:
   }
 
   std::shared_ptr<bt_executor::PerceptionCache> cache_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_, tree_pub_, node_status_pub_;
   rclcpp::Subscription<ExtensionManifest>::SharedPtr manifest_sub_;
   rclcpp::Subscription<object_detection_msgr::msg::ObjectArray>::SharedPtr obj_sub_;
   rclcpp::Subscription<person_detection_msgr::msg::PersonArray>::SharedPtr per_sub_;

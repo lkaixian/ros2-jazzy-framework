@@ -34,6 +34,10 @@ whitelist:
   - offer_seat
   - receive_guest
   - hric_round
+  - wander
+  - wander_until_person
+  - scout_room
+  - announce_and_go
   - guide_to
   - escort_person_to
   - wait_for_wave
@@ -388,3 +392,53 @@ macros:
       - {macro: receive_guest, args: {slot: guest2}}
       - {macro: offer_seat}
       - {macro: introduce_guest, args: {slot: guest1}}
+
+  # ---- walking around ----
+  wander:
+    description: "Walk around: drive about half a metre, turn a little, repeated for a number of legs (1-10). Stops for obstacles (lidar guard) and turns away instead"
+    params: {legs: {default: "4"}}
+    example_args: {legs: "3"}
+    steps:
+      - group: Sequence
+        repeat: "${legs}"
+        steps:
+          - group: Fallback
+            steps:
+              - {node: DriveDistance, ports: {meters: "0.5"}}
+              - {node: RotateBy, ports: {radians: "1.6"}}      # blocked: turn away, the next leg tries again
+          - {node: RotateBy, ports: {radians: "0.5"}}
+
+  wander_until_person:
+    description: "Look for a person; if none is in view, walk a leg and look again, up to a number of tries (1-10); fails if nobody is found"
+    params: {tries: {default: "5"}}
+    example_args: {tries: "3"}
+    steps:
+      - group: Fallback
+        retry: "${tries}"
+        steps:
+          - {node: DetectPerson}
+          - group: Sequence
+            steps:
+              - {macro: wander, args: {legs: "1"}}
+              - {node: AlwaysFailure}
+
+  scout_room:
+    description: "Turn a full circle in quarter turns and say how many people are seen at each stop"
+    steps:
+      - group: Sequence
+        repeat: "4"
+        steps:
+          - {node: RotateBy, ports: {radians: "1.57"}}
+          - {node: CountPeople, ports: {out_count: "{n}"}}
+          - {node: Speak, ports: {text: "I see {person} people", person: "{n}"}}
+
+  announce_and_go:
+    description: "Say a sentence while driving to a named place (both at the same time)"
+    params: {place: {required: true}, text: {required: true}}
+    example_args: {place: door, text: "On my way"}
+    steps:
+      - group: Parallel
+        success_count: "2"
+        steps:
+          - {macro: go_to_place, args: {place: "${place}"}}
+          - {macro: say, args: {text: "${text}"}}
