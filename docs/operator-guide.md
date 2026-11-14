@@ -6,7 +6,7 @@ logged. Never pass `dry_run:=false` for a real robot without a person ready at t
 ## Start
 ```
 ros2 launch launch/framework.launch.py image_topic:=/camera/image_raw start_llama_server:=false dry_run:=true
-llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 4096 -ngl 99 --reasoning off   # E2B on the 4 GB GPU
+llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 6144 -np 1 -ngl 99 --reasoning off   # E2B on the 4 GB GPU
 ros2 run framework_bringup preflight                    # PASS/WARN/FAIL: key, SROS2, mux, executor dry-run, LLM, /scan, TF, clock, disk
 ros2 topic pub --once /bt/task std_msgs/msg/String "{data: 'go to the door and say hello'}"
 ros2 service call /bt_executor/run std_srvs/srv/Trigger       # run the validated plan (dry-run: logged only)

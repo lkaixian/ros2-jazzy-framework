@@ -12,6 +12,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 
+from bt_orchestrator.policy import refuse_no_arm
 from bt_orchestrator.task_fsm import TaskFsm, repair_prompt
 
 
@@ -104,10 +105,13 @@ class OrchestratorNode(Node):
         return fut.result()
 
     def _on_spec(self, msg):
+        spec = refuse_no_arm(msg.data) or msg.data       # no arm: say so instead of driving somewhere
+        if spec != msg.data:
+            self.get_logger().warn('goal needs the arm: replaced by a refusal')
         with self.fsm_lock:
-            self.fsm.on_spec(msg.data)
+            self.fsm.on_spec(spec)
         with self.lock:
-            plan = BtPlan(task_spec=msg.data, valid=False)
+            plan = BtPlan(task_spec=spec, valid=False)
             plan.header.stamp = self.get_clock().now().to_msg()
             try:
                 self._run(plan, self._expanded(plan.task_spec))

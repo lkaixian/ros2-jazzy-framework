@@ -1,0 +1,44 @@
+{"id": 1000, "category": "navigation", "command": "Could you head over to the far corner for me", "expect": {"visit": ["far_corner"]}}
+{"id": 1001, "category": "navigation", "command": "I need you in the left room", "expect": {"visit": ["left_room"]}}
+{"id": 1002, "category": "navigation", "command": "Roll over to the door", "expect": {"visit": ["door"]}}
+{"id": 1003, "category": "navigation", "command": "Get yourself to the right room", "expect": {"visit": ["right_room"]}}
+{"id": 1004, "category": "navigation", "command": "Okay, time to go back to where you started", "expect": {"visit": ["start"]}}
+{"id": 1005, "category": "navigation", "command": "Head back to base", "expect": {"visit": ["start"]}}
+{"id": 1006, "category": "navigation", "command": "Go to the door and let them know I am on my way", "expect": {"visit": ["door"], "says": true}}
+{"id": 1007, "category": "navigation", "command": "Drive to the left room and announce that dinner is ready", "expect": {"visit": ["left_room"], "says": true}}
+{"id": 1008, "category": "navigation", "command": "Pop over to the right room and say good evening", "expect": {"visit": ["right_room"], "says": true}}
+{"id": 1009, "category": "navigation", "command": "Check the left room and then the far corner", "expect": {"visit": ["left_room", "far_corner"]}}
+{"id": 1010, "category": "navigation", "command": "Go to the door, then the right room, then back to the start", "expect": {"visit": ["door", "right_room", "start"]}}
+{"id": 1011, "category": "navigation", "command": "Shuttle between the door and the far corner", "expect": {"visit": ["door", "far_corner"]}}
+{"id": 1012, "category": "navigation", "command": "Do three rounds between the left room and the right room", "expect": {"visit": ["left_room", "right_room"], "laps": 3}}
+{"id": 1013, "category": "navigation", "command": "Patrol the door and the start four times", "expect": {"visit": ["door", "start"], "laps": 4}}
+{"id": 1014, "category": "navigation", "command": "Wander around for a bit", "expect": {"any_node": ["NavigateToPlace", "DriveDistance", "RotateBy"]}}
+{"id": 1015, "category": "navigation", "command": "Turn around", "expect": {"any_node": ["RotateBy"]}}
+{"id": 1016, "category": "people", "command": "Come along with me", "expect": {"macro": "follow_person"}}
+{"id": 1017, "category": "people", "command": "Stay behind me and follow", "expect": {"macro": "follow_person"}}
+{"id": 1018, "category": "people", "command": "Walk with me please", "expect": {"macro": "follow_person"}}
+{"id": 1019, "category": "people", "command": "Let me know when the doorbell rings", "expect": {"any_node": ["DetectSound"]}}
+{"id": 1020, "category": "people", "command": "Listen for the bell and tell me when it goes", "expect": {"any_node": ["DetectSound"]}}
+{"id": 1021, "category": "people", "command": "Wait for a visitor to ring", "expect": {"any_node": ["DetectSound"]}}
+{"id": 1022, "category": "people", "command": "Welcome the new guest, ask their name and what they like to drink", "expect": {"macro": "meet_guest"}}
+{"id": 1023, "category": "people", "command": "Take our guest to the right room", "expect": {"visit": ["right_room"]}}
+{"id": 1024, "category": "people", "command": "Show the visitor to the left room", "expect": {"visit": ["left_room"]}}
+{"id": 1025, "category": "people", "command": "Look at me", "expect": {"macro": "look_at_person"}}
+{"id": 1026, "category": "people", "command": "Face me and say hi", "expect": {"any_node": ["Speak"]}}
+{"id": 1027, "category": "people", "command": "Find somebody in the far corner and say hello", "expect": {"visit": ["far_corner"], "says": true}}
+{"id": 1028, "category": "people", "command": "Go find a person in the left room and ask how they are", "expect": {"visit": ["left_room"], "says": true}}
+{"id": 1029, "category": "people", "command": "Wait until someone waves at you, then wave back", "expect": {"macro": "wait_for_wave"}}
+{"id": 1030, "category": "people", "command": "Is there anyone in the right room", "expect": {"visit": ["right_room"]}}
+{"id": 1031, "category": "vision", "command": "How many people can you see", "expect": {"any_node": ["CountPeople", "DetectPerson"]}}
+{"id": 1032, "category": "vision", "command": "Tell me what is in front of you", "expect": {"any_node": ["DescribeScene", "DetectObject", "DetectPerson", "CountPeople"]}}
+{"id": 1033, "category": "vision", "command": "Look for a bottle", "expect": {"detects": "bottle"}}
+{"id": 1034, "category": "vision", "command": "Do you see a laptop anywhere", "expect": {"detects": "laptop"}}
+{"id": 1035, "category": "vision", "command": "Go to the right room and find a cup", "expect": {"visit": ["right_room"], "detects": "cup"}}
+{"id": 1036, "category": "vision", "command": "Search the left room for a book and tell me if it is there", "expect": {"visit": ["left_room"], "detects": "book"}}
+{"id": 1037, "category": "refuse", "command": "Get me a cup from the left room", "expect": {"refuse": true}}
+{"id": 1038, "category": "refuse", "command": "Carry this bottle to the door", "expect": {"refuse": true}}
+{"id": 1039, "category": "refuse", "command": "Hand me that book", "expect": {"refuse": true}}
+{"id": 1040, "category": "refuse", "command": "Could you open the door for the guest", "expect": {"refuse": true}}
+{"id": 1041, "category": "refuse", "command": "Put the apple in the bowl", "expect": {"refuse": true}}
+{"id": 1042, "category": "refuse", "command": "Make me a sandwich", "expect": {"refuse": true}}
+{"id": 1043, "category": "refuse", "command": "Throw this away", "expect": {"refuse": true}}

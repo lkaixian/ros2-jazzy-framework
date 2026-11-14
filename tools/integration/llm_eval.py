@@ -81,6 +81,12 @@ def main():
     end = time.monotonic() + 60
     while time.monotonic() < end and pub.get_subscription_count() < 2:
         rclpy.spin_once(n, timeout_sec=0.2)
+    quiet = time.monotonic()                       # a plan still in flight from an earlier run would shift every score by one
+    while time.monotonic() - quiet < 60:
+        rclpy.spin_once(n, timeout_sec=0.2)
+        if plans:
+            plans.clear()
+            quiet = time.monotonic()
     ok = hit = gold = 0
     per_cat = {}                                   # category -> [right, total]
     misses = []
@@ -104,7 +110,7 @@ def main():
             hit += GOLD[c] in p.task_spec
         right = None
         if it.get('expect') and p.task_spec.startswith('{'):
-            right = checker(json.loads(p.task_spec), it['expect'])
+            right = bool(p.valid) and checker(json.loads(p.task_spec), it['expect'])     # a plan that does not validate cannot run
             per_cat[it['category']][0] += bool(right)
             if not right:
                 misses.append((it['category'], c, p.task_spec[:200]))

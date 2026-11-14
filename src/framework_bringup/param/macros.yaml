@@ -37,6 +37,7 @@ whitelist:
   - wander
   - wander_until_person
   - scout_room
+  - describe_person
   - announce_and_go
   - guide_to
   - escort_person_to
@@ -116,7 +117,7 @@ macros:
       - {node: Speak, ports: {text: "Hello!"}}
 
   report_object:
-    description: "Look for an object (label from the detector's list), turning once if not seen, and say what was found"
+    description: "Do you see a <object>? Look for an object (label from the detector's list), turning once if not seen, and say what was found"
     params: {label: {required: true}}
     example_args: {label: person}
     steps:
@@ -171,7 +172,7 @@ macros:
               - {node: AlwaysFailure}
 
   find_object:
-    description: "Look for an object (detector label), turning up to three quarter turns; says so and FAILS if not seen"
+    description: "Only look for an object (detector label), turning up to three quarter turns; says so and FAILS if not seen; it never picks up or carries"
     params: {label: {required: true}}
     example_args: {label: person}
     steps:
@@ -196,7 +197,7 @@ macros:
               - {node: AlwaysFailure}
 
   go_find_object:
-    description: "Go to a named place and look for an object there"
+    description: "Go to a named place and only look for an object there (never picks up, takes or brings it)"
     params: {place: {required: true}, label: {required: true}}
     example_args: {place: door, label: person}
     steps:
@@ -230,7 +231,7 @@ macros:
       - {node: Speak, ports: {text: "Nice to meet you ${name}"}}
 
   follow_person:
-    description: "Find a person and follow them at a distance in metres (min 0.5); if the person is lost, turns a little, looks again and retries up to 3 times"
+    description: "Follow me / come with me / walk behind a person: find a person and follow them at a distance in metres (min 0.5); if the person is lost, turns a little, looks again and retries up to 3 times"
     params: {distance: {default: "1.0"}}
     steps:
       - {macro: find_person}
@@ -251,7 +252,7 @@ macros:
       - {node: FollowTarget, ports: {timeout_ms: "5000"}}
 
   acknowledge_person:
-    description: "Find a person, turn to face them and say hello (a robot that ignores people loses points)"
+    description: "Find a person, turn to face them and say hello (a greeting only: it does not follow or move with them)"
     steps:
       - {macro: find_person}
       - {macro: look_at_person}
@@ -339,7 +340,7 @@ macros:
       - {node: Speak, ports: {text: "Their favourite drink is {person}", person: "{${slot}_drink}"}}
 
   patrol_laps:
-    description: "Visit two named places in order, repeated for a number of laps (1-10)"
+    description: "Patrol between two named places a number of times ('patrol N times', 'N laps'); laps is a plain whole number 1-10 such as \"4\""
     params: {first: {required: true}, second: {required: true}, laps: {default: "2"}}
     example_args: {first: left_room, second: right_room, laps: "3"}
     steps:
@@ -350,7 +351,7 @@ macros:
           - {macro: go_to_place, args: {place: "${second}"}}
 
   wait_for_doorbell:
-    description: "Wait up to 60 s for the doorbell (a steady tone) and say that someone is at the door; fails if it never rings"
+    description: "Wait for the doorbell / when someone rings the bell (listens for a steady tone, up to 60 s) and say that someone is at the door; fails if it never rings"
     steps:
       - {node: DetectSound, ports: {kind: doorbell, timeout_ms: "60000"}}
       - {macro: say, args: {text: "Someone is at the door"}}
@@ -431,6 +432,13 @@ macros:
           - {node: RotateBy, ports: {radians: "1.57"}}
           - {node: CountPeople, ports: {out_count: "{n}"}}
           - {node: Speak, ports: {text: "I see {person} people", person: "{n}"}}
+
+  describe_person:
+    description: "Find a person and say what colour top they are wearing (a description of the guest by their clothes)"
+    steps:
+      - {macro: find_person}
+      - {node: DescribePerson, ports: {out_text: "{look}"}}
+      - {node: Speak, ports: {text: "I see {person}", person: "{look}"}}
 
   announce_and_go:
     description: "Say a sentence while driving to a named place (both at the same time)"
