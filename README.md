@@ -1,21 +1,110 @@
+<div align="center">
+
 # ros2-jazzy-framework
 
-ROS 2 Jazzy workspace: YOLO11 perception + an LLM -> SLM -> validator pipeline that produces
-BehaviorTree.CPP v4 XML, with pluggable extension packages.
+**Speak a task. Get a validated behaviour tree. Watch the robot run it.**
 
+An LLM → SLM → validator pipeline that turns natural-language tasks into
+[BehaviorTree.CPP](https://www.behaviortree.dev/) v4 plans, with YOLO11 perception, Nav2, voice in/out and a safety layer in front of the motors.
+
+[![CI](https://github.com/lkaixian/ros2-jazzy-framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lkaixian/ros2-jazzy-framework/actions/workflows/ci.yml)
+![ROS 2](https://img.shields.io/badge/ROS_2-Jazzy%20%7C%20Humble-22314E?logo=ros&logoColor=white)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04%20%7C%2022.04-E95420?logo=ubuntu&logoColor=white)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.12-3776AB?logo=python&logoColor=white)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![SLM on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97-bt--sim--slm-FFD21E)](https://huggingface.co/larmkaixian/bt-sim-slm)
+
+[Quick start](#quick-start) · [Architecture](#architecture) · [Packages](#packages) · [Safety](#executing-plans-safety) · [Operator guide](docs/operator-guide.md) · [Notes](notes/README.md)
+
+</div>
+
+---
+
+## Highlights
+
+| | |
+|---|---|
+| **Language to plan** | Gemma 4 (llama.cpp, JSON-schema constrained) writes a task spec; macros expand it; an exact rule generator renders BT XML in 0.06 ms; a fine-tuned 230M SLM covers retries. |
+| **Nothing unchecked runs** | `bt_validator` checks structure, ports, values, cycles and limits against the live node catalog. Invalid plans never reach the executor. |
+| **Recovery built in** | Task lifecycle, robot mode (init / teleop / safe-stop), mission budget and a per-failure recovery policy (retry, replan, go home, ask a human). |
+| **Safety in front of the motors** | `cmd_vel_mux` with priorities, clamps, 0.5 s watchdog and bumper/cliff latch; lidar and battery guards; fail-closed mode gate. |
+| **See it live** | Terminal dashboard, plan tree with per-node status, and [Groot2](https://www.behaviortree.dev/groot/) monitoring on port 1667. |
+| **Voice** | faster-whisper / Vosk with place-name hints and snapping; Piper / Kokoro / espeak TTS. |
+| **Many machines** | Cluster scheduler, LLM failover with emergency halt, SROS2 workspaces with roles and revocation. |
+| **Measured** | GPSR-style eval: 99 % on 100 generated commands, 95 % on 44 hand-written ones (see [docs/macros.md](docs/macros.md), [docs/slm-benchmark.md](docs/slm-benchmark.md)). |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph IN[Input]
+        MIC[Microphone] --> STT[stt_pipeline]
+        CAM[Camera] --> PER[object / person / face<br/>YOLO11]
+        PER --> SUM[scene_summarizer]
+    end
+    STT -- bt/task --> LLM
+    SUM -. scene/summary .-> LLM
+    subgraph PLAN[Planning]
+        LLM[llm_bridge<br/>Gemma 4 via llama.cpp<br/>failover + emergency halt] -- bt/task_spec --> ORC[orchestrator<br/>macros, lifecycle, recovery]
+        ORC --> SLM[bt_slm<br/>rules first, SLM on retry]
+        SLM --> VAL[bt_validator]
+        VAL -- errors, retry --> ORC
+    end
+    VAL -- bt/plan --> EXE
+    subgraph RUN[Execution]
+        MODE[robot_mode<br/>init, teleop, safe-stop] -- run_ok --> EXE[bt_executor<br/>BehaviorTree.CPP v4]
+        EXE --> EXT[extensions<br/>nav, arm, pose, pid, odom, social]
+        EXT --> MUX[cmd_vel_mux<br/>clamps, watchdog, latch]
+        MUX --> ROBOT[(Robot)]
+    end
+    EXE -- bt/status --> ORC
+    EXT -. manifest .-> VAL
+    EXT -. manifest .-> LLM
+    EXE -. Groot2 / dash .-> OPS[Operator]
 ```
-camera -> object_detection / person_detection / face_recognition (YOLO11)
-                         |  (objects, persons, faces)
-                 scene_summarizer  -> scene/summary
-task  --bt/task--> llm_bridge (C++; llama.cpp servers, failover: Gemma E4B on a strong PC, E2B on the
-                    robot laptop) --bt/task_spec (JSON, may call macros)-->
-orchestrator (expands macros) -> bt_slm (exact rule generator first; fine-tuned ~230M SLM for retries)
-        ^                                  -> bt_validator
-        +------------ errors fed back, max_attempts ------------+
-                         -> bt/plan (BtPlan, valid=true only if validated) -> bt_executor
-                    task/state: idle | planning | ready | running | repairing | done | failed | halted
-*_extension (arm, pose, odom, pid) --extensions/manifest--> validator / SLM / llm_bridge
+
+Task lifecycle (`task/state`): `idle → planning → ready → running → done | failed | halted`, with `repairing` between a failed run and the next attempt.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> planning: bt/task
+    planning --> ready: plan valid
+    planning --> failed: attempts used up
+    ready --> running: run
+    running --> done: SUCCESS
+    running --> repairing: FAILURE
+    repairing --> running: retry / go home / ask human
+    repairing --> planning: replan
+    running --> halted: halt / safe-stop / budget
+    done --> idle
+    failed --> idle
+    halted --> idle
 ```
+
+## Quick start
+
+```bash
+./setup.sh --dry-run        # see what it would do; then ./setup.sh   (apt, rosdep, pip, llama.cpp, LLM + SLM base, build)
+source env.sh               # system Python first, ROS, this workspace, ~/.local/bin
+ros2 run framework_bringup check_params     # param files vs the real nodes
+ros2 launch framework_bringup framework.launch.py dry_run:=true       # nothing moves in dry-run
+ros2 topic pub --once /bt/task std_msgs/msg/String "{data: 'go to the door and say hello'}"
+```
+
+**Humble** (Ubuntu 22.04, Python 3.10) builds too: `./setup_humble.sh` (`./setup_jazzy.sh` is the default). The `build-test-humble` CI job builds and runs unit tests only; the integration sims run on Jazzy, and nothing was run on a real Humble machine or robot. Do not mix Jazzy and Humble machines on one DDS domain (unsupported; see rmw_fastrtps #797): one distro per robot, or a separate `ROS_DOMAIN_ID`.
+
+> **Picking this up in a new session?** Read `notes/README.md` (status, architecture, runbook, gotchas), `notes/BACKLOG.md` (what is next) and `notes/technical_debt.md`.
+
+<details>
+<summary><b>Setup details</b></summary>
+
+`setup.sh` steps: `apt rosdep python llamacpp models build` (+ optional `slm` = dataset and fine-tune). Use `--only`, `--skip`, `--minimal`, `--backend cuda|vulkan|cpu`. The LLM is fetched by `llama-server -hf` (Gemma 4 E4B), the SLM base `LiquidAI/LFM2.5-230M-Base` goes to `models/slm-base` for fine-tuning only. `nav2_params.yaml` is generated from the Jazzy Nav2 defaults, so Nav2 on Humble is untested.
+
+</details>
+
+## Packages
 
 | Package | Type | Role |
 |---|---|---|
@@ -43,18 +132,6 @@ orchestrator (expands macros) -> bt_slm (exact rule generator first; fine-tuned 
 | `tts_pipeline` | ament_python | queued TTS (espeak / Piper / Kokoro-82M), `tts/say`, `tts/speak`, `tts/stop`, `tts/status`; `plan_announcer` speaks `bt/plan` results |
 | `dstar_lite_planner` | **ament_cmake (C++)** | Nav2 global planner plugin: incremental D* Lite, `planner:=dstar_lite` (NavFn stays the default) |
 | `framework_bringup` | ament_cmake | `launch/`: `framework`, `perception`, `pipeline`, `extensions`, `audio`; tools `check_params`, `dash` (terminal status/logs), `ws` (workspaces); `param/` incl. `macros.yaml`, `llm_knowledge.md` |
-
-> **Picking this up in a new session?** Read `notes/README.md` first (status, architecture, runbook, gotchas) and `notes/technical_debt.md`.
-
-## Quick start
-```
-./setup.sh --dry-run        # see what it would do; then ./setup.sh   (apt, rosdep, pip, llama.cpp, LLM + SLM base, build)
-source env.sh               # system Python first, ROS, this workspace, ~/.local/bin
-ros2 run framework_bringup check_params     # param files vs the real nodes
-```
-**ROS 2 Humble** (Ubuntu 22.04, Python 3.10) builds too: `./setup_humble.sh` is `setup.sh` with `DISTRO=humble` (`./setup_jazzy.sh` is the default), and it installs `requirements-lock-humble.txt` (newer pins have no Python 3.10 build). Checked in a `ros:humble` Docker container and by the `build-test-humble` CI job (build + unit tests only; the integration sims run on Jazzy): all packages build and the unit tests pass; nothing was run on a real Humble machine or robot. `nav2_params.yaml` is generated from the Jazzy Nav2 defaults, so Nav2 on Humble is untested. Do not mix Jazzy and Humble machines on one DDS domain (unsupported; Humble subscribers can run out of memory, see rmw_fastrtps #797): use one distro per robot, or a separate `ROS_DOMAIN_ID` and a bridge.
-
-`setup.sh` steps: `apt rosdep python llamacpp models build` (+ optional `slm` = dataset and fine-tune). Use `--only`, `--skip`, `--minimal`, `--backend cuda|vulkan|cpu`. The LLM is fetched by `llama-server -hf` (Gemma 4 E4B), the SLM base `LiquidAI/LFM2.5-230M-Base` goes to `models/slm-base` for fine-tuning only.
 
 ## Parameters
 Everything tunable lives in `src/framework_bringup/param/*.yaml` (`perception`, `pipeline`, `llama_server`, `extensions`, `audio`). Precedence: package defaults < these files < launch arguments (only arguments you actually pass override). Edit and relaunch; no rebuild needed. Another folder: `params_dir:=/path`. `check_params` starts every node with these files and reports typo'd keys and wrong types, which ROS would otherwise ignore silently. Per-package `launch/<pkg>.launch.py` files use the package's own `config/` defaults, not `param/`.
@@ -166,4 +243,4 @@ TTS: `espeak` works out of the box; `piper` needs `pip install piper-tts` plus a
 Verified: workspace builds; validator/SLM-fallback unit tests and C++ gtest pass; the pipeline ran end-to-end against a stub llama server (including a rejected-then-repaired attempt). Audio plumbing was verified with a synthesized WAV and mock engines (VAD -> transcript -> `bt/task`; TTS status).
 Execution was verified in a **simulated** robot (a node integrating `cmd_vel` into `odom`): task -> stub llama -> SLM fallback -> validator -> `bt_executor` -> `odom_extension` -> mux -> robot, covering a live drive+turn (0.29 m / 0.47 rad requested 0.30 / 0.50), dry-run (no motion), halt mid-drive, and SIGKILL of the extension (mux stops the robot within its timeout). Controllers and PID have closed-loop unit tests; gesture rules are tested on synthetic skeletons only.
 The greeting/enrolment trees were run through the real chain against a **fake perception node** and the mock TTS engine (spoke `Hello alice` / `Hello there`, enrolled via a stub service); the real YOLO face node, face embeddings and neural TTS were not exercised. Not verified: `setup.sh` apt/pip/llama.cpp/model steps (dry-run only; `--only build` was run), any real robot, MoveIt/arm execution (only goal construction is tested), gesture accuracy on real video, the fine-tuned SLM on real LLM output (see Models), the YOLO nodes on a camera, a real llama-server, any two-machine or WiFi setup (cluster, workspaces, LLM failover), face/pose models (the scene-summary path was fed synthetic skeletons), the Kobuki bumper/cliff latch and a real RPLIDAR with SLAM (simulated lidar only), real STT recognition (faster-whisper/Vosk), Piper and Kokoro playback, live microphone capture.
-CI: `.github/workflows/ci.yml` (ROS Jazzy container) builds, runs the Python tests and gtests, `check_params`, `--show-args` on every launch file and the integration sims in `tools/integration/` on every push; check the Actions tab for the current result. Detailed status, gotchas and ranked debt: `notes/`.
+CI: `.github/workflows/ci.yml` (job `build-test` on ROS Jazzy; `build-test-humble` builds and unit-tests on Humble) builds, runs the Python tests and gtests, `check_params`, `--show-args` on every launch file and the integration sims in `tools/integration/` on every push; check the Actions tab for the current result. Detailed status, gotchas and ranked debt: `notes/`.
