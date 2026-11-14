@@ -70,6 +70,8 @@ def sample_steps(leaves, rng, depth=0, labels=None):
                  'steps': sample_steps(leaves, rng, depth + 1, labels)}
             if rng.random() < 0.3:
                 g['retry'] = rng.randint(2, 4)
+            if rng.random() < 0.15:
+                g['repeat'] = rng.randint(2, 4)
             steps.append(g)
             continue
         n = rng.choice(leaves)

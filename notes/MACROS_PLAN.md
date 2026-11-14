@@ -252,3 +252,11 @@ STILL UNCONFIRMED: exact servo count, servo model, camera model. Ask the teammat
   `llm_knowledge.md` (guarded by a test that each example is a valid plan) are the fix being measured.
 - Still open in P2: DescribePerson, FindFreeSeat, DetectSound (need real data/camera). P4 (arm) blocked on the hardware. P3 grammar,
   P5 rehearsal scripts, P6 preflight extensions, B-03..B-12 not started.
+
+## STATUS 2026-11-14 (evening)
+- **P3 slice done: `repeat: N` on groups** (spec grammar, `fallback.py` -> `Repeat num_cycles`, validator catalog, LLM schema + prompt,
+  dataset sampler, macro `patrol_laps`). Verified in the real executor (dry-run: a repeated step ran twice). NOT done: `Parallel`,
+  `SubTree`, blackboard "for each" loops. The SLM must be retrained to see `repeat` in training data (not yet).
+- **P5 done for 4 cases:** `tools/integration/rehearsal.sh` (go_and_say, patrol_laps, meet_guest, refuse-to-bring) checks the exact
+  node sequence through orchestrator -> expansion -> validator -> executor in dry-run; in CI. Not yet: HRIC door/doorbell/handover and
+  PnPC/Laundry rehearsals (blocked on the missing nodes and the arm). `llm_eval.py` is the real-LLM counterpart (not in CI: needs a GPU model).

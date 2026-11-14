@@ -131,6 +131,13 @@ jobs:
           source install/setup.bash
           python3 tools/integration/guard_test.py
 
+      - name: Sim - task rehearsals (GPSR/HRIC node sequences in dry-run)
+        timeout-minutes: 10
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          bash tools/integration/rehearsal.sh
+
       - name: Sim - LLM failover and emergency halt
         timeout-minutes: 5
         run: |

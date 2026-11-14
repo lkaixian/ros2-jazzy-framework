@@ -176,7 +176,7 @@ def spec_schema(nodes, lib):
                     'properties': {'macro': {'const': name}, 'args': obj(list(m['params']), req)}})
     group = {'type': 'object', 'required': ['group', 'steps'], 'additionalProperties': False,
              'properties': {'group': {'enum': ['Sequence', 'Fallback', 'ReactiveSequence', 'ReactiveFallback']},
-                            'retry': {'type': 'integer'},
+                            'retry': {'type': 'integer'}, 'repeat': {'type': 'integer'},
                             'steps': {'type': 'array', 'minItems': 1, 'maxItems': 12, 'items': {'$ref': '#/$defs/step'}}}}
     return {'$defs': {'step': {'anyOf': mac + leaf + [group]}}, 'type': 'object', 'required': ['goal', 'steps'],
             'properties': {'goal': {'type': 'string'}, 'retry': {'type': 'integer'},

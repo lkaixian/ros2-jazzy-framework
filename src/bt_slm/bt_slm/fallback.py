@@ -4,7 +4,7 @@ task_spec JSON:
   {"goal": str, "retry": N?, "steps": [STEP, ...]}
   STEP = {"node": "DetectObject", "ports": {"label": "cup"}}
        | {"group": "Sequence|Fallback|ReactiveSequence|ReactiveFallback",
-          "retry": N?, "steps": [STEP, ...]}
+          "retry": N?, "repeat": N?, "steps": [STEP, ...]}
 """
 import json
 import re
@@ -36,13 +36,19 @@ def _render(step, pad):
     return f'{sp}<{step["node"]}{attrs}/>'
 
 
-def _retry(spec, body, pad):
-    if not spec.get('retry'):
-        return body
+def _wrap(body, pad, tag, attr, n):
     sp = ' ' * pad
     indented = '\n'.join('  ' + ln for ln in body.split('\n'))
-    return (f'{sp}<RetryUntilSuccessful num_attempts="{int(spec["retry"])}">\n'
-            f'{indented}\n{sp}</RetryUntilSuccessful>')
+    return f'{sp}<{tag} {attr}="{int(n)}">\n{indented}\n{sp}</{tag}>'
+
+
+def _retry(spec, body, pad):
+    """`repeat: N` runs the group N times in a row (Repeat); `retry: N` retries it on failure (outermost)."""
+    if spec.get('repeat'):
+        body = _wrap(body, pad, 'Repeat', 'num_cycles', spec['repeat'])
+    if spec.get('retry'):
+        body = _wrap(body, pad, 'RetryUntilSuccessful', 'num_attempts', spec['retry'])
+    return body
 
 
 def build_xml(task_spec, known_ids=None, errors=()):

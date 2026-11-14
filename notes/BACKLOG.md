@@ -22,7 +22,7 @@ are new; T-xx point at `technical_debt.md`. Update this file as items are done (
   strings), e.g. `GetPersonPose` cannot hand keypoints on. Blocks genuinely complex tasks. Suggest first.
 - [x] **B-02 Preflight check.** `ros2 run framework_bringup preflight`: lidar publishing, TF chain sane,
   mux alive, `LLM_API_KEY` set, workspace/SROS2 state, LLM endpoints healthy, executor in dry-run.
-- [ ] **B-03 Richer task grammar (T-07).** Parallel, loops, SubTree/blackboard in the spec grammar AND
+- [~] **B-03 Richer task grammar (T-07) (`repeat` loops DONE 2026-11-14; Parallel/SubTree/blackboard loops open; SLM not retrained with it).** Parallel, loops, SubTree/blackboard in the spec grammar AND
   `bt_slm/fallback.py` AND the dataset generator together (the SLM prompt format must stay in sync).
 - [~] **B-04 Obstacle awareness for plain motion (PARTLY DONE 2026-11-14):** `bt_common.obstacle.ScanGuard`; `DriveDistance`/`NavigateTo` (odom_extension) stop for anything closer than 0.30 m in the travel direction (front, or rear when reversing) and `FollowTarget approach=true` (pid_extension) stops at 0.40 m; `scan_required: true` makes them refuse to drive without a fresh scan (default false so lidar-less sims work; set it true on the real robot). Tested with fake scans (`tools/integration/guard_test.py`, unit tests); `RotateBy` is unguarded (turns in place); the lidar yaw offset and mounting are unverified; a hardware e-stop is still required. Original: `DriveDistance`/`RotateBy`/`FollowTarget`
   drive blind; route them through `collision_monitor` or a scan check. Document a hardware e-stop.

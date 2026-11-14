@@ -29,6 +29,7 @@ whitelist:
   - acknowledge_person
   - meet_guest
   - introduce_guest
+  - patrol_laps
   - guide_to
   - escort_person_to
   - wait_for_wave
@@ -328,3 +329,14 @@ macros:
     steps:
       - {node: Speak, ports: {text: "This is {person}", person: "{${slot}_name}"}}
       - {node: Speak, ports: {text: "Their favourite drink is {person}", person: "{${slot}_drink}"}}
+
+  patrol_laps:
+    description: "Visit two named places in order, repeated for a number of laps (1-10)"
+    params: {first: {required: true}, second: {required: true}, laps: {default: "2"}}
+    example_args: {first: left_room, second: right_room, laps: "3"}
+    steps:
+      - group: Sequence
+        repeat: "${laps}"
+        steps:
+          - {macro: go_to_place, args: {place: "${first}"}}
+          - {macro: go_to_place, args: {place: "${second}"}}

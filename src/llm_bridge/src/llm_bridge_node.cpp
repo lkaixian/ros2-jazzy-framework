@@ -31,7 +31,7 @@ const char * kDefaultSystem =
   "{\"goal\": string, \"retry\": optional int, \"steps\": [STEP,...]} where STEP is a macro call "
   "{\"macro\": <name>, \"args\": {<arg>: <string>}}, or {\"node\": <id>, \"ports\": {<port>: <string>}}, "
   "or a nested group {\"group\": \"Sequence|Fallback|ReactiveSequence|ReactiveFallback\", "
-  "\"retry\": optional int, \"steps\": [STEP,...]}. PREFER a macro whenever one fits the request "
+  "\"retry\": optional int, \"repeat\": optional int (run the group N times in a row), \"steps\": [STEP,...]}. PREFER a macro whenever one fits the request "
   "(it is shorter and tested); use single nodes only for what no macro does. Keep the plan short "
   "(usually 1 to 5 steps) and do exactly what was asked. If the robot cannot do the task (see the "
   "robot knowledge), do not invent steps: use the say macro to tell the person so. Use Fallback "

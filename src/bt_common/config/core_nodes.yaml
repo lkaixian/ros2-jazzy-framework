@@ -6,6 +6,7 @@ nodes:
   ReactiveFallback:     {category: Control}
   Parallel:             {category: Control, optional: [success_count, failure_count]}
   RetryUntilSuccessful: {category: Decorator, required: [num_attempts]}
+  Repeat:               {category: Decorator, required: [num_cycles]}
   Timeout:              {category: Decorator, required: [msec]}
   Inverter:             {category: Decorator}
   ForceSuccess:         {category: Decorator}

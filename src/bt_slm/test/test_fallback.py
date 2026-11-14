@@ -39,3 +39,16 @@ def test_retry_filter_prunes_empty_groups_recursively():
     xml = build_xml(NESTED, {'DetectObject', 'Sleep'}, errors=['x'])
     assert 'Fly' not in xml and xml.count('<Sequence>') == 1      # inner Sequence removed
     assert '<Fallback>' in xml and 'Sleep' in xml
+
+
+def test_repeat_wraps_the_group_and_retry_is_outermost():
+    import json
+
+    from bt_slm.fallback import build_xml
+    spec = {'goal': 'loop', 'steps': [{'group': 'Sequence', 'repeat': 3, 'retry': 2,
+                                        'steps': [{'node': 'Sleep', 'ports': {'msec': '10'}}]}]}
+    xml = build_xml(json.dumps(spec))
+    assert xml.index('RetryUntilSuccessful num_attempts="2"') < xml.index('Repeat num_cycles="3"') < xml.rindex('<Sequence>')
+    from bt_common.catalog import Catalog
+    from bt_validator.validate import validate_xml
+    assert validate_xml(xml, Catalog()) == []
