@@ -175,8 +175,8 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
 ## Sharing the fine-tuned SLM
 The weights are 443 MB (`model.safetensors`): too big for git (GitHub rejects files over 100 MB; `models/` is gitignored on purpose). Two ways, both
 need your decision and your login (nothing is uploaded automatically):
-- **Hugging Face Hub (recommended):** `hf auth login`, then `python3 tools/slm/publish_hf.py --model models/bt-slm --repo <you>/robocup-bt-slm --valid <v> --exact <e>`
-  (private by default; `--public` to share). Others get it with `SLM_WEIGHTS_REPO=<you>/robocup-bt-slm ./setup.sh --only slmweights`.
+- **Hugging Face Hub (recommended):** `hf auth login`, then `python3 tools/slm/publish_hf.py --model models/bt-slm --repo <you>/<model-name> --valid <v> --exact <e>`
+  (private by default; `--public` to share). Pick a neutral `<model-name>`: the model card is neutral too (no project name, no repo link unless you pass `--project-url`), and the weight files contain no project strings (checked with grep). Others get it with `SLM_WEIGHTS_REPO=<you>/<model-name> ./setup.sh --only slmweights`.
 - **GitHub release asset:** `gh auth login`, `tools/slm/release_github.sh slm-v4` creates a DRAFT release with a tarball; publish it on github.com
   when you are happy. Extract with `tar -xzf bt-slm-<tag>.tar.gz -C models`.
 - **License:** the base model is under the LFM Open License v1.0: redistribution of a fine-tune is allowed if you ship the license, mark the files as
