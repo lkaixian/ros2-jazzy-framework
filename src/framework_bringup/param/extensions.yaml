@@ -90,6 +90,7 @@ social_extension_node:
     speak_timeout_sec: 30.0
     enroll_timeout_sec: 10.0
     transcript_topic: stt/transcript
+    events_topic: audio/events
     republish_sec: 3.0
 
 nav_extension_node:         # Nav2 BT nodes; needs navigation.launch.py (see docs/navigation.md)

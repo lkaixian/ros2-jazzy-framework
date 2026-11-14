@@ -25,6 +25,15 @@ vad_node:
     mute_while_speaking: true
     mute_tail_ms: 400
 
+sound_event_node:           # steady-tone (doorbell) detector; tuned on synthetic tones only
+  ros__parameters:
+    window_sec: 0.12
+    need_windows: 3
+    freq_tolerance: 0.04
+    peak_ratio: 0.5
+    min_rms: 300.0
+    refractory_sec: 2.0
+
 stt_node:
   ros__parameters:
     engine: faster_whisper  # faster_whisper | vosk | mock

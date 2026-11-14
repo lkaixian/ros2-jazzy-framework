@@ -18,6 +18,7 @@ def _nodes(context):
             n('audio_capture', 'audio_capture_node', 'audio_capture_node', F,
               {'audio_source': 'source', 'audio_device': 'device', 'audio_file': 'file'}),
             n('stt_pipeline', 'vad_node', 'vad_node', F),
+            n('stt_pipeline', 'sound_event_node', 'sound_event_node', F),
             n('stt_pipeline', 'stt_node', 'stt_node', F,
               {'stt_engine': 'engine', 'stt_model': 'model'}),
             n('stt_pipeline', 'transcript_to_task_node', 'transcript_to_task_node', F,

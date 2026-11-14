@@ -21,6 +21,7 @@ setup(
         'console_scripts': [
             'vad_node = stt_pipeline.vad_node:main',
     'stt_node = stt_pipeline.stt_node:main',
+    'sound_event_node = stt_pipeline.sound_event_node:main',
     'transcript_to_task_node = stt_pipeline.transcript_to_task_node:main',
         ],
     },

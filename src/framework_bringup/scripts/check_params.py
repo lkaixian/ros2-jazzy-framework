@@ -38,6 +38,7 @@ NODES = {
     'audio_capture_node': ('audio_capture', 'audio_capture_node', 'audio.yaml',
                            {'source': 'file', 'file': '/nonexistent.wav'}),
     'vad_node': ('stt_pipeline', 'vad_node', 'audio.yaml', {}),
+    'sound_event_node': ('stt_pipeline', 'sound_event_node', 'audio.yaml', {}),
     'stt_node': ('stt_pipeline', 'stt_node', 'audio.yaml', {'engine': 'mock'}),
     'transcript_to_task_node': ('stt_pipeline', 'transcript_to_task_node', 'audio.yaml', {}),
     'tts_node': ('tts_pipeline', 'tts_node', 'audio.yaml', {'engine': 'mock'}),

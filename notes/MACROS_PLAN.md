@@ -260,3 +260,8 @@ STILL UNCONFIRMED: exact servo count, servo model, camera model. Ask the teammat
 - **P5 done for 4 cases:** `tools/integration/rehearsal.sh` (go_and_say, patrol_laps, meet_guest, refuse-to-bring) checks the exact
   node sequence through orchestrator -> expansion -> validator -> executor in dry-run; in CI. Not yet: HRIC door/doorbell/handover and
   PnPC/Laundry rehearsals (blocked on the missing nodes and the arm). `llm_eval.py` is the real-LLM counterpart (not in CI: needs a GPU model).
+- **P2: `DetectSound(kind=doorbell, timeout_ms)` done** (`stt_pipeline/sound.py` + `sound_event_node` -> `audio/events`; BT node in
+  `social_extension`; macro `wait_for_doorbell`). Verified: unit tests with synthetic tones plus negative controls (white noise, quiet
+  tone, short blip, gliding pitch, one Piper speech clip), and a synthetic ding-dong WAV through `audio_capture` -> `sound_event_node`
+  -> `audio/events` (883 Hz). NOT verified: real doorbell recordings, the BT handler through the executor, noisy rooms. Heuristic
+  thresholds are guesses until real recordings exist (B-23).

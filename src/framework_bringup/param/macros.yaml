@@ -30,6 +30,7 @@ whitelist:
   - meet_guest
   - introduce_guest
   - patrol_laps
+  - wait_for_doorbell
   - guide_to
   - escort_person_to
   - wait_for_wave
@@ -340,3 +341,9 @@ macros:
         steps:
           - {macro: go_to_place, args: {place: "${first}"}}
           - {macro: go_to_place, args: {place: "${second}"}}
+
+  wait_for_doorbell:
+    description: "Wait up to 60 s for the doorbell (a steady tone) and say that someone is at the door; fails if it never rings"
+    steps:
+      - {node: DetectSound, ports: {kind: doorbell, timeout_ms: "60000"}}
+      - {macro: say, args: {text: "Someone is at the door"}}
