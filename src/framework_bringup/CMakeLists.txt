@@ -5,5 +5,6 @@ install(DIRECTORY launch behavior_trees param maps DESTINATION share/${PROJECT_N
 install(PROGRAMS scripts/check_params.py DESTINATION lib/${PROJECT_NAME} RENAME check_params)
 install(PROGRAMS scripts/dash.py DESTINATION lib/${PROJECT_NAME} RENAME dash)
 install(PROGRAMS scripts/preflight.py DESTINATION lib/${PROJECT_NAME} RENAME preflight)
+install(PROGRAMS scripts/teleop.py DESTINATION lib/${PROJECT_NAME} RENAME teleop)
 install(PROGRAMS scripts/ws.py DESTINATION lib/${PROJECT_NAME} RENAME ws)
 ament_package()

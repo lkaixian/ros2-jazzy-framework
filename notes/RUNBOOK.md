@@ -149,3 +149,10 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
 - **Verified end to end (isolated domain, mock TTS):** Piper-synthesised WAV -> `audio_capture` -> `vad_node` -> `stt_node`
   ("Go to the door and say hello.") -> `transcript_to_task` -> `llm_bridge` -> `go_and_say(door, hello)` -> valid plan. First
   request after start takes ~11 s (cold prompt cache), then 1-2 s. Real microphone/speaker not tried.
+
+## Operator tools added 2026-11-14
+- `ros2 run framework_bringup preflight [--no-robot]`: PASS/WARN/FAIL for key, SROS2, mux, executor dry-run, LLM, /scan, TF, clock sync, disk.
+- `ros2 run framework_bringup teleop`: keyboard takeover (highest mux priority, halts the running plan on the first key).
+- `ros2 run framework_bringup dash`: keys j/k select, r/R restart node, s/S stop system, w/W restart system, h halt task; shows Kobuki battery.
+- `ros2 run cluster_core host_info`: CPU/RAM/GPU/VRAM/temperature/battery of each machine with a cluster agent.
+- `tools/record_run.sh NAME [--images]`: rosbag2 recording of a run; `tools/systemd/install.sh [--enable]`: restart-always user units.

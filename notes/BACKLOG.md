@@ -26,13 +26,13 @@ are new; T-xx point at `technical_debt.md`. Update this file as items are done (
   `bt_slm/fallback.py` AND the dataset generator together (the SLM prompt format must stay in sync).
 - [ ] **B-04 Obstacle awareness for plain motion (T-01 rest).** `DriveDistance`/`RotateBy`/`FollowTarget`
   drive blind; route them through `collision_monitor` or a scan check. Document a hardware e-stop.
-- [ ] **B-05 Recording/replay.** rosbag2 record profile for a run (topics list, QoS), plus a replay recipe.
-- [ ] **B-06 Time sync across machines** (chrony/NTP recipe + a check in preflight). Needed before two PCs.
-- [ ] **B-07 Manual override.** Teleop path into `cmd_vel_mux` at the highest priority (and a way to
+- [x] **B-05 Recording/replay (DONE 2026-11-14):** `tools/record_run.sh NAME [--images]` (mcap, latched QoS kept; recorded and read back with `ros2 bag info`); replay: `ros2 bag play <dir> --clock`. Original: rosbag2 record profile for a run (topics list, QoS), plus a replay recipe.
+- [~] **B-06 Time sync across machines** (preflight now WARNs when the clock is not NTP-synchronised; the chrony setup recipe for two PCs is still open). (chrony/NTP recipe + a check in preflight). Needed before two PCs.
+- [x] **B-07 Manual override (DONE 2026-11-14):** `ros2 run framework_bringup teleop` (w/a/s/d, first key also halts the executor) publishes to `teleop/cmd_vel`, now the FIRST (highest priority) input of `cmd_vel_mux`; releasing the keys returns control after the 0.5 s watchdog. Tested: key map + config; not tried on the real robot. Original: Teleop path into `cmd_vel_mux` at the highest priority (and a way to
   take control back during a run).
-- [ ] **B-08 Battery/health monitoring** (laptop/PC side DONE: `host_info` service + CLI; still open: Kobuki battery topic, show in `dash`, warn/halt threshold). Kobuki publishes battery state; nothing consumes it. Show it in
+- [~] **B-08 Battery/health monitoring** (Kobuki battery now shown in `dash` with low 14.0 V / critical 13.2 V thresholds taken from the driver defaults, unverified on this pack; NO automatic halt on low battery, that is a safety decision to make with the robot). (laptop/PC side DONE: `host_info` service + CLI; still open: Kobuki battery topic, show in `dash`, warn/halt threshold). Kobuki publishes battery state; nothing consumes it. Show it in
   `dash`, warn/halt under a threshold.
-- [ ] **B-09 Process supervision on the robot.** systemd units (or the cluster agent as a service with
+- [~] **B-09 Process supervision on the robot (units written 2026-11-14, NOT enabled or run):** `tools/systemd/` user units `robocup-llm` and `robocup-stack` with `Restart=always`, dry-run kept on; `systemd-analyze --user verify` is clean; install with `tools/systemd/install.sh [--enable]`. Cluster agent as a service still open. Original: systemd units (or the cluster agent as a service with
   `Restart=always`) so a reboot brings the stack back. Pairs with T-15.
 - [ ] **B-10 Hygiene** (LICENSE added; rest open). `LICENSE` (package.xml says Apache-2.0, T-20), lint beyond `object_detection`
   (T-19), `setup.sh` version pins + a tested venv-or-pin story for NumPy 2 (T-17).

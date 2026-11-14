@@ -1,0 +1,17 @@
+[Unit]
+Description=RoboCup framework (ros2 launch framework.launch.py)
+After=robocup-llm.service
+Wants=robocup-llm.service
+
+[Service]
+# Dry-run stays ON: the service restores the stack after a reboot, it never starts moving hardware by itself.
+WorkingDirectory=%h/ros2-jazzy-robocup-fw
+Environment=PATH=/usr/bin:%h/.local/bin:/bin
+ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && source install/setup.bash && exec ros2 launch launch/framework.launch.py llama_url:=http://127.0.0.1:8081 dry_run:=true'
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

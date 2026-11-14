@@ -40,6 +40,11 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
+try:
+    from kobuki_ros_interfaces.msg import SensorState
+except ImportError:     # no Kobuki driver messages installed: no battery line
+    SensorState = None
+
 ERR_WINDOW = 30.0
 COL = {'ONLINE': '32', 'BUSY': '36', 'ERROR': '31', 'OFFLINE': '90', 'WARN': '33'}
 LEVEL = {10: ('DEBUG', '90'), 20: ('INFO', '0'), 30: ('WARN', '33'), 40: ('ERROR', '31'),
@@ -112,6 +117,20 @@ def check_link(url):
     return {'kind': link_type(dev), 'dev': dev, 'ms': ms}
 
 
+def battery_state(raw, charger=0):
+    """Kobuki SensorState.battery (0.1 V units) -> (level, text). shortcut: the 14.0 V low / 13.2 V critical thresholds
+    are the Kobuki driver's documented defaults for the 4-cell pack, not measured on this robot; recheck with its pack."""
+    if raw <= 0:
+        return 'OFFLINE', 'base battery unknown'
+    v = raw / 10.0
+    note = ' (charging)' if charger else ''
+    if v < 13.2:
+        return 'ERROR', f'base battery {v:.1f} V CRITICAL{note}'
+    if v < 14.0:
+        return 'WARN', f'base battery {v:.1f} V low{note}'
+    return 'ONLINE', f'base battery {v:.1f} V{note}'
+
+
 def paint(text, code, color=True):
     return f'\033[{code}m{text}\033[0m' if color else text
 
@@ -165,6 +184,10 @@ class Dash:
         self.links = {}      # endpoint url -> check_link() result, refreshed by a thread
         threading.Thread(target=self._probe_links, daemon=True).start()
         self.cluster = None
+        self.battery = None
+        if SensorState is not None:
+            node.create_subscription(SensorState, 'sensors/core', lambda m: setattr(
+                self, 'battery', (m.battery, m.charger, time.monotonic())), 5)
         self.names, self.sel, self.msg, self.pending = [], 0, '', None
         self.halt = node.create_client(Trigger, 'bt_executor/halt')
         node.create_subscription(Log, '/rosout', self._log, 100)
@@ -281,6 +304,9 @@ class Dash:
             out.append('   ' + paint('up  ' if e['available'] else 'DOWN',
                                      COL['ONLINE'] if e['available'] else COL['ERROR'], c) +
                        f"  {e['url']:<34} {link}")
+        if self.battery and now - self.battery[2] < 10.0:
+            lvl, txt = battery_state(self.battery[0], self.battery[1])
+            out.append(paint(txt, COL[lvl] if lvl in COL else COL['OFFLINE'], c))
         # task lifecycle (orchestrator)
         t = self.task
         if t:

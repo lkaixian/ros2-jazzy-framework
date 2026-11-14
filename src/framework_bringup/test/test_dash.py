@@ -99,3 +99,38 @@ def test_preflight_llm_verdict():
     up = {'state': 'ok', 'endpoints': [{'available': True}]}
     assert pf.llm_verdict(up)[0] == 'PASS'
     assert pf.llm_verdict({**up, 'state': 'degraded'})[0] == 'WARN'
+
+
+def test_teleop_keys_and_priority():
+    spec = importlib.util.spec_from_file_location(
+        'teleop', os.path.join(os.path.dirname(__file__), '..', 'scripts', 'teleop.py'))
+    tp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tp)
+    assert tp.twist_for('w') == (0.2, 0.0) and tp.twist_for('S') == (-0.2, 0.0)
+    assert tp.twist_for('a')[1] > 0 > tp.twist_for('d')[1] and tp.twist_for(' ') == (0.0, 0.0)
+    assert tp.twist_for('x') is None
+    import yaml
+    cfg = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), '..', 'param', 'extensions.yaml')))
+    assert cfg['cmd_vel_mux_node']['ros__parameters']['inputs'][0] == 'teleop/cmd_vel'   # manual override wins
+
+
+def test_preflight_local_checks():
+    from types import SimpleNamespace as N
+    spec = importlib.util.spec_from_file_location(
+        'preflight2', os.path.join(os.path.dirname(__file__), '..', 'scripts', 'preflight.py'))
+    pf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pf)
+    ok = pf.local_checks(lambda *a, **k: N(stdout='yes\n'), lambda p: N(free=50e9))
+    assert [l for l, _ in ok] == ['PASS', 'PASS']
+    bad = pf.local_checks(lambda *a, **k: N(stdout='no\n'), lambda p: N(free=0.5e9))
+    assert [l for l, _ in bad] == ['WARN', 'FAIL']
+    missing = pf.local_checks(lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError()), lambda p: N(free=3e9))
+    assert [l for l, _ in missing] == ['WARN', 'WARN'] and 'unavailable' in missing[0][1]
+
+
+def test_battery_state():
+    assert dash.battery_state(158)[0] == 'ONLINE' and '15.8 V' in dash.battery_state(158)[1]
+    assert dash.battery_state(135)[0] == 'WARN'
+    assert dash.battery_state(130)[0] == 'ERROR' and 'CRITICAL' in dash.battery_state(130)[1]
+    assert dash.battery_state(150, charger=2)[1].endswith('(charging)')
+    assert dash.battery_state(0)[0] == 'OFFLINE'

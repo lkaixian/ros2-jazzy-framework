@@ -9,6 +9,8 @@ shortcut: topic/frame names (/scan, odom, base) are the Kobuki + RPLIDAR default
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import sys
 import time
 
@@ -32,6 +34,23 @@ def llm_verdict(status):
         return 'FAIL', f"LLM {status.get('state', '?')}: no endpoint up"
     return ('WARN' if status.get('state') == 'degraded' else 'PASS',
             f"LLM {status.get('state')}, {len(up)}/{len(status['endpoints'])} endpoints up")
+
+
+def local_checks(run=subprocess.run, usage=shutil.disk_usage):
+    """Machine checks that need no ROS graph: clock sync (matters once two machines share a task, B-06) and disk space."""
+    out = []
+    try:
+        ntp = run(['timedatectl', 'show', '-p', 'NTPSynchronized', '--value'], capture_output=True, text=True,
+                  timeout=3).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        ntp = ''
+    out.append(('PASS', 'clock NTP-synchronised') if ntp == 'yes' else
+               ('WARN', 'clock not NTP-synchronised' + (' (timedatectl unavailable)' if not ntp else '')
+                + ': timestamps drift between machines'))
+    free_gb = usage('/').free / 1e9
+    out.append(('PASS', f'{free_gb:.0f} GB free on /') if free_gb >= 5 else
+               ('WARN' if free_gb >= 1 else 'FAIL', f'only {free_gb:.1f} GB free on /: logs, bags and models need room'))
+    return out
 
 
 def main(argv=None):
@@ -70,6 +89,7 @@ def main(argv=None):
         add('PASS' if got.get('scan') else 'FAIL', '/scan publishing' if got.get('scan') else 'no /scan in 3 s')
         ok = tf.can_transform('odom', 'base', rclpy.time.Time())
         add('PASS' if ok else 'FAIL', 'TF odom -> base' if ok else 'no TF odom -> base')
+    res += local_checks()
     for lvl, txt in res:
         print(f'{lvl:<5} {txt}')
     n.destroy_node()
