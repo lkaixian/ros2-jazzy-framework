@@ -32,7 +32,7 @@ A small causal LM fine-tuned from [{base}](https://huggingface.co/{base}) (**mod
 - Training data: synthetic (task spec, XML) pairs labelled by a validator; rows longer than {max_len} tokens were skipped; 1 epoch.
 - Held-out score against a rule-based generator on synthetic specs: valid {valid}, exact {exact}. This shows the model learned the rules;
   it is NOT evaluated on real LLM output.
-{project}- License: the base model's LFM Open License v1.0 (copy in `LICENSE`); attribution to Liquid AI, Inc. retained; commercial use is
+{note}{project}- License: the base model's LFM Open License v1.0 (copy in `LICENSE`); attribution to Liquid AI, Inc. retained; commercial use is
   restricted above the license's revenue threshold.
 """
 
@@ -45,6 +45,7 @@ def main():
     ap.add_argument('--exact', default='n/a')
     ap.add_argument('--max-len', default='768')
     ap.add_argument('--public', action='store_true')
+    ap.add_argument('--note', default='', help='one line about this version, shown on the model card')
     ap.add_argument('--project-url', help='optional: link the model card to the project that uses it (default: no link, nothing identifying)')
     ap.add_argument('--dry-run', action='store_true')
     a = ap.parse_args()
@@ -60,6 +61,7 @@ def main():
             open(os.path.join(stage, 'LICENSE'), 'wb').write(r.read())
         open(os.path.join(stage, 'README.md'), 'w').write(CARD.format(
             base=BASE, title=a.repo.split('/')[-1], valid=a.valid, exact=a.exact, max_len=a.max_len,
+            note=f'- This version: {a.note}\n' if a.note else '',
             project=f'- Used by: {a.project_url}\n' if a.project_url else ''))
         files = sorted(os.listdir(stage))
         print(f"{'would upload' if a.dry_run else 'uploading'} to {a.repo} ({'public' if a.public else 'private'}): {files}")
