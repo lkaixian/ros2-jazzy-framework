@@ -259,3 +259,51 @@ jobs:
             /tmp/robocup_it
             log/latest_build
             log/latest_test
+
+  # Humble is a build + unit-test check only: the integration sims above are Jazzy-only
+  # (nav2_params.yaml is generated from the Jazzy Nav2 defaults, Cyclone/SROS2 not tried on Humble).
+  build-test-humble:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    container:
+      image: ros:humble
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      ROS_LOCALHOST_ONLY: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-colcon-common-extensions python3-rosdep
+
+      - name: rosdep
+        run: |
+          rosdep init || true
+          rosdep update --rosdistro humble
+          rosdep install --from-paths src --ignore-src --rosdistro humble -y -r \
+            --skip-keys "sllidar_ros2"
+
+      - name: Build workspace
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --event-handlers console_cohesion+
+
+      - name: Unit tests
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon test
+          colcon test-result --verbose
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-humble
+          path: |
+            log/latest_build
+            log/latest_test
