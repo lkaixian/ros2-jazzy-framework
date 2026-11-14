@@ -2,7 +2,6 @@ import random
 
 import pytest
 
-from cluster_core import placement as pl
 from cluster_core.placement import Config, HostInfo, JobDef, State, adopt, plan
 
 

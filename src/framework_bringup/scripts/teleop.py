@@ -11,7 +11,6 @@ import os
 import select
 import sys
 import termios
-import time
 import tty
 
 import rclpy
@@ -37,7 +36,7 @@ def main(argv=None):
     pub = node.create_publisher(Twist, 'teleop/cmd_vel', 10)
     halt = node.create_client(Trigger, 'bt_executor/halt')
     old = termios.tcgetattr(sys.stdin)
-    halted, last = False, 0.0
+    halted = False
     print(__doc__.split('\n\n')[0].split('\n', 1)[1].strip())
     try:
         tty.setcbreak(sys.stdin)
@@ -57,7 +56,6 @@ def main(argv=None):
             t = Twist()
             t.linear.x, t.angular.z = cmd
             pub.publish(t)
-            last = time.monotonic()
     except KeyboardInterrupt:
         pass
     finally:

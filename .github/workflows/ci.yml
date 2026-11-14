@@ -152,6 +152,11 @@ jobs:
           source install/setup.bash
           python3 tools/integration/battery_test.py
 
+      - name: Lint (flake8, config in .flake8)
+        run: |
+          apt-get install -y python3-flake8 >/dev/null
+          python3 -m flake8 src tools
+
       - name: Sim - LLM failover and emergency halt
         timeout-minutes: 5
         run: |

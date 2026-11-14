@@ -1,4 +1,5 @@
-import sys
+
+
 def sub(path, old, new, count=1):
     s = open(path).read()
     if s.count(old) != count:

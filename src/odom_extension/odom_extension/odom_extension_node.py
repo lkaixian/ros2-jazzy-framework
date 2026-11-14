@@ -1,7 +1,7 @@
 import math
 import time
 
-from bt_common.executor_node import (ExtensionExecutor, PortError, port_float, port_str,
+from bt_common.executor_node import (ExtensionExecutor, port_float,
                                      run_executor)
 from bt_common.obstacle import ScanGuard
 from geometry_msgs.msg import Twist

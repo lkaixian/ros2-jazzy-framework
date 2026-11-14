@@ -1,7 +1,6 @@
 import os
 
 import pytest
-import yaml
 
 from bt_common.catalog import Catalog
 from bt_validator.validate import validate_xml

@@ -78,7 +78,6 @@ def test_check_link_unreachable_has_no_ms():
 
 def test_find_pids_and_kill():
     import subprocess
-    import time
     p = subprocess.Popen(['sleep', '60'])
     try:
         assert p.pid in dash.find_pids('sleep')

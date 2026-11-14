@@ -13,7 +13,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory as share
 from ament_index_python.packages import PackageNotFoundError
-from bt_common.launch_utils import (cast_like, declare_overrides, declare_params_dir, flag, given,
+from bt_common.launch_utils import (declare_overrides, declare_params_dir, flag, given,
                                     load_yaml, param_path)
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction

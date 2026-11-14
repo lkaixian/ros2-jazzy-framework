@@ -1,7 +1,7 @@
 import math
 
-from bt_common.executor_node import (ExtensionExecutor, PortError, call_action, port_float,
-                                     port_str, run_executor)
+from bt_common.executor_node import (ExtensionExecutor, call_action, port_float,
+                                     run_executor)
 from control_msgs.action import GripperCommand
 from moveit_msgs.action import MoveGroup
 from rclpy.action import ActionClient

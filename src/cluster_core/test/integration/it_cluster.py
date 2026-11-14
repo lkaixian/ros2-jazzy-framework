@@ -478,7 +478,6 @@ def run_scenarios(work, env, procs, obs):
     obs.wait_until(lambda: converged(obs, [j for j in ALL_JOBS]), 25.0)
     obs.spin(2.0)
     before = {j: obs.pids(j) for j in ALL_JOBS}
-    restarts_before = {h: {j: r for j, (s, p, r) in jobs.items()} for h, (t, jobs) in obs.hosts.items()}
     sizes = {k: len(read(p.log)) for k, p in procs.items()}
     n_sets = len(obs.assign_log)
     t_stop = time.monotonic()

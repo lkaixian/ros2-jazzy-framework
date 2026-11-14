@@ -14,7 +14,8 @@ machine routes through) and the TCP connect time in ms, measured every 3 s in th
 Keys (status view, on a terminal): j/k or arrows select a node; r restart it (SIGINT), R force (SIGKILL);
 the launch file respawns it. s stop the whole system (SIGINT to `ros2 launch`), S force; w restart the whole
 system (stop, then relaunch the same command line, output in /tmp/robocup_launch.log), W force; h halt the
-running task (bt_executor/halt); t shows/hides the plan tree (live node status from bt_executor). s/S/w/W ask y/n first. Without keys it only reads.
+running task (bt_executor/halt); t shows/hides the plan tree (live node status from bt_executor).
+s/S/w/W ask y/n first. Without keys it only reads.
 """
 import argparse
 import importlib.machinery

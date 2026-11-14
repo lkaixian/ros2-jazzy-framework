@@ -1,7 +1,7 @@
 """Build a MoveGroup goal for a Cartesian pose target (model-agnostic)."""
 import math
 
-from geometry_msgs.msg import Pose, PoseStamped
+from geometry_msgs.msg import Pose
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import (BoundingVolume, Constraints, MotionPlanRequest,
                              OrientationConstraint, PositionConstraint)

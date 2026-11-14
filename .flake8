@@ -1,0 +1,13 @@
+# One lint config for the whole repo: `python3 -m flake8` (CI runs it). Style-only rules that the codebase never followed are
+# off; real problems (unused imports/variables, undefined names, syntax, long lines > 140 outside launch files and tools) stay on.
+[flake8]
+max-line-length = 140
+exclude = build,install,log,models,bt_dataset,bt_dataset_v2,bt_dataset_v2_small,bt_dataset_small,.git,__pycache__
+extend-ignore =
+    W503,W504,
+    I100,I101,I201,I202,I666,
+    D100,D101,D102,D103,D104,D105,D107,D200,D202,D204,D205,D209,D212,D400,D401,D403,D413,
+    C408,C401,C416,Q000,Q001,A003,Q003,E741,E731,E701,E702,E122,E127,E128,E201,E202
+per-file-ignores =
+    tools/integration/*.py: E3,E4,E501
+    src/*/launch/*.py: E501

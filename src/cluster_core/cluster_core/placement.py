@@ -7,7 +7,7 @@ for movable jobs on unusable hosts, immovable jobs never leave their host, overl
 with hysteresis + cooldown (one migration per call).
 """
 from dataclasses import dataclass, field
-from typing import Dict, FrozenSet, List, Optional, Set, Tuple
+from typing import Dict, FrozenSet, List, Tuple
 
 
 @dataclass(frozen=True)
