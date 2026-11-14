@@ -3,7 +3,35 @@
 Picked up from the end of a long session. Order inside each group is the suggested order. IDs B-xx
 are new; T-xx point at `technical_debt.md`. Update this file as items are done (delete or tick).
 
-## Start here
+## NEXT: what to do first (written 2026-11-14 night; supersedes the order below where they differ)
+State: everything is committed and pushed; CI was last seen green except for races fixed in the final commits (check the Actions tab first). `llama-server`
+(E2B) may still be running on port 8081 (stop it before training on the GPU). SLM v4 is at `models/bt-slm` and on the public HF repo `larmkaixian/bt-sim-slm`.
+
+1. **Read the 14 misses of the GPSR-style baseline and fix them without training** (86 % -> aim above 95 %). Run `llm_eval.py --gen 100 --seed 1` with a
+   stack up (see `docs/operator-guide.md` "Test and rehearse"), read the `MISS` lines, then fix in this order: macro descriptions (`macros.yaml`), worked examples
+   (`llm_knowledge.md`, each is test-validated), the system prompt in `llm_bridge_node.cpp`. Known misses: doorbell -> `WaitForTranscript` instead of
+   `DetectSound`; "patrol N times"; "come with me"; one refusal that drove somewhere. Re-run `llm_eval.py` (15 commands) and `prompt_lab.py` afterwards, the
+   model is prompt sensitive (T-21).
+2. **Make the evaluation trustworthy:** add 30-50 hand-written commands in your own words (and the real GPSR wording if you have it) to a JSONL next to
+   `tools/gpsr/commands.py`; the generated set is template-based and can flatter the model.
+3. **Close the hazards found today:** T-22 (retry path silently drops unknown steps: fail instead), T-21 value checks in the validator (`min_conf ">0.5"` passes),
+   T-25 (`Parallel` on one extension). Small, testable, no hardware.
+4. **Only if step 1 still leaves misses:** fine-tune E2B on a free Colab T4 (QLoRA, fp16, checkpoints). Data = `tools/gpsr/commands.py` gold plans (command -> plan,
+   validator-checked by `test_gpsr_commands.py`); build the notebook, train, export a LoRA adapter, load with `llama-server --lora`, compare with `llm_eval.py --gen`.
+   Gemma 4 support in peft/trl and the adapter conversion are untested. Do NOT train on this laptop (4 GB).
+5. **STT without training first:** vocabulary hints (`hotwords`/`initial_prompt` in faster-whisper) + fuzzy matching of heard names/places in `stt_node` / `ExtractAnswer`;
+   record about 100 real sentences from the real microphone to measure word error rate before any Whisper fine-tune. TTS fine-tune: skip.
+6. **Next SLM version (optional):** the rules run first, so gain is small; if you do it, add the new row to `docs/slm-benchmark.json`, run
+   `tools/slm/plot_benchmark.py`, then `tools/slm/publish_hf.py` (this updates the PUBLIC repo).
+7. **Still software-only:** `DescribePerson` (needs pixels/colour features in `person_detection`, T-31), HRIC door/handover and PnPC/Laundry rehearsals (need the arm),
+   a two-machine test of `ws` roles/revoke, `timesync.sh` and `host_info` (needs a second machine; deferred B-24).
+8. **Housekeeping:** delete the local branch `backup-before-history-rewrite` (old messages with the chat link, never push it); prune `models/bt-slm-v1..v3`,
+   `bt_dataset*` dirs and `~/llama.cpp` leftovers when disk gets tight (about 6 GB free); `tools/systemd/install.sh --enable` once the stack should survive reboots.
+
+Blocked on hardware or on the user (unchanged): B-20 real robot bring-up, B-24 two machines, B-25 arm (all deferred by the user), B-22 detector images,
+B-23 real microphone/speaker/doorbell recordings, chrony and the Kobuki battery/lidar thresholds on the real robot, a hardware e-stop.
+
+## Start here (older list, partly done: see the ticks)
 - [x] **CI check (latest run green, 2026-11-14).** The last full GitHub run failed only in `Sim - workspaces (create, discover, join) +
   SROS2 enforcement` (the secured DDS probes printed neither RECEIVED nor NOTHING in the container; it
   passes locally). Since then: `ros-jazzy-rmw-cyclonedds-cpp` added to the apt list and the probe now

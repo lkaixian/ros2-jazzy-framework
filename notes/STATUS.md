@@ -66,7 +66,7 @@ Verification levels used below:
 - `setup.sh`: the `prebuilt` llama.cpp and `voice` steps were reproduced by hand and dry-run; apt/rosdep and a clean-machine run were not executed.
 - Bumper/cliff latch, lidar guards and the battery guard are tested with fake events only (real Kobuki topics, lidar mounting yaw and battery thresholds unverified); no hardware e-stop.
 
-## Suggested next steps (in order)
+## Suggested next steps (in order; the up-to-date short list is in BACKLOG.md "NEXT")
 1. Bring up the real robot step by step with the user present: Kobuki driver -> lidar -> TF check ->
    `navigation.launch.py slam:=slam_toolbox` -> save map -> measure the placeholder transforms ->
    `map:=...` navigation with `dry_run` still true, then live with a spotter.

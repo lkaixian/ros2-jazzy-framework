@@ -9,7 +9,7 @@ Read in this order (10 minutes):
 | [RUNBOOK.md](RUNBOOK.md) | Exact commands: setup, build, launch, test, debug |
 | [GOTCHAS.md](GOTCHAS.md) | Traps that already cost time (silent edit failures, PATH, numpy, process cleanup...) |
 | [technical_debt.md](technical_debt.md) | Known shortcuts, risks and unfinished edges, ranked |
-| [BACKLOG.md](BACKLOG.md) | What to do next, as a checklist (start here after the status) |
+| [BACKLOG.md](BACKLOG.md) | What to do next, as a checklist: the **NEXT** section at the top is the current plan |
 | [BUILD_HISTORY.md](BUILD_HISTORY.md) | How it was built, in order: phases, measurements, incidents and what they taught |
 | [RESEARCH.md](RESEARCH.md) | Questions answered while building (LLM on 4 GB, SROS2 roles, D* Lite, speech...) with how sure each answer is |
 | [TASKS.md](TASKS.md), [MACROS_PLAN.md](MACROS_PLAN.md) | The competition tasks (score sheets) and the macro/work plan built from them |
