@@ -1,0 +1,23 @@
+# Python packages for ROS 2 Humble (Ubuntu 22.04, system Python 3.10). Same set as requirements-lock.txt, with the newest versions that still support Python 3.10.
+# setup.sh passes this file as a pip *constraint* (-c): it does not install extra packages, it pins the ones it installs.
+# Update it deliberately: run the tests and `tools/integration/rehearsal.sh` first, then re-freeze with
+#   python3 -m pip list --user --format=freeze | grep -i -E "^(ultralytics|transformers|...)=="
+# NumPy 2 note: pip brings NumPy 2, the ROS apt packages are built for NumPy 1. The tested combination is exactly this set
+# (matplotlib is a NumPy-2 build); do not `import cv_bridge` from a NumPy-2 environment, this repo uses its own conversion
+# (yolo11_common.image_to_bgr) for that reason.
+ultralytics==8.4.211
+transformers==5.20.2
+huggingface_hub==2.4.0
+matplotlib==3.10.9
+faster-whisper==1.2.1
+ctranslate2==4.9.0
+vosk==0.3.45
+piper-tts==1.8.0
+kokoro-onnx==0.6.1
+onnxruntime==1.23.2
+soundfile==0.14.0
+torch==2.14.1
+numpy==2.2.6
+opencv-python==5.0.0.93
+tokenizers==0.23.3
+safetensors==0.8.0
