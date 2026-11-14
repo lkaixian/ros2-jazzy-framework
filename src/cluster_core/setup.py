@@ -23,6 +23,7 @@ setup(
             'cluster_scheduler_node = cluster_core.scheduler_node:main',
             'cluster_status = cluster_core.status_cli:main',
             'plan_preview = cluster_core.plan_preview:main',
+            'host_info = cluster_core.host_info_cli:main',
         ],
     },
 )

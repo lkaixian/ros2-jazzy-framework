@@ -10,12 +10,14 @@ Safety properties (see docs/cluster.md):
   (hardware-bound) jobs keep running (fail-static) until a scheduler says otherwise.
 """
 import os
+import re
 import socket
 import time
 
 import rclpy
 from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from cluster_msgs.msg import AssignmentSet, JobStatus, NodeInfo, ServiceEndpoint
+from cluster_msgs.srv import HostInfo
 from rclpy.node import Node
 
 from cluster_core.catalog import CatalogError, expand, load_catalog
@@ -72,6 +74,9 @@ class AgentNode(Node):
         self.seq = 0
 
         self.info_pub = self.create_publisher(NodeInfo, TOPIC_INFO, INFO_QOS)
+        self.last_info = None
+        # one service per machine (names cannot clash across hosts); `ros2 run cluster_core host_info` reads them
+        self.create_service(HostInfo, 'host_info/' + re.sub(r'\W', '_', self.host), self._host_info)
         self.create_subscription(AssignmentSet, TOPIC_ASSIGN, self._on_assign, LATCHED_QOS)
         self.create_timer(1.0 / p('heartbeat_hz'), self._heartbeat)
         self.create_timer(1.0 / p('poll_hz'), self._tick)
@@ -132,6 +137,10 @@ class AgentNode(Node):
         elif not self.orphaned:
             self._reconcile()                            # restarts after backoff are in poll()
 
+    def _host_info(self, _req, res):
+        res.info = self.last_info or NodeInfo(host_id=self.host)
+        return res
+
     def _heartbeat(self):
         m = NodeInfo()
         m.header.stamp = self.get_clock().now().to_msg()
@@ -142,12 +151,13 @@ class AgentNode(Node):
             self.get_logger().warn(f'metrics unavailable: {e}', throttle_duration_sec=30.0)
             s = {'cores': os.cpu_count() or 1, 'cpu_load': 0.0, 'mem_total_mb': 0.0,
                  'mem_free_mb': 0.0, 'gpu_mem_total_mb': -1.0, 'gpu_mem_free_mb': -1.0,
-                 'gpu_util': -1.0, 'temp_c': -1.0}
+                 'gpu_util': -1.0, 'temp_c': -1.0, 'battery_pct': -1.0, 'charging': -1}
         m.cpu_cores = int(s['cores'])
         m.cpu_load, m.mem_total_mb, m.mem_free_mb = (float(s['cpu_load']), float(s['mem_total_mb']),
                                                      float(s['mem_free_mb']))
         m.gpu_mem_total_mb, m.gpu_mem_free_mb = float(s['gpu_mem_total_mb']), float(s['gpu_mem_free_mb'])
         m.gpu_util, m.temp_c = float(s['gpu_util']), float(s['temp_c'])
+        m.battery_pct, m.charging = float(s['battery_pct']), int(s['charging'])
         m.catalog_hash = self.catalog.hash
         self.seq += 1
         m.seq, m.assignment_epoch = self.seq, int(self.epoch)
@@ -158,6 +168,7 @@ class AgentNode(Node):
                                     last_error=st['last_error'][:200]))
         for jid, kind, url, prio in advertised(self.catalog, sts, self.address):
             m.endpoints.append(ServiceEndpoint(job_id=jid, kind=kind, url=url, priority=prio))
+        self.last_info = m
         self.info_pub.publish(m)
 
     def destroy_node(self):

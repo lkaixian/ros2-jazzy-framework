@@ -3,3 +3,5 @@ nodes:
   GetPersonPose: {category: Condition, required: [], optional: [track_id, min_conf], description: "A person with a usable pose skeleton is visible"}
   IsPersonWaving: {category: Condition, required: [], optional: [track_id, min_conf], description: "A person is waving"}
   IsPersonPointing: {category: Condition, required: [], optional: [track_id, direction, min_conf], description: "A person is pointing (direction: left|right in image coordinates)"}
+  CountPeople: {category: Condition, required: [], optional: [min_conf, out_count], description: "Counts the people in view right now; out_count receives the number (0 is a valid answer); fails only if the detector is silent"}
+  CountObjects: {category: Condition, required: [label], optional: [min_conf, out_count], description: "Counts objects with this label (detector labels only) in view right now; out_count receives the number; fails only if the detector is silent"}

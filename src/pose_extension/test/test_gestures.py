@@ -46,3 +46,12 @@ def test_waving_needs_raised_swinging_wrist():
                     for i in range(15)]
     assert not g.waving(swinging_low)
     assert not g.waving(frames[:3])                   # too few samples
+
+
+def test_count_confident():
+    from types import SimpleNamespace as N
+    from pose_extension.pose_extension_node import count_confident
+    items = [N(confidence=0.9, label='cup'), N(confidence=0.3, label='cup'), N(confidence=0.8, label='bowl')]
+    assert count_confident(items, 0.5) == 2
+    assert count_confident(items, 0.5, 'cup') == 1
+    assert count_confident([], 0.5) == 0

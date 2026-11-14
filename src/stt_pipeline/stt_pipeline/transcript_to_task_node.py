@@ -1,7 +1,8 @@
 import rclpy
 from audio_msgr.msg import Transcript
 from rclpy.node import Node
-from std_msgs.msg import String
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool, String
 
 from stt_pipeline.wake import WakeGate
 
@@ -17,9 +18,13 @@ class TranscriptToTask(Node):
                              self.get_parameter('wake_window_sec').value)
         self.pub = self.create_publisher(String, 'bt/task', 10)
         self.create_subscription(Transcript, 'stt/transcript', self._on, 10)
+        self.capturing = False    # set by WaitForTranscript: the next answer is data, not a task
+        self.create_subscription(Bool, 'stt/capture', lambda m: setattr(self, 'capturing', m.data),
+                                 QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                                            durability=DurabilityPolicy.TRANSIENT_LOCAL))
 
     def _on(self, m):
-        if not m.is_final:
+        if not m.is_final or self.capturing:
             return
         task = self.gate.task(m.text)
         if task:

@@ -1,5 +1,6 @@
 #include "bt_executor/registry.hpp"
 
+#include <set>
 #include <sstream>
 
 namespace bt_executor
@@ -187,6 +188,7 @@ struct GoalState
   rclcpp_action::ClientGoalHandle<ExecuteNode>::SharedPtr handle;
   bool rejected = false, done = false, success = false;
   std::string message;
+  std::vector<std::string> out_names, out_values;
 };
 
 class ExtNode : public BT::StatefulActionNode
@@ -194,9 +196,9 @@ class ExtNode : public BT::StatefulActionNode
 public:
   ExtNode(
     const std::string & name, const BT::NodeConfig & cfg, std::shared_ptr<ExecContext> ctx,
-    std::string ext, std::string id, std::vector<std::string> ports)
+    std::string ext, std::string id, std::vector<std::string> ports, std::set<std::string> outs)
   : BT::StatefulActionNode(name, cfg), ctx_(std::move(ctx)), ext_(std::move(ext)),
-    id_(std::move(id)), ports_(std::move(ports)) {}
+    id_(std::move(id)), ports_(std::move(ports)), outs_(std::move(outs)) {}
 
   static BT::PortsList providedPorts() {return {};}
 
@@ -239,7 +241,11 @@ public:
         st->done = true;
         st->success = r.code == rclcpp_action::ResultCode::SUCCEEDED && r.result &&
           r.result->success;
-        if (r.result) {st->message = r.result->message;}
+        if (r.result) {
+          st->message = r.result->message;
+          st->out_names = r.result->output_names;
+          st->out_values = r.result->output_values;
+        }
       };
     client_->async_send_goal(goal, opts);
     ctx_->log("start " + desc.str());
@@ -255,6 +261,13 @@ public:
     }
     if (!state_->done) {return BT::NodeStatus::RUNNING;}
     ctx_->log(id_ + (state_->success ? " succeeded: " : " failed: ") + state_->message);
+    if (state_->success) {   // out_<name> ports named in the XML land on the blackboard
+      for (size_t i = 0; i < state_->out_names.size() && i < state_->out_values.size(); ++i) {
+        if (outs_.count(state_->out_names[i]) && port_in_xml(*this, state_->out_names[i])) {
+          setOutput(state_->out_names[i], state_->out_values[i]);
+        }
+      }
+    }
     return state_->success ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
   }
 
@@ -269,6 +282,7 @@ private:
   std::shared_ptr<ExecContext> ctx_;
   std::string ext_, id_;
   std::vector<std::string> ports_;
+  std::set<std::string> outs_;
   rclcpp_action::Client<ExecuteNode>::SharedPtr client_;
   std::shared_ptr<GoalState> state_;
 };
@@ -290,12 +304,20 @@ int register_extensions(
       tm.type = BT::NodeType::ACTION;
       tm.registration_ID = spec.id;
       std::vector<std::string> ports;
-      for (const auto & p : spec.required_ports) {tm.ports.insert(BT::InputPort<std::string>(p)); ports.push_back(p);}
-      for (const auto & p : spec.optional_ports) {tm.ports.insert(BT::InputPort<std::string>(p)); ports.push_back(p);}
+      std::set<std::string> outs;    // out_<name>: written to the blackboard from the action result
+      auto add = [&](const std::string & p) {
+          if (p.rfind("out_", 0) == 0) {
+            tm.ports.insert(BT::OutputPort<std::string>(p)); outs.insert(p);
+          } else {
+            tm.ports.insert(BT::InputPort<std::string>(p)); ports.push_back(p);
+          }
+        };
+      for (const auto & p : spec.required_ports) {add(p);}
+      for (const auto & p : spec.optional_ports) {add(p);}
       const std::string id = spec.id;
       f.registerBuilder(
-        tm, [ctx, ext, id, ports](const std::string & name, const BT::NodeConfig & cfg) {
-          return std::make_unique<ExtNode>(name, cfg, ctx, ext, id, ports);
+        tm, [ctx, ext, id, ports, outs](const std::string & name, const BT::NodeConfig & cfg) {
+          return std::make_unique<ExtNode>(name, cfg, ctx, ext, id, ports, outs);
         });
       ++n;
     }

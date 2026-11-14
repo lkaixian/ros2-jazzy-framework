@@ -2,3 +2,4 @@ extension: social_extension
 nodes:
   Speak: {category: Action, required: [text], optional: [person, voice, wait], description: "Say text through tts_node; {person} in text is replaced by the person port (unknown -> there); wait=false returns once queued"}
   EnrollFace: {category: Action, required: [person], optional: [], description: "Store the largest face seen in the last 2 s under the name in person (A-Z a-z 0-9 _ -)"}
+  WaitForTranscript: {category: Action, required: [], optional: [timeout_ms, out_text], description: "Listen for one spoken answer (default 10 s, max 60 s); out_text receives what was said; fails if nobody answers. Use right after Speak asks a question"}

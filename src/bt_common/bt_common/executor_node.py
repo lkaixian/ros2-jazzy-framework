@@ -124,8 +124,15 @@ def call_service(client, request, ctl, timeout_sec, wait_sec=2.0):
     return box.get('r'), box.get('e', '')
 
 
+def unpack(r):
+    """(ok, msg) or (ok, msg, {out_name: value}) -> (ok, msg, outputs); values become strings."""
+    ok, msg, *rest = r
+    return ok, msg, {k: str(v) for k, v in (rest[0] if rest else {}).items()}
+
+
 class ExtensionExecutor(ExtensionNode):
-    """Subclasses fill self.handlers: {node_id: fn(ports: dict, ctl: Ctl) -> (ok, message)}.
+    """Subclasses fill self.handlers: {node_id: fn(ports: dict, ctl: Ctl) -> (ok, message[, outputs])}.
+    outputs = {"out_x": value} is written to the BT blackboard when the node's XML names that out_ port.
 
     Action-category nodes are exclusive (a second goal is rejected while one runs);
     Condition nodes are always allowed so they can be polled during an action.
@@ -158,8 +165,9 @@ class ExtensionExecutor(ExtensionNode):
         req = gh.request
         ports = dict(zip(req.port_names, req.port_values))
         result = ExecuteNode.Result()
+        outs = {}
         try:
-            ok, msg = self.handlers[req.node_id](ports, Ctl(gh))
+            ok, msg, outs = unpack(self.handlers[req.node_id](ports, Ctl(gh)))
         except PortError as e:
             ok, msg = False, f'bad port: {e}'
         except Exception as e:  # noqa: BLE001
@@ -170,6 +178,7 @@ class ExtensionExecutor(ExtensionNode):
                 with self._lock:
                     self._action_busy = False
         result.success, result.message = bool(ok), msg
+        result.output_names, result.output_values = list(outs), list(outs.values())
         if gh.is_cancel_requested:
             result.success, result.message = False, 'cancelled'
             gh.canceled()

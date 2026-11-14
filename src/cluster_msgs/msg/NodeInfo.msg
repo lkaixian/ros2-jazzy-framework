@@ -11,6 +11,8 @@ float32 gpu_mem_total_mb # -1: no GPU / unknown
 float32 gpu_mem_free_mb  # -1: no GPU / unknown
 float32 gpu_util         # 0..1, -1 unknown
 float32 temp_c           # hottest thermal zone, -1 unknown
+float32 battery_pct      # laptop battery 0..100, -1 no battery / unknown
+int8 charging            # 1 charging or full on AC, 0 discharging, -1 unknown
 string catalog_hash      # hash of this agent's local job catalog
 uint64 seq
 uint64 assignment_epoch  # epoch of the last AssignmentSet this agent accepted (0 = none)

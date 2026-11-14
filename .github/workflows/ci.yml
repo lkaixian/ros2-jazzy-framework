@@ -110,6 +110,20 @@ jobs:
           source install/setup.bash
           python3 tools/integration/stop_latch_test.py
 
+      - name: Sim - node outputs (extension -> blackboard -> next node)
+        timeout-minutes: 3
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          python3 tools/integration/outputs_test.py
+
+      - name: Sim - WaitForTranscript and the stt/capture flag
+        timeout-minutes: 3
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          python3 tools/integration/listen_test.py
+
       - name: Sim - LLM failover and emergency halt
         timeout-minutes: 5
         run: |

@@ -13,6 +13,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AssignmentSet.msg"
   "msg/JobPlacement.msg"
   "msg/ClusterStatus.msg"
+  "srv/HostInfo.srv"
   DEPENDENCIES std_msgs
 )
 

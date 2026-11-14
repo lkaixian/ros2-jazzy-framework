@@ -83,9 +83,35 @@ def parse_nvidia_smi(csv):
     return best if best else (-1.0, -1.0, -1.0)
 
 
+def parse_battery(capacity, status):
+    """/sys/class/power_supply BAT* files -> (percent 0..100, charging): charging 1 = charging/full on AC,
+    0 = discharging, -1 = unknown. Unreadable or out-of-range capacity -> (-1.0, -1)."""
+    try:
+        pct = float(capacity)
+    except (TypeError, ValueError):
+        return -1.0, -1
+    if not 0.0 <= pct <= 100.0:
+        return -1.0, -1
+    st = (status or '').strip().lower()
+    return pct, 1 if st in ('charging', 'full') else 0 if st == 'discharging' else -1
+
+
 def read_text(path):
     with open(path) as f:
         return f.read()
+
+
+def read_battery(base='/sys/class/power_supply'):
+    for cap in sorted(glob.glob(os.path.join(base, 'BAT*', 'capacity'))):
+        try:
+            status = read_text(os.path.join(os.path.dirname(cap), 'status'))
+        except OSError:
+            status = ''
+        try:
+            return parse_battery(read_text(cap), status)
+        except OSError:
+            continue
+    return -1.0, -1       # desktop PC / no battery
 
 
 def read_thermal(base='/sys/class/thermal'):
@@ -129,8 +155,9 @@ class GpuProbe:
 class Sampler:
     """Everything a heartbeat needs, from the real /proc (paths injectable for tests)."""
 
-    def __init__(self, proc='/proc', thermal='/sys/class/thermal', gpu=None):
-        self.proc, self.thermal = proc, thermal
+    def __init__(self, proc='/proc', thermal='/sys/class/thermal', gpu=None,
+                 power='/sys/class/power_supply'):
+        self.proc, self.thermal, self.power = proc, thermal, power
         self.cpu = CpuMeter()
         self.gpu = gpu or GpuProbe()
         self.cores = os.cpu_count() or 1
@@ -139,6 +166,8 @@ class Sampler:
         load = self.cpu.update(read_text(os.path.join(self.proc, 'stat')))
         total, avail = parse_meminfo(read_text(os.path.join(self.proc, 'meminfo')))
         g_total, g_free, g_util = self.gpu.read()
+        batt, charging = read_battery(self.power)
         return {'cores': self.cores, 'cpu_load': load, 'mem_total_mb': total,
                 'mem_free_mb': avail, 'gpu_mem_total_mb': g_total, 'gpu_mem_free_mb': g_free,
-                'gpu_util': g_util, 'temp_c': read_thermal(self.thermal)}
+                'gpu_util': g_util, 'temp_c': read_thermal(self.thermal),
+                'battery_pct': batt, 'charging': charging}

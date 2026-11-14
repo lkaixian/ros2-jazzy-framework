@@ -116,3 +116,21 @@ def test_sampler_real_machine_returns_sane_numbers():
     s.sample()
     r = s.sample()
     assert r['cores'] >= 1 and 0.0 <= r['cpu_load'] <= 1.0 and r['mem_total_mb'] > 0
+
+
+def test_parse_battery():
+    assert sysinfo.parse_battery('87\n', 'Charging\n') == (87.0, 1)
+    assert sysinfo.parse_battery('40', 'Discharging') == (40.0, 0)
+    assert sysinfo.parse_battery('100', 'Full') == (100.0, 1)
+    assert sysinfo.parse_battery('40', 'Weird') == (40.0, -1)
+    assert sysinfo.parse_battery('150', 'Full') == (-1.0, -1)
+    assert sysinfo.parse_battery('x', 'Full') == (-1.0, -1)
+
+
+def test_read_battery_from_fake_sysfs(tmp_path):
+    assert sysinfo.read_battery(str(tmp_path)) == (-1.0, -1)          # desktop: no battery
+    b = tmp_path / 'BAT0'
+    b.mkdir()
+    (b / 'capacity').write_text('55\n')
+    (b / 'status').write_text('Discharging\n')
+    assert sysinfo.read_battery(str(tmp_path)) == (55.0, 0)
