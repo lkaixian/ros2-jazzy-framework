@@ -1,5 +1,23 @@
 # Backlog (logged 2026-11-14, to start the next session)
 
+## NEXT SESSION (written 2026-11-15; read this first, older lists below are mostly done)
+State: all pushed. SLM v5 is `models/bt-slm` (v4 kept as `models/bt-slm-v4`) and on the public HF repo. Stack and llama-server are stopped. Disk ~6 GB free.
+`src/dstar_lite_planner/src/planner.cpp` carries a Humble-compat `#if __has_include` change from the other agent (builds on Jazzy; not tested on Humble).
+
+Needs you (hardware or a human):
+1. Record ~100 real sentences on the real microphone, measure the STT word error rate (hints and snapping are in, unmeasured on real audio).
+2. Real robot bring-up (B-20): tune `RecoveryPolicy.TABLE` (`bt_orchestrator/mode.py`) and the mission budget on real runs; check the Kobuki battery/lidar thresholds, chrony, a hardware e-stop.
+3. Arm (B-25): HRIC door/handover, PnPC, Laundry rehearsals; then the arm-driver decision (Jazzy-only, see memory: own driver or vendor source in a Jazzy workspace, no translator).
+4. Two machines (B-24): `ws` roles/revoke, `timesync.sh`, `host_info`.
+5. Your call: `tools/systemd/install.sh --enable`; restart Claude Code and run `/mcp` to use the Colab MCP (needs an open Colab notebook).
+
+Software-only, can start without you:
+6. Residual GPSR misses: question phrasings ("Is there anyone in the right room", "Do you see a laptop anywhere"); refusal verbs in `bt_orchestrator/policy.py` are a heuristic. Re-run `llm_eval.py --gen 100 --seed 1` and `--jsonl tools/gpsr/handwritten.jsonl` after any prompt change.
+7. v5 can still emit Parallel on one extension (old `bt_dataset_v3` rows have it; the validator rejects it, so valid caps at 0.975). Filter the old rows and retrain only if the retry path starts failing on it.
+8. Add real GPSR wording to `tools/gpsr/handwritten.jsonl` when you have it. Add `DescribePerson` beyond the top colour (T-31).
+9. Disk is 95% full, mostly outside the project: find what else to free (`du` on home); the llama.cpp `cudart` folder is required, keep it.
+
+
 Picked up from the end of a long session. Order inside each group is the suggested order. IDs B-xx
 are new; T-xx point at `technical_debt.md`. Update this file as items are done (delete or tick).
 

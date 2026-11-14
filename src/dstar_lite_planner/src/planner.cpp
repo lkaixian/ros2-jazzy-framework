@@ -18,14 +18,36 @@
 #include "dstar_lite_planner/core.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav2_core/global_planner.hpp"
+#if __has_include("nav2_core/planner_exceptions.hpp")
 #include "nav2_core/planner_exceptions.hpp"
+namespace nav2_ex = nav2_core;
+#define DSTAR_CANCEL_CHECKER 1
+#else
+// Humble: no planner exceptions and no cancel_checker in createPlan; plain exceptions instead.
+#include <stdexcept>
+namespace nav2_ex
+{
+struct Error : std::runtime_error {using std::runtime_error::runtime_error;};
+using PlannerTFError = Error;
+using StartOutsideMapBounds = Error;
+using GoalOutsideMapBounds = Error;
+using GoalOccupied = Error;
+using StartOccupied = Error;
+using PlannerCancelled = Error;
+using NoValidPathCouldBeFound = Error;
+}
+#endif
 #include "nav2_costmap_2d/cost_values.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
+#if __has_include("tf2/utils.hpp")
 #include "tf2/utils.hpp"
+#else
+#include "tf2/utils.h"
+#endif
 
 namespace dstar_lite_planner
 {
@@ -58,27 +80,39 @@ public:
   void activate() override {}
   void deactivate() override {}
 
+#ifdef DSTAR_CANCEL_CHECKER
   nav_msgs::msg::Path createPlan(
     const geometry_msgs::msg::PoseStamped & start, const geometry_msgs::msg::PoseStamped & goal,
     std::function<bool()> cancel_checker) override
+  {return plan(start, goal, cancel_checker);}
+#else
+  nav_msgs::msg::Path createPlan(
+    const geometry_msgs::msg::PoseStamped & start, const geometry_msgs::msg::PoseStamped & goal)
+  override
+  {return plan(start, goal, nullptr);}
+#endif
+
+  nav_msgs::msg::Path plan(
+    const geometry_msgs::msg::PoseStamped & start, const geometry_msgs::msg::PoseStamped & goal,
+    const std::function<bool()> & cancel_checker)
   {
     std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(costmap_->getMutex()));
     if (start.header.frame_id != global_frame_ || goal.header.frame_id != global_frame_) {
-      throw nav2_core::PlannerTFError(
+      throw nav2_ex::PlannerTFError(
               "start/goal must be in the costmap frame '" + global_frame_ + "'");
     }
     unsigned int sx, sy, gx, gy;
     if (!costmap_->worldToMap(start.pose.position.x, start.pose.position.y, sx, sy)) {
-      throw nav2_core::StartOutsideMapBounds("start is outside the costmap");
+      throw nav2_ex::StartOutsideMapBounds("start is outside the costmap");
     }
     if (!costmap_->worldToMap(goal.pose.position.x, goal.pose.position.y, gx, gy)) {
-      throw nav2_core::GoalOutsideMapBounds("goal is outside the costmap");
+      throw nav2_ex::GoalOutsideMapBounds("goal is outside the costmap");
     }
     const unsigned int w = costmap_->getSizeInCellsX(), h = costmap_->getSizeInCellsY();
     const std::vector<double> cost = cost_grid(w, h, sx, sy);
-    if (cost[gy * w + gx] < 0) {throw nav2_core::GoalOccupied("goal cell is blocked");}
-    if (cost[sy * w + sx] < 0) {throw nav2_core::StartOccupied("start cell is in an obstacle");}
-    if (cancel_checker && cancel_checker()) {throw nav2_core::PlannerCancelled("cancelled");}
+    if (cost[gy * w + gx] < 0) {throw nav2_ex::GoalOccupied("goal cell is blocked");}
+    if (cost[sy * w + sx] < 0) {throw nav2_ex::StartOccupied("start cell is in an obstacle");}
+    if (cancel_checker && cancel_checker()) {throw nav2_ex::PlannerCancelled("cancelled");}
 
     const bool same_map = core_ && core_->width() == static_cast<int>(w) &&
       core_->height() == static_cast<int>(h) && res_ == costmap_->getResolution() &&
@@ -99,7 +133,7 @@ public:
       core_->set_costs(cost);
     }
     if (!core_->compute()) {
-      throw nav2_core::NoValidPathCouldBeFound("D* Lite found no path to the goal");
+      throw nav2_ex::NoValidPathCouldBeFound("D* Lite found no path to the goal");
     }
     RCLCPP_DEBUG(logger_, "D* Lite expanded %ld vertices", core_->expansions());
 
