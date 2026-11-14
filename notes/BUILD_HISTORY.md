@@ -42,7 +42,7 @@ tooling, workspace roles + revoke, pinned Python/llama.cpp versions, one lint co
 | Plan latency | about 60 s -> 1-2 s (first request after start about 11 s, cold prompt cache) | same |
 | STT | faster-whisper base.en int8 on CPU: 2.2 s audio -> 0.6 s; Piper -> Whisper round trip exact (3/3) | RUNBOOK |
 | Voice loop | WAV -> capture -> VAD -> STT -> bt/task -> E2B -> `go_and_say(door, hello)` valid | RUNBOOK |
-| SLM (rules are tried first, so it only matters on retries) | old catalog 0.99/0.985 (valid/exact); 42 nodes, 472 rows 0.895/0.795; 768 tokens 0.975/0.915; see RUNBOOK for the latest | `finetune_bt_slm` |
+| SLM (rules are tried first, so it only matters on retries) | old catalog 0.99/0.985 (valid/exact); 42 nodes, 472 rows 0.895/0.795; 768 tokens 0.975/0.915; 45 nodes + Parallel/Repeat, 2835 rows 0.995/0.935 (current, `models/bt-slm`) | `finetune_bt_slm` |
 | D* Lite fresh search 240x160 | 50 ms (no optimisation) -> 8.4 ms (Release) | `test_core` `FreshSearchTiming` |
 | Nav door route in nav_sim | NavFn 44.8 s, D* Lite 45.9-46.5 s, final error 0.15-0.23 m | `nav_planner_test.py` |
 | Tests | about 940 Python tests + 14 gtests pass; 2 `object_detection` lint tests lint `build/` and fail (T-19) | `pytest src` |

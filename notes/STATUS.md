@@ -57,7 +57,7 @@ Verification levels used below:
 - **Placeholders that must be measured** (`param/navigation.yaml`): lidar mount, camera mount; robot
   radius (0.18) in `param/nav2_params.yaml`; `param/places.yaml` coordinates (sample map only).
 - `~/maps/my_map.yaml` is unusable for planning (2.6 m^2 connected free space): re-map with slam_toolbox.
-- SLM: re-trained on the 45-node catalog with the new grammar (see RUNBOOK for the held-out score vs the rule generator); wired by auto-discovery of `models/bt-slm` (`ROBOCUP_SLM_MODEL` overrides, `model_path: none` = rules only); never evaluated on real LLM output.
+- SLM: re-trained on the 45-node catalog with the new grammar: held-out valid 0.995 / exact 0.935 vs the rule generator on synthetic specs; wired by auto-discovery of `models/bt-slm` (`ROBOCUP_SLM_MODEL` overrides, `model_path: none` = rules only); never evaluated on real LLM output.
 - Gemma 4 E4B on the big PC and `LLAMA_API_KEY` support (E2B + llama.cpp b12375 DO run here: see RUNBOOK); no comparison against E4B.
 - Live microphone and speaker, VAD in noise, wake word, Kokoro; (faster-whisper + Piper work on synthetic audio).
 - Detector trained on the user's items (dataset does not exist yet); YOLO face weights; face accuracy.

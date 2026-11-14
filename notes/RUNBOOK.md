@@ -184,3 +184,9 @@ need your decision and your login (nothing is uploaded automatically):
 - **Published (2026-11-14):** the first fine-tuned SLM (`bt-slm-v3`, valid 0.975 / exact 0.915, older catalog) is on the Hugging Face Hub as **public**
   `larmkaixian/bt-sim-slm` (made public the same day at the owner's request; it was uploaded private first). Update it any time by running `publish_hf.py` again (each run is a new commit; old versions stay in the repo history and can
   be fetched with `--revision`). Visibility is changed on the repo's settings page.
+
+## SLM v4 (2026-11-14 evening): trained on the 45-node catalog with Parallel/Repeat
+Data `bt_dataset_v3` (12000 rows, 1724 with Parallel, 1302 with Repeat); first 6000 rows, 2835 usable at `--max-len 768`, 1 epoch, batch 1, about 50 minutes
+including the evaluation. Held-out valid **0.995** / exact **0.935** (200 rows, against the rule generator on synthetic specs). Promoted to
+`models/bt-slm` (auto-discovered by `bt_slm_node`, CPU, only used on retries); the earlier models are `models/bt-slm-v1..v3`. The public Hugging Face repo
+still holds the first version (v3).
