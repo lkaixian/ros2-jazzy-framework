@@ -20,6 +20,7 @@ LLAMA_DIR="${LLAMA_DIR:-$HOME/llama.cpp}"
 LLM_REPO="${LLM_REPO:-ggml-org/gemma-4-E2B-it-GGUF}"   # E2B: E4B Q4_0 does not fit a 4 GB GPU well
 SLM_BASE="${SLM_BASE:-LiquidAI/LFM2.5-230M-Base}"
 MIN_LLAMA_BUILD=8637          # first llama.cpp build with Gemma 4 support
+LLAMA_TAG="${LLAMA_TAG:-b12375}"   # the llama.cpp release this was tested with (CUDA 12.8 prebuilt); LLAMA_TAG=latest takes the newest
 PY=/usr/bin/python3           # ROS uses the system Python; never a venv/conda one
 
 usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; cat <<EOF
@@ -31,7 +32,7 @@ Options:
   --skip a,b         skip these steps
   --minimal          skip the optional heavy Python extras (STT/TTS engines)
   --backend B        llama.cpp backend: auto|cpu|cuda|vulkan|prebuilt   (default auto: cuda if nvcc exists)
-  --llama-dir DIR    llama.cpp checkout/build dir (default $LLAMA_DIR)
+  --llama-dir DIR    llama.cpp checkout/build dir (default $LLAMA_DIR); LLAMA_TAG=<bNNNN|latest> pins the llama.cpp release (default $LLAMA_TAG)
   --llm-repo REPO    GGUF repo for llama-server -hf (default $LLM_REPO)
   --slm-base REPO    base model to fine-tune (default $SLM_BASE)
 EOF
@@ -116,7 +117,7 @@ step_python() {
   log "python: ultralytics (YOLO11), transformers (SLM), huggingface_hub (+ STT/TTS extras)"
   # Ubuntu 24.04 marks the system Python as externally managed; ROS nodes run on it, so the
   # packages must live there. --user keeps them out of /usr.
-  local pip=("$PY" -m pip install --user --break-system-packages)
+  local pip=("$PY" -m pip install --user --break-system-packages -c "$ROOT/requirements-lock.txt")   # tested versions
   # matplotlib: ROS's apt matplotlib is built for NumPy 1 but pip brings NumPy 2, and Ultralytics
   # training imports matplotlib, so install a NumPy-2-compatible build into ~/.local
   local core=(ultralytics transformers huggingface_hub 'matplotlib>=3.9')
@@ -133,9 +134,11 @@ llama_build_number() { "$1" --version 2>&1 | sed -n 's/^version: \([0-9]\+\).*/\
 
 step_llamacpp_prebuilt() {
   log "llama.cpp: prebuilt CUDA 12.8 release into $LLAMA_DIR (NVIDIA driver only, no toolkit)"
-  local tag
-  tag="$(curl -fsS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=1' | sed -n 's/.*"tag_name": *"\(b[0-9]*\)".*/\1/p' | head -1)"
-  [[ $DRY -eq 1 ]] && tag="${tag:-bNNNN}"
+  local tag="$LLAMA_TAG"
+  if [[ $tag == latest ]]; then
+    tag="$(curl -fsS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=1' | sed -n 's/.*"tag_name": *"\(b[0-9]*\)".*/\1/p' | head -1)"
+    [[ $DRY -eq 1 ]] && tag="${tag:-bNNNN}"
+  fi
   [[ -n "$tag" ]] || die "could not read the latest llama.cpp release tag"
   local base="https://github.com/ggml-org/llama.cpp/releases/download/$tag" f
   run mkdir -p "$LLAMA_DIR" "$HOME/.local/bin"
@@ -164,8 +167,9 @@ step_llamacpp() {
     *) die "unknown backend '$be'" ;;
   esac
   [[ $be == cpu ]] && warn "building CPU-only; for a GPU install the CUDA toolkit and use --backend cuda (or vulkan)"
-  if [[ -d "$LLAMA_DIR/.git" ]]; then run git -C "$LLAMA_DIR" pull --ff-only
-  else run git clone --depth 1 https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"; fi
+  local ref=(--branch "$LLAMA_TAG"); [[ $LLAMA_TAG == latest ]] && ref=()
+  if [[ -d "$LLAMA_DIR/.git" ]]; then run git -C "$LLAMA_DIR" fetch --depth 1 origin "${ref[@]:+tag}" "${LLAMA_TAG/latest/HEAD}" && run git -C "$LLAMA_DIR" checkout -q FETCH_HEAD
+  else run git clone --depth 1 "${ref[@]}" https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"; fi
   run cmake -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" "${flags[@]}"
   run cmake --build "$LLAMA_DIR/build" --config Release -j "$(nproc)" --target llama-server llama-cli
   run mkdir -p "$HOME/.local/bin"
