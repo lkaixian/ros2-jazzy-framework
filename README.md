@@ -138,6 +138,7 @@ ros2 launch framework_bringup audio.launch.py tts_engine:=kokoro tts_voice:=<voi
 Python edits need `colcon build` again: in this setup `--symlink-install` copies Python files into `install/`.
 
 ## Models
+**Local setup that was verified (GTX 1650, 4 GB):** see `notes/RUNBOOK.md` "Local LLM + voice": prebuilt llama.cpp (CUDA 12.8), Gemma 4 E2B, `--reasoning off`, constrained JSON-schema decoding with the macro whitelist (`param/macros.yaml`), Piper TTS and faster-whisper STT. `./setup.sh --only llamacpp,voice --backend prebuilt` reproduces it.
 * LLM: Gemma 4 E4B via `llama-server -hf ggml-org/gemma-4-E4B-it-GGUF` (needs a llama.cpp build with Gemma 4 support).
 * SLM: `LiquidAI/LFM2.5-230M-Base`, fine-tuned on synthetic pairs labelled by the validator:
   ```

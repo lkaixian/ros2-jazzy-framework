@@ -47,13 +47,13 @@ are new; T-xx point at `technical_debt.md`. Update this file as items are done (
   radius (`param/navigation.yaml`, `nav2_params.yaml`) -> real `places.yaml` -> navigate dry-run, then
   live with a spotter. Re-map: `~/maps/my_map.yaml` is unusable. Verify the bumper/cliff latch with the
   real driver (topic names/timing are assumed).
-- [ ] **B-21 Real LLM.** Build llama.cpp (>= b8637), run `llama-server`; Gemma E4B does not fit the
+- [~] **B-21 Real LLM (PARTLY DONE 2026-11-14):** llama.cpp b12375 CUDA prebuilt + Gemma 4 E2B Q4_0 run on the GTX 1650 (about 1-2 s per plan, 15/15 valid and sensible plans on `llm_eval.py`; details in `RUNBOOK.md`). Still open: E4B on the big PC, `LLAMA_API_KEY`/E4B/E2B cluster flags, SLM vs LLM comparison, harder commands. Original: Build llama.cpp (>= b8637), run `llama-server`; Gemma E4B does not fit the
   4 GB GPU well (4.28 GiB Q4_0), E2B Q4_0 is 2.65 GiB. The E4B/E2B flags in `cluster_jobs.yaml` and
   `LLAMA_API_KEY` support are UNVERIFIED. Then evaluate LLM -> spec -> XML quality and compare the
   fine-tuned SLM with the rule generator on real LLM specs (the held-out 0.99/0.985 is synthetic).
 - [ ] **B-22 Perception assets.** Collect images of the competition items and train the detector;
   provide YOLO face weights and evaluate face accuracy (T-12); pose models for gestures (T-13).
-- [ ] **B-23 Audio.** Download model files (Whisper/Vosk model, Piper voice, Kokoro files), test the
+- [~] **B-23 Audio (PARTLY DONE 2026-11-14):** Piper voice + faster-whisper base.en downloaded (`setup.sh --only voice`); Piper->Whisper round trip exact; a spoken WAV went through capture -> VAD -> STT -> `bt/task` -> E2B -> valid plan. Still open: real microphone, VAD in noise, wake word, Kokoro, speaker playback, T-14. Original: Download model files (Whisper/Vosk model, Piper voice, Kokoro files), test the
   real microphone, VAD in noise, wake word (T-14).
 - [ ] **B-24 Two machines.** Cluster failover over WiFi/Ethernet (T-15), LLM failover to the E2B,
   workspace join across the LAN (unicast discovery between the peers is unverified), dash link

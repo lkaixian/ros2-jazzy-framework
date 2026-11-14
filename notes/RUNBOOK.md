@@ -144,3 +144,8 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
   (`tools/integration/llm_eval.py`); sampler settings (repeat/DRY penalty, temperature) made no difference, the cause was never sampling.
   `tools/integration/prompt_lab.py --body <captured request>` replays the bridge's exact prompt+schema (capture with a tiny logging proxy
   in front of llama-server); rebuilt prompts are only an approximation (the bridge adds e.g. "Known places" to NavigateToPlace).
+- **Test hygiene gotcha:** processes started with `&` from a non-interactive shell ignore SIGINT, so `kill -INT` on a stray
+  `ros2 launch` does nothing; use SIGTERM. Scope kills by the test's `ROS_DOMAIN_ID` (read `/proc/<pid>/environ`), never by name.
+- **Verified end to end (isolated domain, mock TTS):** Piper-synthesised WAV -> `audio_capture` -> `vad_node` -> `stt_node`
+  ("Go to the door and say hello.") -> `transcript_to_task` -> `llm_bridge` -> `go_and_say(door, hello)` -> valid plan. First
+  request after start takes ~11 s (cold prompt cache), then 1-2 s. Real microphone/speaker not tried.
