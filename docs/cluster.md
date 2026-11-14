@@ -199,3 +199,8 @@ is the same 5 s plus detection noise; discovery time of a joining machine is net
 Every `cluster_agent` serves `host_info/<host_id>` (`cluster_msgs/srv/HostInfo`, the host id is sanitised into a valid ROS name: other characters
 become `_`, a leading digit gets an `h` prefix) and `cluster/node_info` carries the same numbers (CPU load, RAM, GPU util/VRAM, temperature, laptop
 battery) at about 2 Hz. `ros2 run cluster_core host_info [host_id]` prints one line per machine. Time sync between hosts: `tools/net/timesync.sh`.
+
+
+## Overview
+`cluster_msgs` + `cluster_core`: one agent per machine, one scheduler, job catalog in `param/cluster_jobs.yaml`; places jobs by role/tags/capacity, fails movable jobs over, keeps hardware-bound jobs (`odom`, `pid`, `cmd_vel_mux`) on the `core` host, adopts state after a scheduler restart. Control plane only (data still flows directly over DDS). `ros2 launch framework_bringup cluster.launch.py role:=agent host_id:=pi roles:=core tags:=camera`, `ros2 run cluster_core cluster_status`, offline `plan_preview`. See `docs/cluster.md` (setup, failure semantics, security, measured numbers). Verified on one machine with simulated hosts only; not on a second machine or WiFi.
+

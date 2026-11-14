@@ -118,3 +118,15 @@ The package builds as **Release** by default and its static core library with `-
 segfaulted `planner_server` on the first goal. Try experimental builds in a scratch overlay (`colcon build --build-base B --install-base I`), not in
 `install/`. `test_core` prints the timing (`FreshSearchTiming`); `tools/integration/nav_planner_test.py dstar_lite` drives the sample map end to end.
 Obstacle checks for plain motion (not Nav2) are in the README ("Executing plans (safety)").
+
+
+## Quick commands and planners
+Nav2 + slam_toolbox (default 2D SLAM; Cartographer and RTAB-Map optional) + RealSense, with Nav2's output going through the safety mux. Note: **the static transforms in `param/navigation.yaml` are placeholders you must measure**.
+```
+ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox         # map
+ros2 launch framework_bringup navigation.launch.py map:=$HOME/maps/room1.yaml  # navigate
+ros2 launch framework_bringup nav_sim.launch.py                                # no robot needed
+ros2 launch framework_bringup nav_sim.launch.py planner:=dstar_lite            # D* Lite instead of NavFn
+```
+Global planner: `planner:=navfn` (default) or `dstar_lite` (`src/dstar_lite_planner`, an incremental D* Lite ported from `lkaixian/dstarlite-py`: 8-connected, costmap-aware, repairs only changed cells). On the sample map both drive the door route in 45.5 s (the controller sets the speed); planning itself is not faster: NavFn needs ~0.5-1.5 ms, D* Lite 0.7 ms for a repeated goal but ~6 ms for a new one and 38 ms for the first call. Keep NavFn unless replanning becomes a problem on the real robot.
+
