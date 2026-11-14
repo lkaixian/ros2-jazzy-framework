@@ -52,7 +52,7 @@ def main():
         f'**{g}**\n\n' + '\n'.join('* ' + link(s) for s in ss if s in stems) for g, ss in SIDEBAR) + '\n')
     start = convert(open(os.path.join(docs, 'start-here.md')).read()).split('\n', 1)[1]
     open(os.path.join(d, 'Home.md'), 'w').write(
-        f'# ros2-jazzy-framework\n\n> **Speak a task. Get a validated behaviour tree. Watch the robot run it.**\n> '
+        f'![ros2-jazzy-framework]({RAW}img/banner.svg)\n\n> **Speak a task. Get a validated behaviour tree. Watch the robot run it.**\n> '
         f'Overview, badges and quick start: [README](https://github.com/{REPO}#readme) · '
         f'[Source](https://github.com/{REPO}) · [Notes](https://github.com/{REPO}/tree/main/notes)\n\n'
         '*These pages are generated from `docs/` in the repository (`tools/wiki_sync.py`); edit them there, not here.*\n' + start)

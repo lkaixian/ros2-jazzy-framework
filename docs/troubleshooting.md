@@ -2,6 +2,9 @@
 
 Find the symptom, read the cause, apply the fix. Everything here cost real time once.
 
+> [!TIP]
+> Most start-up problems are one of three things: system Python not first on `PATH`, a stale `install/` after a Python edit (rebuild), or a shared DDS domain (use your own `ROS_DOMAIN_ID`).
+
 ## Build and environment
 
 | Symptom | Cause | Fix |

@@ -10,6 +10,9 @@ ros2 run bt_validator validate_bt --labels cup,bottle my.xml  # without a runnin
 
 ## What is checked
 
+> [!NOTE]
+> The validator is the single source of truth. The LLM schema, the SLM prompt and the executor all derive from the same catalog.
+
 | Area | Rule | Example error |
 |---|---|---|
 | Document | `<root BTCPP_format="4">`; every `<BehaviorTree>` has a unique `ID`; `main_tree_to_execute` names one | `<root> is missing main_tree_to_execute` |

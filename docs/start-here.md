@@ -17,6 +17,14 @@ flowchart LR
     F --> G[Safety mux] --> H[(Robot)]
     E -- failure --> I[Recovery policy]
     I --> B
+    classDef brain fill:#8b5cf6,stroke:#5b21b6,color:#fff
+    classDef gate fill:#f59e0b,stroke:#b45309,color:#111
+    classDef act fill:#10b981,stroke:#047857,color:#fff
+    classDef hw fill:#ef4444,stroke:#b91c1c,color:#fff
+    class B,C brain
+    class D,I gate
+    class E,F,G act
+    class H hw
 ```
 
 ## The learning path
@@ -38,5 +46,8 @@ flowchart LR
 Reference pages you will keep open: [Interfaces](interfaces.md), [Messages](messages.md), [Parameters](parameters.md), [BT node catalog](node-catalog.md).
 
 ## What is real and what is not
+
+> [!IMPORTANT]
+> Everything here is tested in simulation and CI. Nothing has run on a real robot, arm, second machine or real microphone audio.
 
 Be clear about this before you rely on anything: everything here is tested **in simulation and CI**. It has **not** been run on a real robot, a real arm, a second machine or real microphone audio. [Status](status.md) lists exactly what was verified. Keep a hardware e-stop within reach; the software mux is not one.

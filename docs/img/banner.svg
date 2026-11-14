@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" role="img" aria-label="ros2-jazzy-framework: speak a task, get a validated behaviour tree, watch the robot run it">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f2027"/><stop offset="0.55" stop-color="#203a43"/><stop offset="1" stop-color="#2c5364"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#34d399"/></linearGradient>
+  </defs>
+  <rect width="1200" height="260" rx="18" fill="url(#bg)"/>
+  <text x="60" y="105" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="54" font-weight="700" fill="#ffffff">ros2-jazzy-framework</text>
+  <rect x="62" y="122" width="180" height="5" rx="2.5" fill="url(#accent)"/>
+  <text x="60" y="168" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="25" fill="#cbd5e1">Speak a task. Get a validated behaviour tree. Watch the robot run it.</text>
+  <text x="60" y="212" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="18" fill="#94a3b8">LLM → SLM → validator → BehaviorTree.CPP  ·  YOLO11  ·  Nav2  ·  voice  ·  safety mux</text>
+  <g font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#0b1220">
+    <rect x="790" y="62" width="120" height="44" rx="10" fill="#38bdf8"/><text x="850" y="90" text-anchor="middle">LLM</text>
+    <rect x="930" y="62" width="120" height="44" rx="10" fill="#a78bfa"/><text x="990" y="90" text-anchor="middle">SLM + rules</text>
+    <rect x="790" y="140" width="120" height="44" rx="10" fill="#fbbf24"/><text x="850" y="168" text-anchor="middle">Validator</text>
+    <rect x="930" y="140" width="120" height="44" rx="10" fill="#34d399"/><text x="990" y="168" text-anchor="middle">Executor</text>
+    <rect x="1070" y="101" width="90" height="44" rx="10" fill="#f87171"/><text x="1115" y="129" text-anchor="middle">Robot</text>
+  </g>
+  <g stroke="#e2e8f0" stroke-width="2.5" fill="none" stroke-linecap="round"><path d="M910 84h20"/><path d="M990 106v34"/><path d="M930 162h-20"/><path d="M1050 162h20v-17"/></g>
+</svg>

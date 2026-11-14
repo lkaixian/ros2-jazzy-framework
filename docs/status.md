@@ -1,5 +1,8 @@
 # Status: what is verified and what is not
 
+> [!WARNING]
+> Verified in simulation and CI only. Not verified on a real robot, a real arm, a second machine, or real microphone audio.
+
 Read this before trusting any claim. The honest summary: **everything works in simulation and CI; nothing has run on a real robot.**
 
 ## Verified

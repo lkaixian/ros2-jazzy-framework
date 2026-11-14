@@ -2,6 +2,9 @@
 
 Goal: build the workspace, start the pipeline in **dry-run**, feed it a task spec by hand (so no LLM is needed), watch it become a validated tree and "run". Takes about 15 minutes after the build. Nothing moves.
 
+> [!NOTE]
+> The executor starts in dry-run: extension nodes are only logged and succeed. Nothing can move, whatever you send.
+
 ## 0. Prerequisites
 
 * Ubuntu 24.04 with ROS 2 Jazzy (or Ubuntu 22.04 with Humble; see [Quick start](https://github.com/lkaixian/ros2-jazzy-framework#quick-start)). Python from `/usr/bin` must come first on `PATH` (a `~/pyvenv.cfg` can hide system packages).

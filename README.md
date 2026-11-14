@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/img/banner.svg" alt="ros2-jazzy-framework" width="100%">
+
 # ros2-jazzy-framework
 
 **Speak a task. Get a validated behaviour tree. Watch the robot run it.**
@@ -62,6 +64,16 @@ flowchart LR
     EXT -. manifest .-> VAL
     EXT -. manifest .-> LLM
     EXE -. Groot2 / dash .-> OPS[Operator]
+    classDef io fill:#0ea5e9,stroke:#0369a1,color:#fff
+    classDef brain fill:#8b5cf6,stroke:#5b21b6,color:#fff
+    classDef gate fill:#f59e0b,stroke:#b45309,color:#111
+    classDef act fill:#10b981,stroke:#047857,color:#fff
+    classDef hw fill:#ef4444,stroke:#b91c1c,color:#fff
+    class MIC,CAM,STT,PER,SUM,OPS io
+    class LLM,ORC,SLM brain
+    class VAL,MODE,MUX gate
+    class EXE,EXT act
+    class ROBOT hw
 ```
 
 Task lifecycle (`task/state`): `idle → planning → ready → running → done | failed | halted`, with `repairing` between a failed run and the next attempt.

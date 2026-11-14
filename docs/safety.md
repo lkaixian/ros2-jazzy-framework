@@ -1,5 +1,8 @@
 # Safety
 
+> [!CAUTION]
+> The software mux is a gate, not an emergency stop. Keep a hardware e-stop within reach on every real run, and never pass `dry_run:=false` without a person at it.
+
 The planner is not trusted with safety. Every protection sits in the code that moves the robot, in layers, and the defaults are conservative. **None of this replaces a hardware emergency stop.** The software mux is a gate, not an e-stop; keep a hardware stop within reach on every real run.
 
 ## The layers
