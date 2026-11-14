@@ -171,3 +171,13 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
   source `Y/setup.bash` on top (as done for the investigation); never install an experimental binary into the shared `install/`.
 - **LLM re-check after the HRIC/doorbell/seat macros (31 whitelisted macros, 2026-11-14):** `llm_eval.py` 15/15 valid, right macro 8/10; the two "misses"
   were reasonable alternatives (`go_find_person` + `greet_person`; `go_find_person` + `guide_to`). Prompt growth is not hurting E2B so far.
+
+## Sharing the fine-tuned SLM
+The weights are 443 MB (`model.safetensors`): too big for git (GitHub rejects files over 100 MB; `models/` is gitignored on purpose). Two ways, both
+need your decision and your login (nothing is uploaded automatically):
+- **Hugging Face Hub (recommended):** `hf auth login`, then `python3 tools/slm/publish_hf.py --model models/bt-slm --repo <you>/robocup-bt-slm --valid <v> --exact <e>`
+  (private by default; `--public` to share). Others get it with `SLM_WEIGHTS_REPO=<you>/robocup-bt-slm ./setup.sh --only slmweights`.
+- **GitHub release asset:** `gh auth login`, `tools/slm/release_github.sh slm-v4` creates a DRAFT release with a tarball; publish it on github.com
+  when you are happy. Extract with `tar -xzf bt-slm-<tag>.tar.gz -C models`.
+- **License:** the base model is under the LFM Open License v1.0: redistribution of a fine-tune is allowed if you ship the license, mark the files as
+  modified and keep the attribution (both scripts do), and commercial use is restricted above 10 M USD annual revenue. Check it fits your use.

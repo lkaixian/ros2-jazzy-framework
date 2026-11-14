@@ -8,7 +8,8 @@
 #   ./setup.sh --skip models,llamacpp
 #   ./setup.sh --yes --backend cuda --minimal
 #
-# Steps (in order): apt rosdep python llamacpp models voice build   (optional, never default: slm)
+# Steps (in order): apt rosdep python llamacpp models voice build   (optional, never default: slm, slmweights)
+# slmweights: download a published fine-tuned SLM instead of training one:  SLM_WEIGHTS_REPO=<user>/<repo> ./setup.sh --only slmweights
 # --backend prebuilt: download the official llama.cpp CUDA 12.8 release (no CUDA toolkit, no compiling).
 set -euo pipefail
 
@@ -65,12 +66,12 @@ in_list() { [[ ",$2," == *",$1,"* ]]; }
 wanted() {
   local s="$1"
   if [[ -n "$ONLY" ]]; then in_list "$s" "$ONLY"; return; fi
-  [[ "$s" == slm ]] && return 1                      # optional step: only via --only slm
+  [[ "$s" == slm || "$s" == slmweights ]] && return 1   # optional steps: only via --only
   ! in_list "$s" "$SKIP"
 }
 
 [[ -n "$ONLY" ]] && for s in ${ONLY//,/ }; do
-  [[ " ${ALL_STEPS[*]} slm " == *" $s "* ]] || die "unknown step '$s' (steps: ${ALL_STEPS[*]} slm)"
+  [[ " ${ALL_STEPS[*]} slm slmweights " == *" $s "* ]] || die "unknown step '$s' (steps: ${ALL_STEPS[*]} slm slmweights)"
 done
 
 # ---------------------------------------------------------------- preflight
@@ -90,7 +91,7 @@ preflight() {
 
 confirm() {
   [[ $YES -eq 1 || $DRY -eq 1 ]] && return
-  echo "About to run steps:"; for s in "${ALL_STEPS[@]}" slm; do wanted "$s" && echo "  - $s"; done
+  echo "About to run steps:"; for s in "${ALL_STEPS[@]}" slm slmweights; do wanted "$s" && echo "  - $s"; done
   echo "This installs system packages (sudo), pip packages into ~/.local, may download several GB"
   echo "of models, and builds llama.cpp and the ROS workspace."
   read -r -p "Continue? [y/N] " a; [[ "$a" =~ ^[Yy]$ ]] || exit 1
@@ -255,6 +256,18 @@ EOF
   fi
 }
 
+step_slmweights() {
+  log "SLM weights: download a published fine-tuned model into $ROOT/models/bt-slm (license: LFM Open License v1.0, included with the files)"
+  [[ -n "${SLM_WEIGHTS_REPO:-}" ]] || die "set SLM_WEIGHTS_REPO=<user>/<repo> (a Hugging Face repo made with tools/slm/publish_hf.py)"
+  if [[ $DRY -eq 1 ]]; then echo "  \$ $PY -c 'snapshot_download(\"$SLM_WEIGHTS_REPO\", local_dir=\"$ROOT/models/bt-slm\")'"; return; fi
+  "$PY" - "$SLM_WEIGHTS_REPO" "$ROOT/models/bt-slm" <<'PYEOF' || die "download failed (private repo? run `hf auth login`)"
+import sys
+from huggingface_hub import snapshot_download
+print("  saved to", snapshot_download(sys.argv[1], local_dir=sys.argv[2]))
+PYEOF
+  echo "  bt_slm_node finds models/bt-slm by itself (or set ROBOCUP_SLM_MODEL)"
+}
+
 step_slm() {
   log "SLM: synthetic dataset + fine-tune $SLM_BASE (GPU strongly recommended)"
   run bash -c ". '$ROOT/env.sh' && cd '$ROOT' && ros2 run bt_slm make_bt_dataset --out-dir bt_dataset --n 30000"
@@ -265,7 +278,7 @@ step_slm() {
 # ---------------------------------------------------------------- main
 preflight
 confirm
-for s in "${ALL_STEPS[@]}" slm; do
+for s in "${ALL_STEPS[@]}" slm slmweights; do
   if wanted "$s"; then "step_$s"; else echo "skip: $s"; fi
 done
 log "done"

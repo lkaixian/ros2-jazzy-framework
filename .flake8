@@ -10,4 +10,5 @@ extend-ignore =
     C408,C401,C416,Q000,Q001,A003,Q003,E741,E731,E701,E702,E122,E127,E128,E201,E202
 per-file-ignores =
     tools/integration/*.py: E3,E4,E501
+    tools/slm/*.py: E501
     src/*/launch/*.py: E501
