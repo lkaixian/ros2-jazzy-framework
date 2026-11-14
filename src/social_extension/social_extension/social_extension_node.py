@@ -10,6 +10,7 @@ from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
 
 from face_recognition.gallery import valid_name
+from social_extension.answers import extract_drink, extract_name
 
 MAX_TEXT = 300
 
@@ -39,7 +40,7 @@ class SocialExtension(ExtensionExecutor):
         self.stop = self.create_client(Trigger, p('stop_service'))
         self.enroll = self.create_client(Enroll, p('enroll_service'))
         self.handlers = {'Speak': self._speak, 'EnrollFace': self._enroll,
-                         'WaitForTranscript': self._listen}
+                         'WaitForTranscript': self._listen, 'ExtractAnswer': self._extract}
         # latched flag: tells transcript_to_task to keep this answer out of bt/task
         self.capture = self.create_publisher(Bool, 'stt/capture', QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -79,6 +80,15 @@ class SocialExtension(ExtensionExecutor):
         finally:
             self._listening = False
             self.capture.publish(Bool(data=False))
+
+    def _extract(self, ports, ctl):
+        kind, text = port_str(ports, 'kind'), port_str(ports, 'text')
+        if kind not in ('name', 'drink'):
+            return False, "kind must be 'name' or 'drink'"
+        value = (extract_name if kind == 'name' else extract_drink)(text)
+        if not value:
+            return False, f'no {kind} found in {text!r}'
+        return True, f'{kind}: {value}', {'out_value': value}
 
     def _enroll(self, ports, ctl):
         name = port_str(ports, 'person')

@@ -47,3 +47,11 @@ def test_a_macro_call_is_much_shorter_than_its_expansion():
     spec = {'goal': 'g', 'steps': [{'macro': 'go_and_say', 'args': {'place': 'door', 'text': 'Hi'}}]}
     short, long_ = json.dumps(spec), json.dumps(expand(spec, LIB))
     assert len(long_) > 3 * len(short)
+
+
+def test_whitelist_names_only_existing_macros():
+    from bt_common.macros import load_whitelist
+    wl = load_whitelist(os.path.join(PARAM, 'macros.yaml'))
+    assert wl, 'macros.yaml has no whitelist'
+    assert set(wl) <= set(LIB), f'whitelisted but not defined: {sorted(set(wl) - set(LIB))}'
+    assert set(LIB) <= set(wl), f'defined but not whitelisted (hidden from the LLM): {sorted(set(LIB) - set(wl))}'

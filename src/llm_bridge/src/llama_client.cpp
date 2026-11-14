@@ -29,13 +29,20 @@ std::string build_body(const ChatRequest & req)
   j["temperature"] = req.temperature;
   j["max_tokens"] = req.max_tokens;
   j["stream"] = false;
+  if (req.repeat_penalty > 0.0) {j["repeat_penalty"] = req.repeat_penalty;}
   j["messages"] = nlohmann::json::array();
   if (!req.system.empty()) {
     j["messages"].push_back({{"role", "system"}, {"content", req.system}});
   }
   j["messages"].push_back({{"role", "user"}, {"content", req.prompt}});
   if (req.json_mode) {
-    j["response_format"] = {{"type", "json_object"}};
+    auto schema = nlohmann::json::parse(req.schema, nullptr, false);   // constrained decoding when valid
+    if (!req.schema.empty() && !schema.is_discarded()) {
+      j["response_format"] = {{"type", "json_schema"},
+        {"json_schema", {{"name", "task_spec"}, {"schema", schema}}}};
+    } else {
+      j["response_format"] = {{"type", "json_object"}};
+    }
   }
   return j.dump();
 }

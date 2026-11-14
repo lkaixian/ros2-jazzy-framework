@@ -16,3 +16,4 @@ bt_slm_model/
 .claude/
 bt_dataset_small/
 finetune.log
+bt_dataset_v2/

@@ -4,6 +4,37 @@
 # (src/bt_validator/test/test_macro_library.py), so a typo in a node or port fails the build.
 #   params: name -> {required: true | default: "..."}   (values are strings; ${name} in any value)
 #   example_args: used by the test. A macro may call other macros (max depth 4, no cycles).
+# Whitelist: the ONLY macros a task spec (LLM / SLM) may call; the validator's catalog, the LLM's JSON schema and the
+# orchestrator all honour it. Macros may still call any macro inside their own steps. Remove a name to hide it.
+whitelist:
+  - say
+  - go_to_place
+  - go_and_say
+  - patrol
+  - turn_around
+  - greet_person
+  - approach_person
+  - wave_back
+  - report_object
+  - go_home
+  - look_around
+  - find_person
+  - find_object
+  - go_find_object
+  - go_find_person
+  - go_find_and_say
+  - meet_and_remember
+  - follow_person
+  - look_at_person
+  - acknowledge_person
+  - meet_guest
+  - introduce_guest
+  - guide_to
+  - escort_person_to
+  - wait_for_wave
+  - stop_and_wait
+  - ask_and_repeat
+
 macros:
   say:
     description: "Say one short sentence"
@@ -190,11 +221,32 @@ macros:
       - {node: Speak, ports: {text: "Nice to meet you ${name}"}}
 
   follow_person:
-    description: "Find a person and follow them at a distance in metres (min 0.5)"
+    description: "Find a person and follow them at a distance in metres (min 0.5); if the person is lost, turns a little, looks again and retries up to 3 times"
     params: {distance: {default: "1.0"}}
     steps:
       - {macro: find_person}
-      - {node: FollowTarget, ports: {approach: "true", distance: "${distance}", timeout_ms: "60000"}}
+      - group: Fallback
+        retry: 3
+        steps:
+          - {node: FollowTarget, ports: {approach: "true", distance: "${distance}", timeout_ms: "60000"}}
+          - group: Sequence
+            steps:
+              - {node: RotateBy, ports: {radians: "0.8"}}
+              - {node: DetectPerson}
+              - {node: FollowTarget, ports: {approach: "true", distance: "${distance}", timeout_ms: "60000"}}
+
+  look_at_person:
+    description: "Turn the base until a visible person is centred in the camera (eye contact; no driving)"
+    steps:
+      - {node: DetectPerson}
+      - {node: FollowTarget, ports: {timeout_ms: "5000"}}
+
+  acknowledge_person:
+    description: "Find a person, turn to face them and say hello (a robot that ignores people loses points)"
+    steps:
+      - {macro: find_person}
+      - {macro: look_at_person}
+      - {macro: say, args: {text: "Hello, I see you"}}
 
   guide_to:
     description: "Tell people to follow, drive to a named place, announce arrival"
@@ -242,3 +294,37 @@ macros:
       - {macro: say, args: {text: "${question}"}}
       - {node: WaitForTranscript, ports: {out_text: "{answer}"}}
       - {node: Speak, ports: {text: "I heard {person}", person: "{answer}"}}
+
+  meet_guest:
+    description: "Ask a guest their name and favourite drink, remember both under a slot (guest1, guest2...) and enrol the face; retries each question twice"
+    params: {slot: {default: guest1}}
+    example_args: {slot: guest1}
+    steps:
+      - group: Fallback
+        retry: 2
+        steps:
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "Hello, what is your name?"}}
+              - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+              - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
+          - {node: Speak, ports: {text: "Sorry, please say only your name"}}
+      - {node: Speak, ports: {text: "Nice to meet you {person}", person: "{${slot}_name}"}}
+      - group: Fallback
+        retry: 2
+        steps:
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "What is your favourite drink?"}}
+              - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+              - {node: ExtractAnswer, ports: {kind: drink, text: "{${slot}_heard}", out_value: "{${slot}_drink}"}}
+          - {node: Speak, ports: {text: "Sorry, please say only the drink"}}
+      - {node: EnrollFace, ports: {person: "{${slot}_name}"}}
+
+  introduce_guest:
+    description: "Say the name and favourite drink remembered for a slot (see meet_guest), e.g. to the host"
+    params: {slot: {default: guest1}}
+    example_args: {slot: guest1}
+    steps:
+      - {node: Speak, ports: {text: "This is {person}", person: "{${slot}_name}"}}
+      - {node: Speak, ports: {text: "Their favourite drink is {person}", person: "{${slot}_drink}"}}

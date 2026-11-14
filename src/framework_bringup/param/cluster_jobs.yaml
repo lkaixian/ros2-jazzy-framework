@@ -78,7 +78,7 @@ jobs:
   # LLM_API_KEY=<same key>. llama-server reading LLAMA_API_KEY / --api-key is UNVERIFIED here
   # (llama.cpp is not installed on this machine); the bridge side is tested against a fake server.
   llm_big:
-    cmd: [llama-server, -hf, "ggml-org/gemma-4-E4B-it-GGUF:Q4_0", --host, 0.0.0.0, --port, "8080", -c, "8192"]
+    cmd: [llama-server, -hf, "ggml-org/gemma-4-E4B-it-GGUF:Q4_0", --host, 0.0.0.0, --port, "8080", -c, "8192", --reasoning, "off"]
     tags: [llm_big]
     endpoint: {kind: llm, port: 8080, priority: 10}
     cpu: 3.0
@@ -90,7 +90,7 @@ jobs:
   # Robot laptop (tags:=robot): Gemma E2B, always there, the fallback when the big PC is gone.
   # Q4_0 is 2.65 GiB; -c 4096 keeps the KV cache small enough for a 4 GB GPU (unverified).
   llm_small:
-    cmd: [llama-server, -hf, "ggml-org/gemma-4-E2B-it-GGUF:Q4_0", --host, 0.0.0.0, --port, "8081", -c, "4096", -ngl, "99"]
+    cmd: [llama-server, -hf, "ggml-org/gemma-4-E2B-it-GGUF:Q4_0", --host, 0.0.0.0, --port, "8081", -c, "4096", -ngl, "99", --reasoning, "off"]
     tags: [robot]
     movable: false
     endpoint: {kind: llm, port: 8081, priority: 100}

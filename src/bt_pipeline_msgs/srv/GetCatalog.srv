@@ -1,3 +1,4 @@
 ---
 string listing             # one line per usable BT node, with descriptions
 string[] labels            # object labels the detector can produce (empty = unknown)
+string schema              # JSON schema of a task_spec (allowed nodes/macros/ports); "" = none

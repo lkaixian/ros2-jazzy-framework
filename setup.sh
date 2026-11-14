@@ -8,15 +8,16 @@
 #   ./setup.sh --skip models,llamacpp
 #   ./setup.sh --yes --backend cuda --minimal
 #
-# Steps (in order): apt rosdep python llamacpp models build   (optional, never default: slm)
+# Steps (in order): apt rosdep python llamacpp models voice build   (optional, never default: slm)
+# --backend prebuilt: download the official llama.cpp CUDA 12.8 release (no CUDA toolkit, no compiling).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ALL_STEPS=(apt rosdep python llamacpp models build)
+ALL_STEPS=(apt rosdep python llamacpp models voice build)
 DRY=0; YES=0; MINIMAL=0; BACKEND=auto
 ONLY=""; SKIP=""
 LLAMA_DIR="${LLAMA_DIR:-$HOME/llama.cpp}"
-LLM_REPO="${LLM_REPO:-ggml-org/gemma-4-E4B-it-GGUF}"
+LLM_REPO="${LLM_REPO:-ggml-org/gemma-4-E2B-it-GGUF}"   # E2B: E4B Q4_0 does not fit a 4 GB GPU well
 SLM_BASE="${SLM_BASE:-LiquidAI/LFM2.5-230M-Base}"
 MIN_LLAMA_BUILD=8637          # first llama.cpp build with Gemma 4 support
 PY=/usr/bin/python3           # ROS uses the system Python; never a venv/conda one
@@ -29,7 +30,7 @@ Options:
   --only a,b         run just these steps
   --skip a,b         skip these steps
   --minimal          skip the optional heavy Python extras (STT/TTS engines)
-  --backend B        llama.cpp backend: auto|cpu|cuda|vulkan   (default auto: cuda if nvcc exists)
+  --backend B        llama.cpp backend: auto|cpu|cuda|vulkan|prebuilt   (default auto: cuda if nvcc exists)
   --llama-dir DIR    llama.cpp checkout/build dir (default $LLAMA_DIR)
   --llm-repo REPO    GGUF repo for llama-server -hf (default $LLM_REPO)
   --slm-base REPO    base model to fine-tune (default $SLM_BASE)
@@ -130,7 +131,29 @@ step_python() {
 
 llama_build_number() { "$1" --version 2>&1 | sed -n 's/^version: \([0-9]\+\).*/\1/p' | head -1; }
 
+step_llamacpp_prebuilt() {
+  log "llama.cpp: prebuilt CUDA 12.8 release into $LLAMA_DIR (NVIDIA driver only, no toolkit)"
+  local tag
+  tag="$(curl -fsS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=1' | sed -n 's/.*"tag_name": *"\(b[0-9]*\)".*/\1/p' | head -1)"
+  [[ $DRY -eq 1 ]] && tag="${tag:-bNNNN}"
+  [[ -n "$tag" ]] || die "could not read the latest llama.cpp release tag"
+  local base="https://github.com/ggml-org/llama.cpp/releases/download/$tag" f
+  run mkdir -p "$LLAMA_DIR" "$HOME/.local/bin"
+  for f in "llama-$tag-bin-ubuntu-cuda-12.8-x64" "cudart-llama-$tag-bin-ubuntu-cuda-12.8-x64"; do
+    run curl -fL -o "$LLAMA_DIR/$f.tar.gz" "$base/$f.tar.gz"
+    run tar -xzf "$LLAMA_DIR/$f.tar.gz" -C "$LLAMA_DIR"
+    run rm -f "$LLAMA_DIR/$f.tar.gz"
+  done
+  if [[ $DRY -eq 0 ]]; then
+    printf '#!/bin/sh\nD="%s"\nexport LD_LIBRARY_PATH="$D/llama-%s:$D/cudart-llama-%s-bin-ubuntu-cuda-12.8-x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\nexec "$D/llama-%s/llama-server" "$@"\n' \
+      "$LLAMA_DIR" "$tag" "$tag" "$tag" > "$HOME/.local/bin/llama-server"
+    chmod +x "$HOME/.local/bin/llama-server"
+    echo "  llama-server: $("$HOME/.local/bin/llama-server" --version 2>&1 | head -1)"
+  else echo "  (would write the llama-server wrapper in ~/.local/bin)"; fi
+}
+
 step_llamacpp() {
+  [[ $BACKEND == prebuilt ]] && { step_llamacpp_prebuilt; return; }
   log "llama.cpp: llama-server (needs build >= $MIN_LLAMA_BUILD for Gemma 4)"
   local be="$BACKEND" flags=(-DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON)
   if [[ $be == auto ]]; then command -v nvcc >/dev/null && be=cuda || be=cpu; fi
@@ -193,6 +216,25 @@ except HfHubHTTPError as e:
 print("  SLM base saved to", p)
 PYEOF
   warn "the SLM base is NOT usable for planning yet: fine-tune it first (./setup.sh --only slm)"
+}
+
+step_voice() {
+  log "voice models: Piper voice (TTS) and faster-whisper base.en (STT) into $ROOT/models"
+  if [[ $DRY -eq 1 ]]; then
+    echo "  \$ $PY -c 'hf_hub_download(\"rhasspy/piper-voices\", en/en_US/lessac/medium/en_US-lessac-medium.onnx[.json], local_dir=models/tts)'"
+    echo "  \$ $PY -c 'WhisperModel(\"base.en\", download_root=models/stt)'"
+    return
+  fi
+  "$PY" - "$ROOT/models" <<'PYEOF' || die "voice model download failed (pip install faster-whisper huggingface_hub piper-tts first: python step)"
+import sys
+from huggingface_hub import hf_hub_download
+from faster_whisper import WhisperModel
+root = sys.argv[1]
+for f in ("en/en_US/lessac/medium/en_US-lessac-medium.onnx", "en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"):
+    hf_hub_download("rhasspy/piper-voices", f, local_dir=root + "/tts")
+WhisperModel("base.en", device="cpu", compute_type="int8", download_root=root + "/stt")
+print("  Piper voice: models/tts/en/en_US/lessac/medium/en_US-lessac-medium.onnx ; whisper: models/stt")
+PYEOF
 }
 
 step_build() {

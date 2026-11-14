@@ -120,3 +120,20 @@ ros2 launch framework_bringup extensions.launch.py cmd_vel_topic:=commands/veloc
 ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
 # then BT node SaveMap file="room1"  ->  navigate with map:=$HOME/maps/room1.yaml
 ```
+
+## Local LLM + voice on this machine (set up 2026-11-14, GTX 1650 4 GB)
+- **llama.cpp**: official prebuilt release b12375 (CUDA 12.8 + bundled cudart, no toolkit, no sudo) in `~/llama.cpp`,
+  wrapper `~/.local/bin/llama-server`. Reproduce: `./setup.sh --only llamacpp --backend prebuilt`.
+- **LLM = Gemma 4 E2B Q4_0** (`models/llm/gemma-4-E2B-it-Q4_0.gguf`, 2.6 GiB; E4B does not fit this GPU well):
+  `llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 4096 -ngl 99 --reasoning off`
+  then `ros2 launch framework_bringup pipeline.launch.py llama_url:=http://127.0.0.1:8081`.
+- **`--reasoning off` is required**: Gemma 4 otherwise "thinks" for hundreds of tokens, exhausts `max_tokens` and the JSON is cut
+  off (measured: a 60-token answer took 431 tokens; plans went from ~60 s to 1-10 s and the "reply is not a JSON object" errors stopped).
+- **Constrained decoding**: `bt_validator/catalog` now returns a JSON schema (`GetCatalog.schema`) listing the allowed macros (the
+  `whitelist:` in `param/macros.yaml`), their args, every leaf node and its real ports; `llm_bridge` sends it as
+  `response_format: json_schema`, so call-syntax slips (`follow_person()`), invented macros/ports and non-string values cannot be
+  produced. Before it: 1/10 valid plans from E2B; see `tools/integration/llm_eval.py` for the measurement.
+- **TTS**: Piper `en_US-lessac-medium` in `models/tts/...`; use `audio.launch.py tts_engine:=piper piper_model:=$PWD/models/tts/en/en_US/lessac/medium/en_US-lessac-medium.onnx`.
+- **STT**: faster-whisper `base.en` int8 on CPU (`models/stt`): 2.2 s of speech -> 0.6 s; Piper -> Whisper round trip returned the
+  exact sentences (3/3). Keep STT on the CPU: the GPU is shared with the LLM.
+- Disk is tight (about 8 GB free on `/`): do not add the E4B model here.

@@ -5,6 +5,7 @@
 
 start: false              # true: launch llama-server together with the pipeline
 model: ""                 # local GGUF path; if empty hf_repo is used
-hf_repo: ggml-org/gemma-4-E4B-it-GGUF
+hf_repo: ggml-org/gemma-4-E2B-it-GGUF   # E2B: the 4 GB GTX 1650 cannot hold E4B Q4_0 (4.28 GiB) well
 port: 8080                # keep in step with llm_bridge_node.server_url (pipeline.yaml)
-extra_args: []            # e.g. ["-ngl", "99", "-c", "8192"]
+# --reasoning off: Gemma 4 otherwise spends the 512-token reply budget on hidden "thinking" and the JSON is cut off
+extra_args: ["-ngl", "99", "-c", "4096", "--reasoning", "off"]

@@ -8,7 +8,8 @@ llm_bridge_node:
     server_url: "http://127.0.0.1:8080"
     model: default
     temperature: 0.1
-    max_tokens: 512
+    max_tokens: 768
+    repeat_penalty: 1.1     # stops E2B repeating one step up to the step cap; 0 = server default
     timeout_sec: 60.0
     # Failover: ordered list, first = preferred (strong PC, Gemma E4B), then the robot laptop's
     # small model (Gemma E2B). Unset -> server_url only. Example:

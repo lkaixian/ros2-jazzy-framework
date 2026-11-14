@@ -23,3 +23,8 @@ def test_empty_and_overlong_rejected():
         render_text('   ')
     with pytest.raises(PortError):
         render_text('x' * (MAX_TEXT + 1))
+
+
+def test_extract_handler_logic():
+    from social_extension.answers import extract_drink, extract_name
+    assert (extract_name('my name is Alice'), extract_drink('I like orange juice')) == ('alice', 'orange juice')

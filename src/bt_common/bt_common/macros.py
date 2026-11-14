@@ -119,8 +119,13 @@ def _call(step, lib, stack):
     return _expand_steps(body, lib, stack + [name])
 
 
-def expand(spec, lib):
-    """spec (dict) -> a new spec with every macro step replaced by its nodes. Raises MacroError."""
+def expand(spec, lib, allowed=None):
+    """spec (dict) -> a new spec with every macro step replaced by its nodes. Raises MacroError.
+    allowed (a list of names, None = all): the macros the spec itself may call (the whitelist)."""
+    if allowed is not None:
+        bad = sorted(_macro_names(spec) - set(allowed))
+        if bad:
+            raise MacroError(f'macro {bad[0]!r} is not available; use one of: {", ".join(sorted(allowed))}')
     if not any('macro' in ks for ks in _key_sets(spec)):
         return spec
     out = dict(spec)
@@ -138,6 +143,57 @@ def _key_sets(spec):
             stack.extend(x.values())
         elif isinstance(x, list):
             stack.extend(x)
+
+
+def load_whitelist(path=None):
+    """The optional top-level `whitelist: [macro, ...]` of macros.yaml: the only macros the LLM/SLM may call
+    in a task spec (macros may still call any other macro inside their own steps). None = no whitelist."""
+    path = default_path() if path is None else path
+    if not path or not os.path.exists(path):
+        return None
+    wl = (yaml.safe_load(open(path)) or {}).get('whitelist')
+    return None if wl is None else [str(x) for x in wl]
+
+
+def callable_macros(lib, whitelist):
+    return lib if whitelist is None else {k: v for k, v in lib.items() if k in whitelist}
+
+
+def spec_schema(nodes, lib):
+    """JSON schema of a task_spec for llama-server `response_format: json_schema`. Constrained decoding can only emit
+    allowed node/macro names with their real port/arg names (string values), so call-syntax slips, invented names and
+    invented ports are impossible. nodes: NodeSpec list (leaf Actions/Conditions); lib: the callable macros."""
+    def obj(names, required):
+        return {'type': 'object', 'additionalProperties': False, 'required': sorted(required),
+                'properties': {n: {'type': 'string'} for n in names}}
+    leaf = [{'type': 'object', 'required': ['node'] + (['ports'] if n.required else []), 'additionalProperties': False,
+             'properties': {'node': {'const': n.id}, 'ports': obj(n.required + n.optional, n.required)}}
+            for n in nodes if n.category in ('Action', 'Condition')]
+    mac = []
+    for name, m in sorted(lib.items()):
+        req = [p for p, d in m['params'].items() if (d or {}).get('required', 'default' not in (d or {}))]
+        mac.append({'type': 'object', 'required': ['macro'] + (['args'] if req else []), 'additionalProperties': False,
+                    'properties': {'macro': {'const': name}, 'args': obj(list(m['params']), req)}})
+    group = {'type': 'object', 'required': ['group', 'steps'], 'additionalProperties': False,
+             'properties': {'group': {'enum': ['Sequence', 'Fallback', 'ReactiveSequence', 'ReactiveFallback']},
+                            'retry': {'type': 'integer'},
+                            'steps': {'type': 'array', 'minItems': 1, 'maxItems': 12, 'items': {'$ref': '#/$defs/step'}}}}
+    return {'$defs': {'step': {'anyOf': mac + leaf + [group]}}, 'type': 'object', 'required': ['goal', 'steps'],
+            'properties': {'goal': {'type': 'string'}, 'retry': {'type': 'integer'},
+                           'steps': {'type': 'array', 'minItems': 1, 'maxItems': 12, 'items': {'$ref': '#/$defs/step'}}}}
+
+
+def _macro_names(spec):
+    out, stack = set(), [spec]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, dict):
+            if 'macro' in x:
+                out.add(str(x['macro']))
+            stack.extend(x.values())
+        elif isinstance(x, list):
+            stack.extend(x)
+    return out
 
 
 def describe(lib):

@@ -42,4 +42,19 @@ def test_places_match_places_yaml(text):
 
 
 def test_stays_small_enough_for_a_prompt(text):
-    assert len(text) < 3000          # ~700 tokens: this goes into every planning request
+    assert len(text) < 4800          # ~1100 tokens (rules + worked examples): this goes into every planning request
+
+
+def test_worked_examples_are_valid_plans(text, cat):
+    import json
+
+    from bt_common.macros import expand, load_macros
+    from bt_slm.fallback import build_xml
+    from bt_validator.validate import validate_xml
+    lib = load_macros(os.path.join(PARAM, 'macros.yaml'))
+    shown = [l for l in text.splitlines() if l.startswith('Example:')]
+    assert len(shown) >= 5
+    for line in shown:
+        steps = json.loads(line.split('->', 1)[1])
+        xml = build_xml(json.dumps(expand({'goal': 'example', 'steps': steps}, lib)))
+        assert validate_xml(xml, cat) == [], line

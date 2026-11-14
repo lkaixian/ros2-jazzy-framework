@@ -28,16 +28,17 @@ namespace
 {
 const char * kDefaultSystem =
   "You convert a robot task into a JSON task spec. Output ONLY a JSON object: "
-  "{\"goal\": string, \"retry\": optional int, \"steps\": [STEP,...]} where STEP is "
-  "{\"node\": <id>, \"ports\": {<port>: <string>}} or a nested group "
-  "{\"group\": \"Sequence|Fallback|ReactiveSequence|ReactiveFallback\", \"retry\": optional int, "
-  "\"steps\": [STEP,...]}. Use Fallback for 'try A, otherwise B'. Use ONLY the node ids below "
-  "with their ports (a trailing ? marks an optional port). Do not invent nodes. "
-  "Nodes are tagged sync (finishes inside one tick: conditions, instant actions) or async "
-  "(runs over many ticks and may fail halfway: movement, speech, anything over DDS). Plan in "
-  "phases: first sync checks of what must hold before starting, then the async actions, and "
-  "wrap every async step that can fail in a Fallback with an alternative or a retry. If a "
-  "REPAIR note says where the previous plan broke, change that step and keep the rest.\n";
+  "{\"goal\": string, \"retry\": optional int, \"steps\": [STEP,...]} where STEP is a macro call "
+  "{\"macro\": <name>, \"args\": {<arg>: <string>}}, or {\"node\": <id>, \"ports\": {<port>: <string>}}, "
+  "or a nested group {\"group\": \"Sequence|Fallback|ReactiveSequence|ReactiveFallback\", "
+  "\"retry\": optional int, \"steps\": [STEP,...]}. PREFER a macro whenever one fits the request "
+  "(it is shorter and tested); use single nodes only for what no macro does. Keep the plan short "
+  "(usually 1 to 5 steps) and do exactly what was asked. If the robot cannot do the task (see the "
+  "robot knowledge), do not invent steps: use the say macro to tell the person so. Use Fallback "
+  "for 'try A, otherwise B'. Use ONLY the macros and node ids below with their args/ports (a "
+  "trailing ? marks an optional one). Nodes are tagged sync (finishes inside one tick) or async "
+  "(runs over many ticks and may fail halfway: movement, speech, anything over DDS). If a REPAIR "
+  "note says where the previous plan broke, change that step and keep the rest.\n";
 }
 
 class LlmBridgeNode : public rclcpp::Node
@@ -75,6 +76,7 @@ public:
     declare_parameter("model", "default");
     declare_parameter("temperature", 0.1);
     declare_parameter("max_tokens", 512);
+    declare_parameter("repeat_penalty", 1.1);   // 0 = leave to the server; small models loop on repeated steps without it
     declare_parameter("timeout_sec", 60.0);
     declare_parameter("task_system_prompt", "");
     std::vector<std::string> urls;
@@ -139,6 +141,7 @@ public:
         scene_ = m->data;
       });
     spec_pub_ = create_publisher<std_msgs::msg::String>("bt/task_spec", 10);
+    err_pub_ = create_publisher<std_msgs::msg::String>("llm/error", 10);
     rclcpp::QoS latched_status(1);
     latched_status.reliable().transient_local();
     status_pub_ = create_publisher<std_msgs::msg::String>("llm/status", latched_status);
@@ -206,6 +209,7 @@ private:
     cr.model = get_parameter("model").as_string();
     cr.temperature = get_parameter("temperature").as_double();
     cr.max_tokens = static_cast<int>(get_parameter("max_tokens").as_int());
+    cr.repeat_penalty = get_parameter("repeat_penalty").as_double();
     return cr;
   }
 
@@ -214,12 +218,13 @@ private:
     std::string system = get_parameter("task_system_prompt").as_string();
     std::string scene;
     // The validator knows every usable node (core + extensions) and the detector's labels.
-    std::string listing, labels;
+    std::string listing, labels, schema;
     if (catalog_client_->wait_for_service(std::chrono::milliseconds(0))) {
       auto fut = catalog_client_->async_send_request(std::make_shared<GetCatalog::Request>());
       if (fut.wait_for(std::chrono::seconds(2)) == std::future_status::ready) {
         auto r = fut.get();
         listing = r->listing;
+        schema = r->schema;
         for (size_t i = 0; i < r->labels.size(); ++i) {
           labels += (i ? ", " : "") + r->labels[i];
         }
@@ -249,12 +254,16 @@ private:
     auto cr = base_request();
     cr.system = system;
     cr.json_mode = true;
+    cr.schema = schema;
     cr.prompt = "Task: " + task + "\nScene: " + (scene.empty() ? "{}" : scene);
     auto r = failover_->chat(cr);
     report(r);
     if (!r.chat.ok) {
       RCLCPP_ERROR(get_logger(), "no usable LLM reply for task '%s': %s", task.c_str(),
         r.chat.error.c_str());
+      std_msgs::msg::String err;   // the orchestrator turns this into an invalid plan, so the task does not vanish
+      err.data = nlohmann::json{{"task", task}, {"error", r.chat.error}}.dump();
+      err_pub_->publish(err);
       if (r.all_down) {emergency("all LLM endpoints are down while a task was requested");}
       return;
     }
@@ -456,7 +465,7 @@ private:
   rclcpp::CallbackGroup::SharedPtr work_group_;
   rclcpp::Subscription<ExtensionManifest>::SharedPtr manifest_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr scene_sub_, task_sub_, repair_sub_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr spec_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr spec_pub_, err_pub_;
   rclcpp::Service<LlmQuery>::SharedPtr query_srv_;
   rclcpp::Client<GetCatalog>::SharedPtr catalog_client_;
   std::mutex mu_;

@@ -1,7 +1,7 @@
 import json
 import threading
 
-from bt_common.macros import MacroError, expand, load_macros
+from bt_common.macros import MacroError, expand, load_macros, load_whitelist
 
 import rclpy
 from bt_pipeline_msgs.msg import BtPlan
@@ -41,10 +41,12 @@ class OrchestratorNode(Node):
                                  callback_group=cb)
         self.lock = threading.Lock()   # one plan at a time
         try:
-            self.macros = load_macros(self.get_parameter('macros_file').value or None)
+            path = self.get_parameter('macros_file').value or None
+            self.macros = load_macros(path)
+            self.whitelist = load_whitelist(path)     # which macros a task spec itself may call
         except (MacroError, OSError) as e:
             self.get_logger().error(f'macros not loaded ({e}): macro steps will be refused')
-            self.macros = {}
+            self.macros, self.whitelist = {}, None
         self.fsm = TaskFsm(self.get_parameter('max_repairs').value)
         self.fsm_lock = threading.Lock()
         self.state_pub = self.create_publisher(
@@ -53,6 +55,7 @@ class OrchestratorNode(Node):
         self.repair_pub = self.create_publisher(String, 'bt/repair', 10)
         self.create_subscription(String, 'bt/task', self._on_task, 10, callback_group=cb)
         self.create_subscription(String, 'bt/status', self._on_status, 10, callback_group=cb)
+        self.create_subscription(String, 'llm/error', self._on_llm_error, 10, callback_group=cb)
         self._publish_state()
 
     def _publish_state(self):
@@ -62,6 +65,20 @@ class OrchestratorNode(Node):
         with self.fsm_lock:
             self.fsm.on_task(msg.data)
             self._publish_state()
+
+    def _on_llm_error(self, msg):
+        """The bridge got no usable reply: answer the task with an invalid plan instead of staying silent."""
+        try:
+            err = str(json.loads(msg.data).get('error', 'unknown error'))
+        except ValueError:
+            err = msg.data
+        plan = BtPlan(valid=False, errors=[f'no plan from the LLM: {err}'])
+        plan.header.stamp = self.get_clock().now().to_msg()
+        self.plan_pub.publish(plan)
+        with self.fsm_lock:
+            self.fsm.on_plan(False, plan.errors)
+            self._publish_state()
+        self.get_logger().error(plan.errors[0])
 
     def _on_status(self, msg):
         try:
@@ -109,7 +126,7 @@ class OrchestratorNode(Node):
 
     def _expanded(self, task_spec):
         """Macro steps -> real nodes. plan.task_spec stays the short form the LLM wrote."""
-        return json.dumps(expand(json.loads(task_spec), self.macros))
+        return json.dumps(expand(json.loads(task_spec), self.macros, self.whitelist))
 
     def _run(self, plan, expanded):
         for attempt in range(1, self.get_parameter('max_attempts').value + 1):

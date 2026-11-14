@@ -2,7 +2,8 @@ import json
 
 import rclpy
 from bt_common.catalog import Catalog, format_listing
-from bt_common.macros import MacroError, describe, load_macros
+from bt_common.macros import (callable_macros, describe, load_macros, load_whitelist, MacroError,
+                              spec_schema)
 from bt_common.extension_node import MANIFEST_QOS
 from bt_pipeline_msgs.msg import ExtensionManifest
 from bt_pipeline_msgs.srv import GetCatalog, ValidateTree
@@ -26,7 +27,8 @@ class ValidatorNode(Node):
         self.declare_parameter('labels', '')       # comma-separated; used until a detector announces
         self.catalog = Catalog()
         try:
-            self.macros = load_macros(self.get_parameter('macros_file').value or None)
+            path = self.get_parameter('macros_file').value or None
+            self.macros = callable_macros(load_macros(path), load_whitelist(path))   # LLM-visible macros only
         except (MacroError, OSError) as e:
             self.get_logger().error(f'macros not loaded: {e}')
             self.macros = {}
@@ -69,6 +71,7 @@ class ValidatorNode(Node):
             res.listing += ('\n\nMacros: a step {"macro": "<name>", "args": {...}} expands to several '
                             'nodes - prefer a macro when one fits (shorter, faster):\n' +
                             describe(self.macros))
+        res.schema = json.dumps(spec_schema(list(self.catalog.all().values()), self.macros))
         res.labels = sorted(self.vocab.get(LABEL_KEY, ()))
         return res
 

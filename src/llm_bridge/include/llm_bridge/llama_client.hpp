@@ -11,7 +11,9 @@ struct ChatRequest
   std::string model = "default";
   double temperature = 0.1;
   int max_tokens = 512;
+  double repeat_penalty = 0.0;   // > 0 is sent as repeat_penalty
   bool json_mode = false;
+  std::string schema;     // JSON schema (text) the reply must follow; empty = any JSON object
 };
 
 struct ChatResult
