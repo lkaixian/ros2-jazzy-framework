@@ -46,7 +46,7 @@ class Vosk:
 class FasterWhisper:
     name = 'faster_whisper'
 
-    def __init__(self, model, device='cpu', compute_type='int8', language='', **_):
+    def __init__(self, model, device='cpu', compute_type='int8', language='', initial_prompt='', **_):
         try:
             from faster_whisper import WhisperModel
         except ImportError as e:
@@ -56,13 +56,15 @@ class FasterWhisper:
         except Exception as e:  # noqa: BLE001  bad name/path, no network, wrong compute type...
             raise SttError(f'faster-whisper could not load {model!r}: {e}') from e
         self.language = language or None
+        self.initial_prompt = initial_prompt or None
 
     def transcribe(self, pcm, rate):
         import numpy as np
         audio = np.frombuffer(pcm, dtype='<i2').astype(np.float32) / 32768.0
         if rate != 16000:
             raise SttError('faster_whisper expects 16 kHz audio')
-        segs, info = self.model.transcribe(audio, language=self.language, vad_filter=False)
+        segs, info = self.model.transcribe(audio, language=self.language, vad_filter=False,
+                                         initial_prompt=self.initial_prompt)
         segs = list(segs)
         text = ' '.join(s.text.strip() for s in segs).strip()
         conf = (sum(2.718281828 ** s.avg_logprob for s in segs) / len(segs)) if segs else -1.0

@@ -4,6 +4,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
 
+from stt_pipeline.vocab import place_phrases, snap
 from stt_pipeline.wake import WakeGate
 
 
@@ -14,6 +15,8 @@ class TranscriptToTask(Node):
         super().__init__('transcript_to_task_node')
         self.declare_parameter('wake_word', '')
         self.declare_parameter('wake_window_sec', 8.0)
+        self.declare_parameter('snap_places', True)     # 'for corner' -> 'far corner' before the task goes to the LLM
+        self.places = place_phrases() if self.get_parameter('snap_places').value else []
         self.gate = WakeGate(self.get_parameter('wake_word').value,
                              self.get_parameter('wake_window_sec').value)
         self.pub = self.create_publisher(String, 'bt/task', 10)
@@ -27,6 +30,8 @@ class TranscriptToTask(Node):
         if not m.is_final or self.capturing:
             return
         task = self.gate.task(m.text)
+        if task and self.places:
+            task = snap(task, self.places)
         if task:
             self.get_logger().info(f'task: {task}')
             self.pub.publish(String(data=task))

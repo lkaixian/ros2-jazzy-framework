@@ -10,3 +10,5 @@ float32[] keypoints_y
 float32[] keypoints_conf
 # metres to the person (median depth in the torso region); 0 = unknown / no depth available
 float32 distance_m
+# colour word of the clothes on the torso (red, blue, black, ...); empty when unknown
+string clothes_colour

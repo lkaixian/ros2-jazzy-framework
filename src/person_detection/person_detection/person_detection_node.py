@@ -1,5 +1,6 @@
 from yolo11_common.base_node import Yolo11Node, run
 
+from person_detection.colour import clothes_colour
 from person_detection_msgr.msg import Person, PersonArray
 
 
@@ -31,6 +32,8 @@ class PersonDetectionNode(Yolo11Node):
                 p.keypoints_x = [float(v) for v in xy[:, 0]]
                 p.keypoints_y = [float(v) for v in xy[:, 1]]
                 p.keypoints_conf = [float(v) for v in cf] if cf is not None else []
+            p.clothes_colour = clothes_colour(frame, (x1, y1, x2, y2), p.keypoints_x or None, p.keypoints_y or None,
+                                              p.keypoints_conf or None)
             out.persons.append(p)
         self.pub.publish(out)
         return result.plot()

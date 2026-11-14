@@ -6,6 +6,7 @@ from audio_msgr.msg import AudioChunk, Transcript
 from rclpy.node import Node
 
 from stt_pipeline import engines
+from stt_pipeline.vocab import hint_prompt, place_phrases
 
 
 class SttNode(Node):
@@ -14,12 +15,15 @@ class SttNode(Node):
     def __init__(self):
         super().__init__('stt_node')
         for k, v in dict(engine='faster_whisper', model='base.en', language='',
-                         device='cpu', compute_type='int8', min_confidence=0.0).items():
+                         device='cpu', compute_type='int8', min_confidence=0.0,
+                         hint_places=True).items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
+        prompt = hint_prompt(place_phrases()) if p('hint_places') else ''     # place names bias Whisper towards them
         # A missing/broken engine must stop the node, not silently degrade.
         self.engine = engines.create(p('engine'), model=p('model'), language=p('language'),
-                                     device=p('device'), compute_type=p('compute_type'))
+                                     device=p('device'), compute_type=p('compute_type'),
+                                     initial_prompt=prompt)
         self.get_logger().info(f'STT engine: {self.engine.name}')
         self.q = queue.Queue(maxsize=8)
         self.pub = self.create_publisher(Transcript, 'stt/transcript', 10)

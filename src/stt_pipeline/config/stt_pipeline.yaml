@@ -16,7 +16,9 @@ stt_node:
     device: cpu
     compute_type: int8
     min_confidence: 0.0
+    hint_places: true         # faster_whisper initial_prompt lists the place names from places.yaml
 transcript_to_task_node:
   ros__parameters:
     wake_word: ""             # e.g. "robot"; empty = every final transcript is a task
+    snap_places: true         # rewrite near-miss place names in the heard task ('for corner' -> 'far corner')
     wake_window_sec: 8.0      # a bare wake word arms the next utterance for this long

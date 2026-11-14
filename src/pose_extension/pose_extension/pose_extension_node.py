@@ -33,6 +33,15 @@ def free_seats(objects, persons, labels=SEAT_LABELS, min_conf=0.4, max_covered=0
     return sorted(seats, key=lambda o: -(o.x_max - o.x_min) * (o.y_max - o.y_min))
 
 
+def describe(persons, min_conf=0.5, track_id=None):
+    """'a person wearing a red top' for the biggest (nearest) confident person that has a colour; '' if none."""
+    cands = [p for p in persons if p.confidence >= min_conf and p.clothes_colour and (track_id is None or p.track_id == track_id)]
+    if not cands:
+        return ''
+    best = max(cands, key=lambda p: (p.x_max - p.x_min) * (p.y_max - p.y_min))
+    return f'a person wearing a {best.clothes_colour} top'
+
+
 class PoseExtension(ExtensionExecutor):
     def __init__(self):
         super().__init__('pose_extension')
@@ -46,7 +55,8 @@ class PoseExtension(ExtensionExecutor):
                                  lambda m: self.last.__setitem__('objects', (time.monotonic(), m)), 10)
         self.handlers = {'GetPersonPose': self._get_pose, 'IsPersonWaving': self._waving,
                          'IsPersonPointing': self._pointing, 'CountPeople': self._count_people,
-                         'CountObjects': self._count_objects, 'FindFreeSeat': self._find_seat}
+                         'CountObjects': self._count_objects, 'FindFreeSeat': self._find_seat,
+                         'DescribePerson': self._describe}
 
     def _on_persons(self, m):
         now = time.monotonic()
@@ -84,6 +94,14 @@ class PoseExtension(ExtensionExecutor):
             return False, 'no recent object detections'
         n = count_confident(m.objects, mc, label)
         return True, f'{n} {label}', {'out_count': n}
+
+    def _describe(self, ports, ctl):
+        m = self._fresh('persons')
+        if m is None:
+            return False, 'no recent person detections'
+        want = int(port_float(ports, 'track_id')) if ports.get('track_id') else None
+        text = describe(m.persons, port_float(ports, 'min_conf', 0.5, lo=0.0, hi=1.0), want)
+        return (True, text, {'out_text': text}) if text else (False, 'no person with a visible clothes colour')
 
     def _find_seat(self, ports, ctl):
         mc = port_float(ports, 'min_conf', 0.4, lo=0.0, hi=1.0)
