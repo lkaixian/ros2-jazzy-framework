@@ -55,3 +55,17 @@ def test_count_confident():
     assert count_confident(items, 0.5) == 2
     assert count_confident(items, 0.5, 'cup') == 1
     assert count_confident([], 0.5) == 0
+
+
+def test_free_seats_skips_taken_and_unconfident_ones():
+    from types import SimpleNamespace as N
+    from pose_extension.pose_extension_node import free_seats
+    chair_taken = N(label='chair', confidence=0.9, x_min=0, y_min=0, x_max=100, y_max=100)
+    chair_free_small = N(label='chair', confidence=0.8, x_min=300, y_min=0, x_max=350, y_max=50)
+    couch_free = N(label='couch', confidence=0.7, x_min=400, y_min=0, x_max=600, y_max=100)
+    dim_chair = N(label='chair', confidence=0.2, x_min=700, y_min=0, x_max=800, y_max=100)
+    table = N(label='dining table', confidence=0.9, x_min=0, y_min=0, x_max=900, y_max=100)
+    person = N(x_min=10, y_min=0, x_max=90, y_max=100)           # sits on the first chair
+    got = free_seats([chair_taken, chair_free_small, couch_free, dim_chair, table], [person])
+    assert got == [couch_free, chair_free_small]                    # biggest first; taken/dim/non-seat dropped
+    assert free_seats([chair_taken], []) == [chair_taken]          # nobody in view: free

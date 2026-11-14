@@ -13,6 +13,26 @@ def count_confident(items, min_conf, label=None):
     return sum(1 for i in items if i.confidence >= min_conf and (label is None or i.label == label))
 
 
+SEAT_LABELS = ('chair', 'couch', 'bench')
+
+
+def _overlap(a, b):
+    """Fraction of box a (x_min, y_min, x_max, y_max) that box b covers."""
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    area = max(1e-9, (a[2] - a[0]) * (a[3] - a[1]))
+    return max(0.0, w) * max(0.0, h) / area
+
+
+def free_seats(objects, persons, labels=SEAT_LABELS, min_conf=0.4, max_covered=0.25):
+    """Seat detections no person sits on: a seat box is taken when a person box covers more than `max_covered` of it.
+    Returns the free seats (objects), biggest box first (bigger = closer, the best guess without depth)."""
+    boxes = [(p.x_min, p.y_min, p.x_max, p.y_max) for p in persons]
+    seats = [o for o in objects if o.label in labels and o.confidence >= min_conf
+             and all(_overlap((o.x_min, o.y_min, o.x_max, o.y_max), b) <= max_covered for b in boxes)]
+    return sorted(seats, key=lambda o: -(o.x_max - o.x_min) * (o.y_max - o.y_min))
+
+
 class PoseExtension(ExtensionExecutor):
     def __init__(self):
         super().__init__('pose_extension')
@@ -26,7 +46,7 @@ class PoseExtension(ExtensionExecutor):
                                  lambda m: self.last.__setitem__('objects', (time.monotonic(), m)), 10)
         self.handlers = {'GetPersonPose': self._get_pose, 'IsPersonWaving': self._waving,
                          'IsPersonPointing': self._pointing, 'CountPeople': self._count_people,
-                         'CountObjects': self._count_objects}
+                         'CountObjects': self._count_objects, 'FindFreeSeat': self._find_seat}
 
     def _on_persons(self, m):
         now = time.monotonic()
@@ -64,6 +84,19 @@ class PoseExtension(ExtensionExecutor):
             return False, 'no recent object detections'
         n = count_confident(m.objects, mc, label)
         return True, f'{n} {label}', {'out_count': n}
+
+    def _find_seat(self, ports, ctl):
+        mc = port_float(ports, 'min_conf', 0.4, lo=0.0, hi=1.0)
+        objs, pers = self._fresh('objects'), self._fresh('persons')
+        if objs is None:
+            return False, 'no recent object detections'
+        seats = free_seats(objs.objects, pers.persons if pers else [], min_conf=mc)
+        if not seats:
+            return False, 'no free seat in view'
+        best = seats[0]
+        w = max(1, objs.image_width)
+        bearing = ((best.x_min + best.x_max) / 2 - w / 2) / (w / 2)     # -1 left edge .. +1 right edge of the image
+        return True, f'free {best.label} at bearing {bearing:+.2f}', {'out_label': best.label, 'out_bearing': f'{bearing:.2f}'}
 
     def _get_pose(self, ports, ctl):
         mc = port_float(ports, 'min_conf', 0.5, lo=0.0, hi=1.0)

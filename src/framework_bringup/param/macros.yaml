@@ -31,6 +31,7 @@ whitelist:
   - introduce_guest
   - patrol_laps
   - wait_for_doorbell
+  - offer_seat
   - guide_to
   - escort_person_to
   - wait_for_wave
@@ -347,3 +348,23 @@ macros:
     steps:
       - {node: DetectSound, ports: {kind: doorbell, timeout_ms: "60000"}}
       - {macro: say, args: {text: "Someone is at the door"}}
+
+  offer_seat:
+    description: "Look for a free seat (chair, couch, bench), turning up to three quarter turns, and tell the guest to sit there; fails if none is found"
+    steps:
+      - group: Fallback
+        steps:
+          - {node: FindFreeSeat, ports: {out_label: "{seat}"}}
+          - group: Sequence
+            steps:
+              - {node: RotateBy, ports: {radians: "1.57"}}
+              - {node: FindFreeSeat, ports: {out_label: "{seat}"}}
+          - group: Sequence
+            steps:
+              - {node: RotateBy, ports: {radians: "1.57"}}
+              - {node: FindFreeSeat, ports: {out_label: "{seat}"}}
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "I cannot see a free seat"}}
+              - {node: AlwaysFailure}
+      - {node: Speak, ports: {text: "Please sit on the {person}", person: "{seat}"}}
