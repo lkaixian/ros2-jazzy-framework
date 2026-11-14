@@ -218,7 +218,7 @@ Not trained, so no HF update was needed.
 `bt_slm make_bt_dataset --profile heavy|max` (normal rows never exceeded 768 tokens, heavy median about 1.4k, max up to 3.8k). v5 = v4 + 860 rows (150 normal / 500 heavy / 250 max,
 `--max-len 2560`, Adafactor lr 2e-5, `--grad-ckpt`, about 40 minutes; AdamW + fp32 does not fit 4 GB at these lengths). 20 held-out rows per set, valid / exact:
 normal 1.00 / 1.00 (v4 1.00 / 0.90), heavy 0.90 / 0.70 (v4 0.55 / 0.35), max 0.90 / 0.80 (v4 0.80 / 0.50). Promoted to `models/bt-slm` (v4 kept as `models/bt-slm-v4`);
-`max_new_tokens` is now 3072. The public Hugging Face repo is NOT updated (needs a decision: `tools/slm/publish_hf.py`). Gotcha: training stdout is block-buffered into a log file, use `PYTHONUNBUFFERED=1`.
+`max_new_tokens` is now 3072. **Published** to the public `larmkaixian/bt-sim-slm` (2026-11-14, the earlier version stays in the repo history). On the usual 200 normal rows under today's validator: v4 0.970 valid / 0.935 exact, v5 0.975 / 0.980 (5 of those 200 reference trees are Parallel-on-one-extension, which the validator rejects since T-25, so valid cannot exceed 0.975; v4's original 0.995 predates that rule). Pruned the same day: `models/bt-slm-v1..v3`, the duplicate v5 dir and the old `bt_dataset*` dirs (kept: `bt-slm`, `bt-slm-v4` as rollback, `bt_dataset_v3` for the dataset publisher, `bt_dataset_v4_*`; the llama.cpp `cudart` folder is NOT a leftover, the `llama-server` wrapper needs it). Gotcha: training stdout is block-buffered into a log file, use `PYTHONUNBUFFERED=1`.
 
 ## Published dataset (2026-11-14)
 `larmkaixian/bt-sim-dataset` (public, Apache-2.0): config `slm` = `bt_dataset_v3` (11,760 train / 240 validation rows: task spec -> BehaviorTree.CPP XML, validator-labelled) and

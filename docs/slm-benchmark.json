@@ -1,5 +1,5 @@
 {
- "note": "Each run is scored on its own 200 held-out rows against the rule-based generator (synthetic specs). Catalogs differ between runs, so bars are not strictly comparable.",
+ "note": "Each run is scored on its own 200 held-out rows against the rule-based generator (synthetic specs). Catalogs differ between runs, so bars are not strictly comparable. v4 re-scored on the same 200 rows under today's stricter validator (Parallel on one extension is rejected): 0.970 valid / 0.935 exact, so its 0.995 above predates that rule. 5 of the 200 reference trees now fail that rule, which caps v5's valid at 0.975.",
  "runs": [
   {
    "label": "v1",
@@ -32,6 +32,14 @@
    "valid": 0.995,
    "exact": 0.935,
    "max_len": 768
+  },
+  {
+   "label": "v5",
+   "rows": 860,
+   "catalog": "46 nodes, current validator",
+   "valid": 0.975,
+   "exact": 0.98,
+   "max_len": 2560
   }
  ],
  "loss_v4": {
