@@ -125,7 +125,7 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
 - **llama.cpp**: official prebuilt release b12375 (CUDA 12.8 + bundled cudart, no toolkit, no sudo) in `~/llama.cpp`,
   wrapper `~/.local/bin/llama-server`. Reproduce: `./setup.sh --only llamacpp --backend prebuilt`.
 - **LLM = Gemma 4 E2B Q4_0** (`models/llm/gemma-4-E2B-it-Q4_0.gguf`, 2.6 GiB; E4B does not fit this GPU well):
-  `llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 4096 -ngl 99 --reasoning off`
+  `llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 6144 -np 1 -ngl 99 --reasoning off`
   then `ros2 launch framework_bringup pipeline.launch.py llama_url:=http://127.0.0.1:8081`.
 - **`--reasoning off` is required**: Gemma 4 otherwise "thinks" for hundreds of tokens, exhausts `max_tokens` and the JSON is cut
   off (measured: a 60-token answer took 431 tokens; plans went from ~60 s to 1-10 s and the "reply is not a JSON object" errors stopped).
@@ -197,6 +197,16 @@ still holds the first version (v3).
 planned `WaitForTranscript` (60 ms timeout) instead of `DetectSound`, "patrol N times" and "come with me" phrasings, one refusal that drove somewhere.
 The command templates are ours (`tools/gpsr/commands.py`), not the official GPSR sentences. Next: look at all misses (`MISS` lines), fix prompt/examples/macro
 descriptions first; fine-tune E2B on Colab (free T4) only if misses persist: the generator's gold plans are the training data.
+
+### Update (2026-11-14, later): misses fixed without training
+Baseline re-measured with the pose extension up (the 86 % run was missing it: `FindFreeSeat`/`CountPeople` plans were invalid): 90 %. Then, one change at a time
+(`llm_eval.py --gen 100 --seed 1`): macro descriptions 94 %, + worked examples 99 %, + numeric-port rule, `-np 1 -c 6144`, `FindFreeSeat` "ONLY for empty seats",
+`describe_person` macro 98 % (100/100 valid). Hand-written set (`tools/gpsr/handwritten.jsonl`, 44 commands in our own words, `llm_eval.py --jsonl`): 93 % -> 95 %, all valid.
+Still missed: "take/put X to Y" sometimes also drives (refuse 10/12), question phrasings ("is there anyone in the right room" -> `DetectPerson` + `Speak`).
+Findings: (1) `llm_eval.py` scores were shifted by one whenever a plan from an earlier run was still in flight (now drains 60 s first); starting `extensions.launch.py` twice
+or leaving old nodes running exhausts the DDS participants of a domain (`error creating node`). (2) The prompt is 3.2-3.7k tokens: `llama-server` ran 4 slots sharing 4096, so
+use `-c 6144 -np 1` (unit, runbook and operator guide updated). (3) The model wrote `min_conf: ">0.5"` by itself; the validator now rejects non-numbers and a knowledge line says so.
+Not trained, so no HF update was needed.
 
 ## Published dataset (2026-11-14)
 `larmkaixian/bt-sim-dataset` (public, Apache-2.0): config `slm` = `bt_dataset_v3` (11,760 train / 240 validation rows: task spec -> BehaviorTree.CPP XML, validator-labelled) and
