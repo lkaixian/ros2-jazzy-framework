@@ -32,6 +32,8 @@ whitelist:
   - patrol_laps
   - wait_for_doorbell
   - offer_seat
+  - receive_guest
+  - hric_round
   - guide_to
   - escort_person_to
   - wait_for_wave
@@ -368,3 +370,21 @@ macros:
               - {node: Speak, ports: {text: "I cannot see a free seat"}}
               - {node: AlwaysFailure}
       - {node: Speak, ports: {text: "Please sit on the {person}", person: "{seat}"}}
+
+  receive_guest:
+    description: "Wait for the doorbell, go to the door, ask the guest's name and favourite drink and remember them under a slot (opening the door is NOT automated: a person must open it)"
+    params: {slot: {default: guest1}}
+    example_args: {slot: guest1}
+    steps:
+      - {macro: wait_for_doorbell}
+      - {macro: go_to_place, args: {place: door}}
+      - {macro: meet_guest, args: {slot: "${slot}"}}
+
+  hric_round:
+    description: "Receptionist task for two guests: receive each one, give them a seat, then introduce the first guest to the second"
+    steps:
+      - {macro: receive_guest, args: {slot: guest1}}
+      - {macro: offer_seat}
+      - {macro: receive_guest, args: {slot: guest2}}
+      - {macro: offer_seat}
+      - {macro: introduce_guest, args: {slot: guest1}}

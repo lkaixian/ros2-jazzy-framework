@@ -30,5 +30,8 @@ case_ hric_meet_guest '{"goal":"hric","steps":[{"macro":"meet_guest","args":{"sl
 # GPSR: a task the robot cannot do must end in an apology, not in motion
 case_ gpsr_refuse_bring '{"goal":"bring","steps":[{"macro":"say","args":{"text":"Sorry, I have no arm and cannot bring objects"}}]}' \
   "Speak"
+# HRIC: one guest at the door (doorbell -> door -> name + drink); find_person is left out: DetectPerson cannot succeed in dry-run
+case_ hric_receive_guest '{"goal":"rg","steps":[{"macro":"receive_guest","args":{"slot":"guest1"}}]}' \
+  "DetectSound Speak NavigateToPlace Speak WaitForTranscript ExtractAnswer Speak Speak WaitForTranscript ExtractAnswer EnrollFace"
 echo "$fails case(s) failed"
 exit $((fails > 0))

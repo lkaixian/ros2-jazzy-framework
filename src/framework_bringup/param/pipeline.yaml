@@ -42,7 +42,7 @@ bt_slm_node:
 bt_validator_node:
   ros__parameters:
     max_depth: 12
-    max_nodes: 64
+    max_nodes: 160          # a macro like hric_round expands to ~100 nodes; LLM replies are bounded by the schema anyway
     labels: ""             # comma-separated DetectObject labels to accept until a detector announces its own
 
 orchestrator_node:
