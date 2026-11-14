@@ -61,13 +61,19 @@ def value_for(node, port, rng, labels=None):
     return str(rng.randint(1, 5))
 
 
-def sample_steps(leaves, rng, depth=0, labels=None):
+# profile -> (top-level steps, steps per group, group depth limit, chance of a group)
+# `heavy` = long plans, `max` = close to the validator's 64-node limit (most samples are rejected, so it is slow)
+PROFILES = {'normal': ((1, 5), (1, 3), 2, 0.2), 'heavy': ((5, 9), (2, 5), 3, 0.35), 'max': ((9, 14), (3, 6), 4, 0.4)}
+
+
+def sample_steps(leaves, rng, depth=0, labels=None, profile='normal'):
+    top, inner, max_depth, p_group = PROFILES[profile]
     steps = []
-    for _ in range(rng.randint(1, 5 if depth == 0 else 3)):
-        if depth < 2 and rng.random() < 0.2:
+    for _ in range(rng.randint(*(top if depth == 0 else inner))):
+        if depth < max_depth and rng.random() < p_group:
             g = {'group': rng.choice(['Sequence', 'Fallback', 'ReactiveSequence',
                                       'ReactiveFallback', 'Parallel']),
-                 'steps': sample_steps(leaves, rng, depth + 1, labels)}
+                 'steps': sample_steps(leaves, rng, depth + 1, labels, profile)}
             if rng.random() < 0.3:
                 g['retry'] = rng.randint(2, 4)
             if rng.random() < 0.15:
@@ -85,9 +91,9 @@ def sample_steps(leaves, rng, depth=0, labels=None):
     return steps
 
 
-def sample_spec(leaves, rng, labels=None):
+def sample_spec(leaves, rng, labels=None, profile='normal'):
     spec = {'goal': ' '.join(rng.sample(WORDS, rng.randint(1, 2)) + [rng.choice(labels or LABELS)]),
-            'steps': sample_steps(leaves, rng, 0, labels)}
+            'steps': sample_steps(leaves, rng, 0, labels, profile)}
     if rng.random() < 0.25:
         spec['retry'] = rng.randint(2, 5)
     return spec
@@ -118,14 +124,14 @@ def corrupt(xml, rng):
     return xml[:s0] + xml[m.start() + a.end():]
 
 
-def generate(cat, n, seed=0, repair_frac=0.25, subset_frac=0.3, labels=None):
+def generate(cat, n, seed=0, repair_frac=0.25, subset_frac=0.3, labels=None, profile='normal'):
     """Yield dict(prompt, completion, kind)."""
     rng = random.Random(seed)
     specs = list(cat.all().values())
     leaves = [s for s in specs if s.category in ('Action', 'Condition')]
     produced = 0
     while produced < n:
-        spec = sample_spec(leaves, rng, labels)
+        spec = sample_spec(leaves, rng, labels, profile)
         spec_json = normalize_spec(json.dumps(spec))
         xml = build_xml(spec_json)
         if validate_xml(xml, cat):          # labels must come from the validator
@@ -156,6 +162,7 @@ def main(args=None):
     ap.add_argument('--val-frac', type=float, default=0.02)
     ap.add_argument('--repair-frac', type=float, default=0.25)
     ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--profile', choices=sorted(PROFILES), default='normal', help='heavy / max = long plans, up to the 64-node limit')
     ap.add_argument('--labels', default='',
                     help='comma-separated object labels = your detector classes (or @file, one per line)')
     ap.add_argument('--extension-config', action='append', default=[],
@@ -172,7 +179,7 @@ def main(args=None):
     counts = {'train': 0, 'val': 0}
     with open(os.path.join(a.out_dir, 'train.jsonl'), 'w') as tr, \
             open(os.path.join(a.out_dir, 'val.jsonl'), 'w') as va:
-        for i, row in enumerate(generate(cat, a.n, a.seed, a.repair_frac, labels=labels)):
+        for i, row in enumerate(generate(cat, a.n, a.seed, a.repair_frac, labels=labels, profile=a.profile)):
             split = 'val' if i < n_val else 'train'
             (va if split == 'val' else tr).write(json.dumps(row) + '\n')
             counts[split] += 1

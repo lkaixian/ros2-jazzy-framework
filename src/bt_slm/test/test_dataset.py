@@ -153,3 +153,11 @@ def test_default_model_path_finds_the_repo_models_folder(tmp_path):
     (m / 'config.json').write_text('{}')
     assert default_model_path(str(f), {}) == str(m)
     assert default_model_path(str(f), {'ROBOCUP_SLM_MODEL': '/x/y'}) == '/x/y'     # the env var wins
+
+
+@pytest.mark.parametrize('profile,low', [('heavy', 12), ('max', 30)])
+def test_heavy_profiles_make_long_valid_trees(cat, profile, low):
+    rows = list(dataset.generate(cat, 12, seed=3, repair_frac=0, profile=profile))
+    sizes = [r['completion'].count('<') for r in rows]
+    assert all(not validate_xml(r['completion'], cat) for r in rows)
+    assert sum(sizes) / len(sizes) > low, sizes

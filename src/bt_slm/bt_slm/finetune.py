@@ -30,10 +30,12 @@ def collate(batch, pad_id):
     return ids, lab, att
 
 
-def load_rows(path, tok, max_len):
+def load_rows(path, tok, max_len, limit=0):
     rows, skipped = [], 0
     with open(path) as f:
         for line in f:
+            if limit and len(rows) + skipped >= limit:
+                break
             r = json.loads(line)
             e = encode(tok, r['prompt'], r['completion'], max_len)
             if e is None:
@@ -69,7 +71,8 @@ def evaluate(model, tok, val_path, cat, n, max_new, device):
 
 def main(args=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--data-dir', default='bt_dataset')
+    ap.add_argument('--data-dir', default='bt_dataset',
+                    help='one dir, or several joined by commas, each optionally DIR:N to use only its first N train rows')
     ap.add_argument('--base', default='LiquidAI/LFM2.5-230M-Base')
     ap.add_argument('--out', default='bt_slm_model')
     ap.add_argument('--epochs', type=int, default=3)
@@ -77,6 +80,8 @@ def main(args=None):
     ap.add_argument('--lr', type=float, default=5e-5)
     ap.add_argument('--max-len', type=int, default=1536)
     ap.add_argument('--eval-n', type=int, default=200)
+    ap.add_argument('--max-new', type=int, default=1024, help='tokens the evaluation may generate (heavy plans need 3000+)')
+    ap.add_argument('--grad-ckpt', action='store_true', help='gradient checkpointing: slower, but long rows fit a 4 GB GPU')
     ap.add_argument('--seed', type=int, default=0)
     a = ap.parse_args(args)
     try:
@@ -94,7 +99,11 @@ def main(args=None):
         tok.pad_token = tok.eos_token
     model = AutoModelForCausalLM.from_pretrained(a.base).to(device)
     print(f'{a.base}: {sum(p.numel() for p in model.parameters()) / 1e6:.0f}M params on {device}')
-    rows = load_rows(os.path.join(a.data_dir, 'train.jsonl'), tok, a.max_len)
+    if a.grad_ckpt:
+        model.gradient_checkpointing_enable()
+        model.config.use_cache = False
+    dirs = [d.partition(':')[::2] for d in a.data_dir.split(',')]          # [(dir, 'N' or '')]
+    rows = [r for d, n in dirs for r in load_rows(os.path.join(d, 'train.jsonl'), tok, a.max_len, int(n or 0))]
     steps = a.epochs * ((len(rows) + a.batch_size - 1) // a.batch_size)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=0.01)
     sched = torch.optim.lr_scheduler.LambdaLR(
@@ -119,8 +128,9 @@ def main(args=None):
     model.save_pretrained(a.out)
     tok.save_pretrained(a.out)
     print('saved', a.out)
-    print('eval:', evaluate(model, tok, os.path.join(a.data_dir, 'val.jsonl'),
-                            discover_catalog(), a.eval_n, 1024, device))
+    model.config.use_cache = True
+    for d, _ in dirs:
+        print('eval', d, evaluate(model, tok, os.path.join(d, 'val.jsonl'), discover_catalog(), a.eval_n, a.max_new, device))
 
 
 if __name__ == '__main__':
