@@ -78,9 +78,6 @@ stateDiagram-v2
     repairing --> running: retry / go home / ask human
     repairing --> planning: replan
     running --> halted: halt / safe-stop / budget
-    done --> idle
-    failed --> idle
-    halted --> idle
 ```
 
 ## Quick start
@@ -135,21 +132,18 @@ ros2 topic pub --once /bt/task std_msgs/msg/String "{data: 'go to the door and s
 
 ## Documentation
 
-| Topic | Where |
+Everything is also on the **[project wiki](https://github.com/lkaixian/ros2-jazzy-framework/wiki)** (generated from `docs/`). New here? Start with [Start here](docs/start-here.md).
+
+| | |
 |---|---|
-| Running and operating the robot (every command an operator types) | [docs/operator-guide.md](docs/operator-guide.md) |
-| Parameters, launch files, build and run | [docs/configuration.md](docs/configuration.md) |
-| Safety: dry-run, `cmd_vel_mux`, guards, robot mode | [docs/safety.md](docs/safety.md) |
-| Behaviour trees, macros, task lifecycle and recovery | [docs/behavior-trees.md](docs/behavior-trees.md) · [macros](docs/macros.md) · [task-spec grammar](docs/task-spec-grammar.md) |
-| LLM link, failover, models and the SLM | [docs/llm-and-models.md](docs/llm-and-models.md) · [SLM benchmark](docs/slm-benchmark.md) |
-| Perception and training your own detector | [docs/perception.md](docs/perception.md) |
-| Navigation (Nav2, SLAM, D* Lite) | [docs/navigation.md](docs/navigation.md) |
-| Audio (STT / TTS engines) | [docs/audio.md](docs/audio.md) |
-| Dashboard, Groot2 and machine health | [docs/dashboard.md](docs/dashboard.md) |
-| Cluster (several machines) | [docs/cluster.md](docs/cluster.md) |
-| Workspaces and SROS2 security | [docs/workspaces-security.md](docs/workspaces-security.md) |
-| What is verified and what is not | [docs/status.md](docs/status.md) |
-| Engineering notes: status, runbook, gotchas, backlog, technical debt | [notes/](notes/README.md) |
+| **Start** | [Start here](docs/start-here.md) · [Concepts and glossary](docs/concepts-and-glossary.md) · [Tutorial: your first plan](docs/tutorial-first-plan.md) · [FAQ](docs/faq.md) |
+| **Understand** | [Architecture](docs/architecture.md) · [Topics, services, actions](docs/interfaces.md) · [Robot mode and recovery](docs/robot-mode-and-recovery.md) · [Safety](docs/safety.md) · [Status: verified and not](docs/status.md) |
+| **Plan** | [Task spec grammar](docs/task-spec-grammar.md) · [Macros](docs/macros.md) · [BT node catalog](docs/node-catalog.md) · [Validator rules](docs/validator-rules.md) · [Behaviour trees](docs/behavior-trees.md) · [LLM and models](docs/llm-and-models.md) |
+| **Operate** | [Operator guide](docs/operator-guide.md) · [Configuration and launch](docs/configuration.md) · [Parameters](docs/parameters.md) · [Dashboard and Groot2](docs/dashboard.md) · [Troubleshooting](docs/troubleshooting.md) |
+| **Robot** | [Perception](docs/perception.md) · [Navigation](docs/navigation.md) · [Audio](docs/audio.md) · [Writing an extension](docs/writing-an-extension.md) |
+| **Models** | [Evaluation](docs/evaluation.md) · [SLM training](docs/slm-training.md) · [SLM benchmark](docs/slm-benchmark.md) |
+| **Many machines** | [Cluster](docs/cluster.md) · [Workspaces and security](docs/workspaces-security.md) |
+| **Reference** | [Messages](docs/messages.md) · [Testing and CI](docs/testing-and-ci.md) · engineering notes in [notes/](notes/README.md) |
 
 ## Status
 

@@ -34,6 +34,6 @@ v4 only saw rows under 768 tokens, so long plans were never trained. v5 continue
 
 On the usual 200 normal rows, under today's validator: v4 0.970 / 0.935, v5 0.975 / 0.980 (5 of those 200 reference trees are Parallel-on-one-extension, which the validator now rejects, so valid cannot exceed 0.975).
 Same caveats as above (synthetic specs, rule-based generator as the reference). Generating a heavy plan on the CPU takes much longer than a normal one (about 2000 tokens),
-which is acceptable because the SLM only runs on retries and specs the rules cannot render. Local only so far: the public Hugging Face repo still holds the older version.
+which is acceptable because the SLM only runs on retries and specs the rules cannot render. Published: v5 is on the public Hugging Face repo `larmkaixian/bt-sim-slm` (older versions stay in the repo history).
 
 Next version: add a row to `slm-benchmark.json` (and the loss points) after each fine-tune, then re-run the plot script.

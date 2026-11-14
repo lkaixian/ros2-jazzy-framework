@@ -13,12 +13,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO = 'lkaixian/ros2-jazzy-framework'
 RAW = f'https://raw.githubusercontent.com/{REPO}/main/docs/'
 TITLE = {'operator-guide': 'Operator guide', 'slm-benchmark': 'SLM benchmark', 'task-spec-grammar': 'Task spec grammar',
-         'llm-and-models': 'LLM and models', 'workspaces-security': 'Workspaces and security'}
-SIDEBAR = [('Getting started', ['operator-guide', 'configuration', 'safety']),
-           ('Planning', ['behavior-trees', 'macros', 'task-spec-grammar', 'llm-and-models', 'slm-benchmark']),
-           ('Robot', ['perception', 'navigation', 'audio', 'dashboard']),
+         'llm-and-models': 'LLM and models', 'workspaces-security': 'Workspaces and security', 'node-catalog': 'BT node catalog',
+         'slm-training': 'SLM training', 'testing-and-ci': 'Testing and CI', 'faq': 'FAQ', 'concepts-and-glossary': 'Concepts and glossary',
+         'tutorial-first-plan': 'Tutorial first plan', 'start-here': 'Start here'}
+SIDEBAR = [('Start', ['start-here', 'concepts-and-glossary', 'tutorial-first-plan', 'faq']),
+           ('Understand', ['architecture', 'interfaces', 'robot-mode-and-recovery', 'safety', 'status']),
+           ('Plan', ['task-spec-grammar', 'macros', 'node-catalog', 'validator-rules', 'behavior-trees', 'llm-and-models']),
+           ('Operate', ['operator-guide', 'configuration', 'parameters', 'dashboard', 'troubleshooting']),
+           ('Robot', ['perception', 'navigation', 'audio', 'writing-an-extension']),
+           ('Models and evaluation', ['evaluation', 'slm-training', 'slm-benchmark']),
            ('Multi-machine', ['cluster', 'workspaces-security']),
-           ('Project', ['status'])]
+           ('Reference', ['messages', 'testing-and-ci'])]
 
 
 def name(stem):
@@ -45,11 +50,13 @@ def main():
     link = lambda s: f"[{name(s)}]({name(s).replace(' ', '-')})"
     open(os.path.join(d, '_Sidebar.md'), 'w').write('**[Home](Home)**\n\n' + '\n\n'.join(
         f'**{g}**\n\n' + '\n'.join('* ' + link(s) for s in ss if s in stems) for g, ss in SIDEBAR) + '\n')
+    start = convert(open(os.path.join(docs, 'start-here.md')).read()).split('\n', 1)[1]
     open(os.path.join(d, 'Home.md'), 'w').write(
-        f'# ros2-jazzy-framework wiki\n\nSpeak a task, get a validated behaviour tree, watch the robot run it. '
-        f'Overview, architecture diagrams and quick start: [README](https://github.com/{REPO}#readme).\n\n'
-        'Pages are generated from `docs/` in the repository (`tools/wiki_sync.py`); edit them there, not here.\n\n'
-        + '\n\n'.join(f'**{g}**\n\n' + '\n'.join('* ' + link(s) for s in ss if s in stems) for g, ss in SIDEBAR) + '\n')
+        f'# ros2-jazzy-framework\n\n> **Speak a task. Get a validated behaviour tree. Watch the robot run it.**\n> '
+        f'Overview, badges and quick start: [README](https://github.com/{REPO}#readme) · '
+        f'[Source](https://github.com/{REPO}) · [Notes](https://github.com/{REPO}/tree/main/notes)\n\n'
+        '*These pages are generated from `docs/` in the repository (`tools/wiki_sync.py`); edit them there, not here.*\n' + start)
+    open(os.path.join(d, '_Footer.md'), 'w').write(f'[Repository](https://github.com/{REPO}) · [Actions](https://github.com/{REPO}/actions) · Generated from `docs/`\n')
     subprocess.run(['git', '-C', d, 'add', '-A'], check=True)
     print(subprocess.run(['git', '-C', d, 'status', '--short'], capture_output=True, text=True).stdout)
     if push:
