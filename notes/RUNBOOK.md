@@ -169,3 +169,5 @@ ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
 - **Planner crash incident (2026-11-14):** an experiment that built `dstar_lite_planner` with optimisation was installed into the shared `install/`
   and `planner_server` crashed for everyone using the workspace. Reverted. Lesson: try builds with `colcon build --build-base X --install-base Y` and
   source `Y/setup.bash` on top (as done for the investigation); never install an experimental binary into the shared `install/`.
+- **LLM re-check after the HRIC/doorbell/seat macros (31 whitelisted macros, 2026-11-14):** `llm_eval.py` 15/15 valid, right macro 8/10; the two "misses"
+  were reasonable alternatives (`go_find_person` + `greet_person`; `go_find_person` + `guide_to`). Prompt growth is not hurting E2B so far.
