@@ -68,6 +68,10 @@ BT.CPP built-ins (Sequence, Fallback, Sleep ...) pass through. Any other node mi
 
 ## Benchmark
 
+![How the WICL benchmark result changed, iteration by iteration](img/wicl-journey.png)
+
+*Regenerate with `python3 tools/plot_wicl_journey.py`. Each panel is a different test set: compare bars inside a panel, not across panels.*
+
 `tools/wicl_bench.py`, 12 navigation tasks: memories learned from one phrasing, evaluated on a paraphrase. ### Results on the production prompt (the fair baseline)
 
 Raw output: `docs/wicl-benchmark-production.json`. Planner: Gemma 4 E2B Q4_0 (GTX 1650) with the **production prompt** (`param/llm_knowledge.md`, which already has about 9 worked examples) and the same JSON-schema constrained decoding as `llm_bridge`. 5 full repeats (learn + evaluate), 3 attempts; 16 memories learned per repeat. Lessons written by an outside AI (`gemini-4-hydrogen-high`, one sentence, `docs/wicl-lessons.json`) through `LessonBook`.
