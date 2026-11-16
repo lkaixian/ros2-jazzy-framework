@@ -1,0 +1,51 @@
+{
+  "runs": 5,
+  "max_attempts": 3,
+  "constrained_decoding": true,
+  "separate_reflector": false,
+  "memories_learned": [
+    10,
+    11,
+    10,
+    11,
+    10
+  ],
+  "results": {
+    "reuse/a_no_memory": {
+      "success_mean": 0.35,
+      "success_min": 0.25,
+      "success_max": 0.417,
+      "mean_attempts_to_success": 1.62
+    },
+    "reuse/b_memory": {
+      "success_mean": 0.883,
+      "success_min": 0.833,
+      "success_max": 0.917,
+      "mean_attempts_to_success": 1
+    },
+    "reuse/c_memory_reflection": {
+      "success_mean": 0.917,
+      "success_min": 0.917,
+      "success_max": 0.917,
+      "mean_attempts_to_success": 1
+    },
+    "heldout/a_no_memory": {
+      "success_mean": 0.35,
+      "success_min": 0.25,
+      "success_max": 0.5,
+      "mean_attempts_to_success": 2.86
+    },
+    "heldout/b_memory": {
+      "success_mean": 0.925,
+      "success_min": 0.75,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "heldout/c_memory_reflection": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    }
+  }
+}

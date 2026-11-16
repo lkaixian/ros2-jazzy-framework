@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bt_rehearsal</name>
+  <version>0.1.0</version>
+  <description>WICL rehearsal loop and simulator interface</description>
+  <maintainer email="lkaixian91@gmail.com">larm</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>bt_memory</exec_depend>
+  <exec_depend>nav_sim</exec_depend>
+  <exec_depend>bt_slm</exec_depend>
+  <exec_depend>bt_common</exec_depend>
+  <exec_depend>bt_validator</exec_depend>
+  <exec_depend>bt_orchestrator</exec_depend>
+  <exec_depend>bt_pipeline_msgs</exec_depend>
+  <exec_depend>framework_bringup</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>bt_validator</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

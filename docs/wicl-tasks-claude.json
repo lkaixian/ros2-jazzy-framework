@@ -1,0 +1,186 @@
+{
+ "train": [
+  {
+   "task": "Go to the left room.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Please drive to the right room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Head to the door.",
+   "goal": "door"
+  },
+  {
+   "task": "Go back to the start.",
+   "goal": "start"
+  },
+  {
+   "task": "Can you go to the far corner?",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Go to the room on the left.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Move to the doorway.",
+   "goal": "door"
+  },
+  {
+   "task": "Return to your starting position.",
+   "goal": "start"
+  },
+  {
+   "task": "Drive over to the room on the right side.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Go to the left room, then come back to the start.",
+   "goal": "start"
+  },
+  {
+   "task": "Go through the doorway into the right room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Visit the right room and then go to the far corner.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Stop at the door, then head into the left room.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Hey, roll over to the corner on the far right side.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "First the far corner, then the door please.",
+   "goal": "door"
+  }
+ ],
+ "eval": [
+  {
+   "task": "Proceed to the western chamber.",
+   "goal": "left_room"
+  },
+  {
+   "task": "yo, scoot over to the east wing",
+   "goal": "right_room"
+  },
+  {
+   "task": "Head back to home base.",
+   "goal": "start"
+  },
+  {
+   "task": "Go stand in the opening in the dividing wall.",
+   "goal": "door"
+  },
+  {
+   "task": "Take me to the most distant nook on the eastern side, opposite your launch point.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Could you make your way to the threshold between the two halves of the building?",
+   "goal": "door"
+  },
+  {
+   "task": "Go to the spot you'd have to pass through to get from one room into the other.",
+   "goal": "door"
+  },
+  {
+   "task": "Return to where you were sitting when you were first switched on today.",
+   "goal": "start"
+  },
+  {
+   "task": "I need you at the point of the map that's as distant as possible from where you began, over on the east side.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Go to the room on the side of the building where the sun sets.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Head into the room on the side where the sun comes up.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Okay so, wherever you'd end up if you crossed the dividing wall heading west, that's where I want you.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Pop into the west room, slip through the gap in the wall, and wait in the east room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "First visit the eastern space, then go back to where you powered on.",
+   "goal": "start"
+  },
+  {
+   "task": "Leave from home, cross through the passage between the rooms, and end at the remotest point of the east side.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Go to the far end of the east side, then come back to the connecting gap between the two rooms.",
+   "goal": "door"
+  },
+  {
+   "task": "Check the eastern room, then the western room.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Start by going to the west room, then the most remote spot past the wall, and finally return to your launch point.",
+   "goal": "start"
+  },
+  {
+   "task": "Don't stop at the passage between the rooms; keep going until you're in the eastern room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "The west-side room is not where I need you. I need you at the threshold.",
+   "goal": "door"
+  },
+  {
+   "task": "You'll roll through the east room on the way, but your actual stop is the spot farthest from where you set off.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Ignore the east side entirely and just go back to where you came from at the beginning.",
+   "goal": "start"
+  },
+  {
+   "task": "Not the far end of the east side, I mean the west room. Go there.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Head toward the east, but only as far as the wall's opening. Don't enter the room beyond it.",
+   "goal": "door"
+  },
+  {
+   "task": "Go to the western one, actually no, scratch that, the remotest spot on the east side.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Head to the archway. Sorry, I meant the east room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Go to the eastern room... hmm, on second thought, just return home.",
+   "goal": "start"
+  },
+  {
+   "task": "Kindly proceed to your point of origin. Correction: proceed to the western room.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Most distant spot. No. The hole in the partition.",
+   "goal": "door"
+  },
+  {
+   "task": "Go to the left room, then... oh wait, never mind, go to the room on the other side of the wall from it.",
+   "goal": "right_room"
+  }
+ ]
+}

@@ -69,6 +69,17 @@ string[] labels            # object labels the detector can produce (empty = unk
 string schema              # JSON schema of a task_spec (allowed nodes/macros/ports); "" = none
 ```
 
+### ListMemories (srv)
+
+```
+string memory_id           # "" = list all; else return that memory as JSON
+---
+string[] ids
+string[] summaries
+string json
+string[] problems          # unreadable or incompatible files
+```
+
 ### LlmQuery (srv)
 
 ```
@@ -80,6 +91,23 @@ bool json_mode
 ---
 bool ok
 string text
+string error
+```
+
+### RehearseTask (srv)
+
+```
+string task
+string goal_place          # scoring only (sim ground truth); "" = any successful run counts
+uint8 max_attempts         # 0 = node default
+float32 timeout_sec        # 0 = node default
+bool reflection
+---
+bool ok                    # true = rehearsal succeeded and a memory was stored
+string status              # success | exhausted | timeout | planner_unavailable | error
+uint8 attempts
+string memory_id
+string[] lessons
 string error
 ```
 

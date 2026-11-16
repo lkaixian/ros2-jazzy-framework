@@ -53,3 +53,12 @@ Severity: **S1** can hurt people/hardware or invalidate results; **S2** likely t
 | T-29 | **Two `object_detection` ament lint tests lint the whole tree from the repo root** (they pass from the package dir). | Run them via `colcon test` or scope them. |
 | T-30 | **Chrony is not installed here**; `timesync.sh`/preflight offset only unit-tested. | Run on two machines. |
 | T-31 | **`DescribePerson` DONE 2026-11-14 for the top colour only** (`Person.clothes_colour`, `person_detection/colour.py`, node + `describe_person` macro, synthetic-pixel tests; not tried on real video, no hair/glasses). Was: `DescribePerson` is missing: perception messages carry no pixels (clothes colour, hair). | Add colour features in `person_detection`, then a node. |
+
+## Added with WICL (2026-11-16)
+| ID | Debt | Next step |
+|---|---|---|
+| T-32 | **Rehearsal sim is kinematic only**: models control nodes + navigation by grid reachability; every other node fails as unsupported. The ROS-driven backend (real `bt_executor` + `nav_sim` + Nav2) is not built. | Implement a second `Simulator`; it must never un-dry-run the executor on a real robot. |
+| T-33 | **WICL benchmark: only the alias split (8 tasks, written by us, near-paraphrase aliases) shows memory helping (100% vs 75%); other splits are at ceiling with the production prompt.** One outside lesson, hand-written remedies in `_REMEDY`, no larger-model reflector tested live. | Harder, independently written tasks; perception and failure-prone places; a Claude or larger-model reflector run; real `llm_bridge` instead of the harness's direct HTTP. |
+| T-34 | **Retrieval is lexical** (token overlap + scene objects); paraphrases score low. `Retriever` is the seam for embeddings. | Add an embedding retriever on CPU. |
+| T-35 | **Memory hook not exercised in a live launch**: unit-tested and launch args checked; the `bt/task_ctx` remap was not run end to end with the bridge. | Add an integration script under `tools/integration/`. |
+| T-36 | `rehearsal_node` (ROS services) was built but only the CLI path was run. | Service smoke test with a fake `llm/query`. |

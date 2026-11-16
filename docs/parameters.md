@@ -56,6 +56,13 @@ orchestrator_node:
   ros__parameters:
     max_attempts: 3
     call_timeout_sec: 60.0
+    memory_enabled: false   # WICL task memory (notes/wicl_design.md): retrieve before planning; a retrieved plan is re-validated, never trusted
+    memory_dir: ""          # "" = ~/.local/share/robocup_fw/bt_memory
+    memory_verbose: false   # true: log each retrieval (score, id, whether a memory was offered as the plan)
+    memory_k: 3
+    memory_min_score: 0.5
+    memory_embodiment: kobuki
+    memory_use_candidate: true   # false: few-shot examples only, always run the planner
     max_repairs: 0         # >0: recoveries allowed per task after a failed run; the policy (mode.py RecoveryPolicy) picks retry/replan/go home/ask a human/abort
 
 scene_summarizer_node:

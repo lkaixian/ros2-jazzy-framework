@@ -1,0 +1,12 @@
+string task
+string goal_place          # scoring only (sim ground truth); "" = any successful run counts
+uint8 max_attempts         # 0 = node default
+float32 timeout_sec        # 0 = node default
+bool reflection
+---
+bool ok                    # true = rehearsal succeeded and a memory was stored
+string status              # success | exhausted | timeout | planner_unavailable | error
+uint8 attempts
+string memory_id
+string[] lessons
+string error

@@ -56,12 +56,15 @@ def main():
         f'Overview, badges and quick start: [README](https://github.com/{REPO}#readme) · '
         f'[Source](https://github.com/{REPO}) · [Notes](https://github.com/{REPO}/tree/main/notes)\n\n'
         '*These pages are generated from `docs/` in the repository (`tools/wiki_sync.py`); edit them there, not here.*\n' + start)
-    open(os.path.join(d, '_Footer.md'), 'w').write(f'[Repository](https://github.com/{REPO}) · [Actions](https://github.com/{REPO}/actions) · Generated from `docs/`\n')
+    open(os.path.join(d, '_Footer.md'), 'w').write(
+        f'[Repository](https://github.com/{REPO}) · [Actions](https://github.com/{REPO}/actions) · Generated from `docs/`\n')
     subprocess.run(['git', '-C', d, 'add', '-A'], check=True)
     print(subprocess.run(['git', '-C', d, 'status', '--short'], capture_output=True, text=True).stdout)
     if push:
-        who = [subprocess.run(['git', 'config', k], capture_output=True, text=True, cwd=ROOT).stdout.strip() for k in ('user.name', 'user.email')]
-        subprocess.run(['git', '-C', d, '-c', f'user.name={who[0]}', '-c', f'user.email={who[1]}', 'commit', '-qm', 'Sync from docs/'], check=True)
+        who = [subprocess.run(['git', 'config', k], capture_output=True, text=True, cwd=ROOT).stdout.strip()
+               for k in ('user.name', 'user.email')]
+        subprocess.run(['git', '-C', d, '-c', f'user.name={who[0]}', '-c', f'user.email={who[1]}',
+                        'commit', '-qm', 'Sync from docs/'], check=True)
         subprocess.run(['git', '-C', d, 'push', '-q'], check=True)
         print('pushed')
 

@@ -1,0 +1,186 @@
+{
+ "train": [
+  {
+   "task": "Go to start.",
+   "goal": "start"
+  },
+  {
+   "task": "Head into the left room.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Please drive to the door.",
+   "goal": "door"
+  },
+  {
+   "task": "Move across to the right room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Go all the way to the far corner.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Return to the starting position.",
+   "goal": "start"
+  },
+  {
+   "task": "Could you head over to the west-side room?",
+   "goal": "left_room"
+  },
+  {
+   "task": "Stop at the entrance between the two rooms.",
+   "goal": "door"
+  },
+  {
+   "task": "Please enter the eastern room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Proceed to the most distant corner on the right.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Visit the left room, then finish at the doorway.",
+   "goal": "door"
+  },
+  {
+   "task": "Start at the beginning and travel to the right room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Go through the entrance and stop in the room on the east side.",
+   "goal": "right_room"
+  },
+  {
+   "task": "First visit the west room, then return to the starting point.",
+   "goal": "start"
+  },
+  {
+   "task": "Travel to the right-hand room and continue to its farthest corner.",
+   "goal": "far_corner"
+  }
+ ],
+ "eval": [
+  {
+   "task": "Position yourself at the building's southwest point of origin.",
+   "goal": "start"
+  },
+  {
+   "task": "I need you beside the passage connecting the two enclosed spaces.",
+   "goal": "door"
+  },
+  {
+   "task": "Head for the chamber occupying the western half of the building.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Settle in the compartment beyond the dividing wall, on its eastern side.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Reach the most remote endpoint of the eastern area.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Go to the spot where someone first enters the mapped building.",
+   "goal": "start"
+  },
+  {
+   "task": "Please wait at the narrow opening that allows movement between the two interior spaces.",
+   "goal": "door"
+  },
+  {
+   "task": "Take me to the western enclosed area, the one on the left when facing east.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Move into the accommodation on the opposite side of the central partition from the western chamber.",
+   "goal": "right_room"
+  },
+  {
+   "task": "I want the endpoint furthest from the southwest origin, within the eastern section.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Start at the southwest origin, pass through the inter-room opening, and finish in the eastern enclosure.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Visit the western chamber first, then stop at the narrow connection in the partition.",
+   "goal": "door"
+  },
+  {
+   "task": "From the initial position, travel to the eastern compartment and continue to its outermost extremity.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Proceed to the western side, return to the point of departure, and remain there.",
+   "goal": "start"
+  },
+  {
+   "task": "Cross the internal threshold into the eastern space, then head back and finish in the western enclosure.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Go past the connecting aperture, but do not stop there. Finish inside the room on the east.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Pass through the western chamber and the central opening. Your destination is the farthest extremity of the eastern side.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "The western space is not where I want you. Go to the place where the journey begins instead.",
+   "goal": "start"
+  },
+  {
+   "task": "Travel toward the eastern enclosure, but halt at the boundary passage separating the two rooms.",
+   "goal": "door"
+  },
+  {
+   "task": "Ignore the starting area. I need you in the chamber immediately west of the internal passage.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Go to the farthest extremity on the right, then come back and finish in the eastern room itself.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Take the route through the western enclosure and the connecting gap, ending at the distant endpoint beyond them.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "First head to the eastern compartment, then visit the southwest departure point, and finally stop in the western compartment.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Move to the central connection, continue into the eastern space, and then return to the original departure location.",
+   "goal": "start"
+  },
+  {
+   "task": "Take me to the western room. Actually, forget that; I want the remote extremity on the opposite side.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Head for the central passage. No, change of plan: finish in the enclosed space to its west.",
+   "goal": "left_room"
+  },
+  {
+   "task": "I initially wanted the eastern chamber, but on second thought, stop at the building's original entry position.",
+   "goal": "start"
+  },
+  {
+   "task": "Go to the distant endpoint, wait—make that the narrow connection between the two interior areas.",
+   "goal": "door"
+  },
+  {
+   "task": "Please proceed to the southwest departure point, then to the western enclosure. Correction: your final destination is the eastern enclosure.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Visit the connecting aperture, then the eastern chamber. Actually, continue beyond that room to its farthest extremity.",
+   "goal": "far_corner"
+  }
+ ]
+}
