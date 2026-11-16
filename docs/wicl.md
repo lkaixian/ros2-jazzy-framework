@@ -99,6 +99,10 @@ Three AIs (Gemini, ChatGPT, Claude) each wrote 15 train and 30 eval tasks from `
 | ChatGPT | 49 | 62 | 57 | 67 | **75** |
 | Claude | 69 | 66 | 80 | 78 | **88** |
 
+![Average success of each arm over the three AI-written test sets](img/wicl-summary.png)
+
+*Regenerate with `python3 tools/plot_wicl_summary.py`.*
+
 How many runs back each column: no memory 5 runs, lessons only 3 runs, the other three 2 runs. Raw: `docs/wicl-benchmark-external-runs12.json` (runs 1 and 2 of the full benchmark; run 3 was stopped to run the ablation) and `docs/wicl-benchmark-ablation.json` (no memory vs lessons only, 3 runs, paired). A single run of the same arm moves by 4 to 10 points, so differences smaller than that are not meaningful.
 
 What this does and does not show:
