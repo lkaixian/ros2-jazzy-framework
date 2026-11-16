@@ -1,5 +1,6 @@
 """Rehearse -> reflect -> retry. The planner only ever sees Observable-derived text."""
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 
 from bt_memory.schema import TaskMemory
@@ -24,7 +25,7 @@ class Result:
 
 
 def rehearse(task, planner, build, validate, sim, reflector=None, max_attempts=4, timeout_s=120.0,
-             clock=time.monotonic):
+             clock=time.monotonic, hint=''):
     """task: bt_rehearsal.sim.Task. build(spec_json) -> xml. validate(xml) -> [errors]. reflector=None
     disables lessons (feedback is then only the raw Observable context)."""
     t0, feedback, lessons, res = clock(), [], [], Result('exhausted')
@@ -56,12 +57,26 @@ def rehearse(task, planner, build, validate, sim, reflector=None, max_attempts=4
                 return res
         require_observable(obs)
         if reflector:
-            lessons.append(reflector.lesson(task.text, obs))
+            lessons.append(reflector.lesson(task.text, obs, _detail(xml, obs, hint)))
             feedback.append(lessons[-1])
         else:
             feedback.append(obs.context_text())
     res.lessons = lessons
     return res
+
+
+def _detail(xml, obs, hint):
+    """What the planner itself wrote at the failing node, plus static config (valid place names): both
+    observable on a real robot. Gives a small reflector something concrete to name."""
+    node, parts = obs.outcome.get('failed_node'), []
+    if node and xml:
+        try:
+            el = next((e for e in ET.fromstring(xml).iter() if e.tag == node), None)
+        except ET.ParseError:
+            el = None
+        if el is not None:
+            parts.append(f'The plan used {node} with ports {dict(el.attrib)}.')
+    return ' '.join(parts + ([hint] if hint else []))
 
 
 def to_memory(task, res, embodiment, framework_version, model_version):

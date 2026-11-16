@@ -18,12 +18,15 @@ class PlannerUnavailable(RuntimeError):
     pass
 
 
-def http_chat(endpoint, timeout=30.0, api_key=''):
+def http_chat(endpoint, timeout=30.0, api_key='', schema=None):
     """OpenAI-compatible /v1/chat/completions (llama-server). Raises on any network or HTTP error."""
     def chat(system, prompt):
         body = json.dumps({'messages': [{'role': 'system', 'content': system},
                                         {'role': 'user', 'content': prompt}],
-                           'temperature': 0.2, 'max_tokens': 1500}).encode()
+                           'temperature': 0.2, 'max_tokens': 1500,
+                           **({'response_format': {'type': 'json_schema',
+                                                   'json_schema': {'name': 'task_spec', 'schema': schema}}}
+                              if schema and system is GRAMMAR else {})}).encode()
         req = urllib.request.Request(endpoint.rstrip('/') + '/v1/chat/completions', body,
                                      {'Content-Type': 'application/json',
                                       **({'Authorization': f'Bearer {api_key}'} if api_key else {})})
@@ -87,12 +90,12 @@ class Reflector:
     def __init__(self, chat=None):
         self.chat = chat
 
-    def lesson(self, task, obs):
+    def lesson(self, task, obs, detail=''):
         base = template_lesson(obs)
         if self.chat:
             try:
                 text = self.chat('Write one short sentence: a lesson for a robot planner. No numbers, '
-                                 'coordinates or ids.', f'Task: {task}\n{obs.context_text()}').strip().splitlines()[0]
+                                 'coordinates or ids.', f'Task: {task}\n{obs.context_text()}' + (f'\n{detail}' if detail else '')).strip().splitlines()[0]
                 if text and not lint(text):
                     return f'{base}. {text}'      # the concrete remedy is never replaced by a vague LLM sentence
             except Exception:  # noqa: BLE001

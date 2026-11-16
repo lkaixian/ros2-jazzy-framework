@@ -4,9 +4,14 @@
   (b) memory retrieval: examples (no lessons) injected, a re-validated memory is tried first
   (c) memory + reflection: examples WITH lessons, and a lesson written after every failed attempt
 Sim-verified only (kinematic sim, not Nav2, not hardware). The LLM is whatever --endpoint serves.
-usage: wicl_bench.py --endpoint http://127.0.0.1:8089 [--attempts 3] [--out docs/wicl-benchmark.json]
+Two splits: REUSE (paraphrases of rehearsed tasks) and HELDOUT (new goal compositions never rehearsed and never
+used while tuning). Each run repeats learn+eval; spread is reported.
+usage: wicl_bench.py --endpoint URL [--reflector-endpoint URL2] [--runs 5] [--attempts 3] [--out docs/wicl-benchmark.json]
 """
 import argparse
+import filecmp
+import os
+import sys
 import json
 import statistics
 import tempfile
@@ -36,7 +41,32 @@ TASKS = [
 ]
 
 
-def attempt_stats(task, planner, env, reflector, max_attempts, memories_dir, use_memory, with_lessons):
+HELDOUT = [
+    ('go to the far corner then the left room', 'left_room'),
+    ('visit the right room then go to the start', 'start'),
+    ('go to the left room then the door then the right room', 'right_room'),
+    ('go to the start then the far corner', 'far_corner'),
+    ('go to the door, then the far corner', 'far_corner'),
+    ('go to the right room, the far corner and then the left room', 'left_room'),
+    ('go to the left room then the right room', 'right_room'),
+    ('go to the far corner then the door', 'door'),
+]
+
+
+def check_install():
+    """The packages install by copy: refuse to benchmark code that differs from the source tree."""
+    import bt_memory
+    import bt_rehearsal
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src')
+    for mod in (bt_memory, bt_rehearsal):
+        inst = os.path.dirname(mod.__file__)
+        src = os.path.join(root, mod.__name__, mod.__name__)
+        for f in os.listdir(src):
+            if f.endswith('.py') and not filecmp.cmp(os.path.join(src, f), os.path.join(inst, f), shallow=False):
+                sys.exit(f'STALE INSTALL: {mod.__name__}/{f} differs from src/. Run colcon build --packages-select {mod.__name__}')
+
+
+def attempt_stats(task, planner, env, reflector, max_attempts, memories_dir, use_memory, with_lessons, hint=''):
     """Returns (success, attempts, first_try_valid)."""
     env['sim'].reset()
     if use_memory:
@@ -50,45 +80,61 @@ def attempt_stats(task, planner, env, reflector, max_attempts, memories_dir, use
             obs, priv = env['sim'].run(cand.xml)
             if env['sim'].score(task, obs, priv):
                 return True, 1, True
-    r = rehearse(task, planner, env['build'], env['validate'], env['sim'], reflector, max_attempts)
+    r = rehearse(task, planner, env['build'], env['validate'], env['sim'], reflector, max_attempts, hint=hint)
     return r.success, r.attempts, r.validated_first_try
+
+
+def one_run(a, env, chat, refl_chat):
+    mem_dir = tempfile.mkdtemp(prefix='wicl_bench_')
+    store, hint = MemoryStore(mem_dir), env['hint']
+    learned = 0
+    for train, _, goal in TASKS:      # learn: rehearse every TRAINING phrasing with reflection
+        t = Task(train, goal)
+        r = rehearse(t, LlmPlanner(chat, env['listing']), env['build'], env['validate'], env['sim'],
+                     Reflector(refl_chat), a.attempts, hint=hint)
+        if r.success:
+            store.save(to_memory(t, r, 'kobuki', '0.1.0', 'bench'))
+            learned += 1
+    arms = {'a_no_memory': (False, False, None), 'b_memory': (True, False, None),
+            'c_memory_reflection': (True, True, Reflector(refl_chat))}
+    splits = {'reuse': [(ev, g) for _, ev, g in TASKS], 'heldout': HELDOUT}
+    out = {'learned': learned}
+    for sname, tasks in splits.items():
+        for name, (use_mem, lessons, refl) in arms.items():
+            rows = [attempt_stats(Task(t, g), LlmPlanner(chat, env['listing']), env, refl, a.attempts, mem_dir,
+                                  use_mem, lessons, hint) for t, g in tasks]
+            out[f'{sname}/{name}'] = (sum(ok for ok, _, _ in rows) / len(rows),
+                                      [n for ok, n, _ in rows if ok])
+    return out
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--endpoint', required=True)
+    ap.add_argument('--reflector-endpoint', default='', help='separate (e.g. larger) model for lessons')
     ap.add_argument('--attempts', type=int, default=3)
+    ap.add_argument('--runs', type=int, default=5)
     ap.add_argument('--out', default='')
     a = ap.parse_args()
+    check_install()
     env = make_env(scene={'objects': [], 'num_persons': 0})
-    chat = http_chat(a.endpoint, timeout=60)
-    mem_dir = tempfile.mkdtemp(prefix='wicl_bench_')
-    store = MemoryStore(mem_dir)
-
-    # learn: rehearse every TRAINING phrasing with reflection, store the successes
-    learned = 0
-    for train, _, goal in TASKS:
-        t = Task(train, goal)
-        r = rehearse(t, LlmPlanner(chat, env['listing']), env['build'], env['validate'], env['sim'], Reflector(chat), a.attempts)
-        if r.success:
-            store.save(to_memory(t, r, 'kobuki', '0.1.0', 'bench'))
-            learned += 1
-    print(f'learned {learned}/{len(TASKS)} memories')
-
-    arms = {'a_no_memory': (False, False, None), 'b_memory': (True, False, None), 'c_memory_reflection': (True, True, Reflector(chat))}
-    report = {'tasks': len(TASKS), 'memories_learned': learned, 'max_attempts': a.attempts, 'arms': {}}
-    for name, (use_mem, lessons, refl) in arms.items():
-        rows = []
-        for _, ev, goal in TASKS:
-            pl = LlmPlanner(chat, env['listing'])
-            rows.append(attempt_stats(Task(ev, goal), pl, env, refl, a.attempts, mem_dir, use_mem, lessons))
-        succ = [n for ok, n, _ in rows if ok]
-        report['arms'][name] = {
-            'sim_success_rate': round(sum(ok for ok, _, _ in rows) / len(rows), 3),
-            'first_plan_validate_rate': round(sum(v for _, _, v in rows) / len(rows), 3),
-            'mean_attempts_to_success': round(statistics.mean(succ), 2) if succ else None}
-        print(name, report['arms'][name])
-    report['note'] = 'kinematic 2D sim, one run per arm, single LLM sample per call: differences of 1 task (8 pts) are noise'
+    chat = http_chat(a.endpoint, timeout=60, schema=env['schema'])
+    refl_chat = http_chat(a.reflector_endpoint, timeout=60) if a.reflector_endpoint else chat
+    runs = []
+    for i in range(a.runs):
+        runs.append(one_run(a, env, chat, refl_chat))
+        print(f'run {i + 1}/{a.runs}:', {k: (round(v[0], 2) if isinstance(v, tuple) else v) for k, v in runs[-1].items()}, flush=True)
+    report = {'runs': a.runs, 'max_attempts': a.attempts, 'constrained_decoding': True,
+              'separate_reflector': bool(a.reflector_endpoint), 'memories_learned': [r['learned'] for r in runs], 'results': {}}
+    for k in runs[0]:
+        if k == 'learned':
+            continue
+        rates = [r[k][0] for r in runs]
+        att = [n for r in runs for n in r[k][1]]
+        report['results'][k] = {'success_mean': round(statistics.mean(rates), 3), 'success_min': round(min(rates), 3),
+                                'success_max': round(max(rates), 3),
+                                'mean_attempts_to_success': round(statistics.mean(att), 2) if att else None}
+        print(k, report['results'][k])
     if a.out:
         json.dump(report, open(a.out, 'w'), indent=2)
 

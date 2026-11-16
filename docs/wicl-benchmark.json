@@ -1,23 +1,51 @@
 {
-  "tasks": 12,
-  "memories_learned": 12,
+  "runs": 5,
   "max_attempts": 3,
-  "arms": {
-    "a_no_memory": {
-      "sim_success_rate": 0.583,
-      "first_plan_validate_rate": 1.0,
-      "mean_attempts_to_success": 2.14
+  "constrained_decoding": true,
+  "separate_reflector": false,
+  "memories_learned": [
+    10,
+    11,
+    10,
+    11,
+    10
+  ],
+  "results": {
+    "reuse/a_no_memory": {
+      "success_mean": 0.35,
+      "success_min": 0.25,
+      "success_max": 0.417,
+      "mean_attempts_to_success": 1.62
     },
-    "b_memory": {
-      "sim_success_rate": 0.917,
-      "first_plan_validate_rate": 1.0,
+    "reuse/b_memory": {
+      "success_mean": 0.883,
+      "success_min": 0.833,
+      "success_max": 0.917,
       "mean_attempts_to_success": 1
     },
-    "c_memory_reflection": {
-      "sim_success_rate": 0.917,
-      "first_plan_validate_rate": 1.0,
+    "reuse/c_memory_reflection": {
+      "success_mean": 0.917,
+      "success_min": 0.917,
+      "success_max": 0.917,
+      "mean_attempts_to_success": 1
+    },
+    "heldout/a_no_memory": {
+      "success_mean": 0.35,
+      "success_min": 0.25,
+      "success_max": 0.5,
+      "mean_attempts_to_success": 2.86
+    },
+    "heldout/b_memory": {
+      "success_mean": 0.925,
+      "success_min": 0.75,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "heldout/c_memory_reflection": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
       "mean_attempts_to_success": 1
     }
-  },
-  "note": "kinematic 2D sim, one run per arm, single LLM sample per call: differences of 1 task (8 pts) are noise"
+  }
 }

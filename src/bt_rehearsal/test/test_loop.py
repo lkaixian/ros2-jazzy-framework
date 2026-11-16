@@ -97,3 +97,14 @@ def test_to_memory(sim):
     assert m.scene == {'objects': ['cup'], 'num_persons': 0}
     with pytest.raises(ValueError):
         to_memory(t, rehearse(t, Scripted(['kitchen']), build, validate, sim, max_attempts=1), 'k', '', '')
+
+
+def test_reflector_gets_ports_and_places(sim):
+    seen = []
+
+    class Spy(Reflector):
+        def lesson(self, task, obs, detail=''):
+            seen.append(detail)
+            return super().lesson(task, obs, detail)
+    rehearse(Task('x', 'right_room'), Scripted(['nowhere', 'right_room']), build, validate, sim, Spy(), hint='Valid places: door.')
+    assert "NavigateToPlace with ports {'place': 'nowhere'}" in seen[0] and 'Valid places: door.' in seen[0]

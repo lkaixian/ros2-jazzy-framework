@@ -5,7 +5,7 @@ import os
 import yaml
 from ament_index_python.packages import get_package_share_directory as share
 from bt_common.catalog import discover_catalog, format_listing
-from bt_common.macros import expand, load_macros, load_whitelist
+from bt_common.macros import expand, load_macros, load_whitelist, spec_schema
 from bt_slm.fallback import build_xml
 from bt_validator.validate import validate_xml
 from nav_sim.occupancy import OccupancyMap
@@ -24,6 +24,8 @@ def make_env(map_yaml='', places_yaml='', scene=None):
                           {k: (v['x'], v['y']) for k, v in places.items()}, scene_summary=scene)
     ids = set(cat.all())
     return {
+        'schema': spec_schema(list(cat.all().values()), macros),
+        'hint': 'Valid places: ' + ', '.join(sorted(places)) + '.',
         'catalog': cat, 'sim': sim, 'places': places,
         'listing': format_listing(cat.all().values(), with_desc=True) + '\nPlaces: ' + ', '.join(sorted(places)),
         'build': lambda spec: build_xml(json.dumps(expand(json.loads(spec), macros, whitelist)), ids),

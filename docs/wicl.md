@@ -54,17 +54,21 @@ BT.CPP built-ins (Sequence, Fallback, Sleep ...) pass through. Any other node mi
 
 ## Benchmark
 
-`tools/wicl_bench.py`, 12 navigation tasks: memories learned from one phrasing, evaluated on a paraphrase. Raw output: `docs/wicl-benchmark.json`. Planner: Gemma 4 E2B Q4_0 on the GTX 1650 through llama-server, max 3 attempts, one run, 12/12 training tasks rehearsed into memories.
+`tools/wicl_bench.py`, 12 navigation tasks: memories learned from one phrasing, evaluated on a paraphrase. Raw output: `docs/wicl-benchmark.json`. Planner: Gemma 4 E2B Q4_0 on the GTX 1650 through llama-server with the same JSON-schema constrained decoding as `llm_bridge`, max 3 attempts. 5 full repeats (learn + evaluate each time); memories learned per repeat: 10 to 11 of 12. Two splits: **reuse** (paraphrases of rehearsed tasks) and **held-out** (8 new goal compositions, never rehearsed, never used for tuning).
 
-| Arm | Sim success | First plan validates | Mean attempts to success |
+| Split | No memory | Memory | Memory + reflection |
 |---|---|---|---|
-| (a) no memory (raw feedback retries) | 7/12 | 12/12 | 2.14 |
-| (b) memory retrieval | 11/12 | 12/12 | 1.0 |
-| (c) memory + reflection | 11/12 | 12/12 | 1.0 |
+| reuse | 35% (25 to 42) | 88% (83 to 92) | 92% (92 to 92) |
+| held-out | 35% (25 to 50) | 92% (75 to 100) | 100% (100 to 100) |
 
-What this does and does not show:
-- **Memory helped here**, mostly by *reuse*: in (b) and (c) a stored plan that still validated was run first, with zero LLM calls. The evaluation tasks are paraphrases of tasks already rehearsed, so this is the best case for retrieval, not a general-planning gain.
-- **Reflection added nothing measurable**: (b) equals (c). It mattered during *learning*: with the concrete template remedies (e.g. "leave out timeout_ms") rehearsal produced 12/12 memories, versus 1/12 earlier.
-- **Hand-written knowledge is doing work.** The remedies in `bt_rehearsal/llm.py` (`_REMEDY`) are authored by a person, not learned. The 2B model's own lessons were vague ("verify the destination") and did not help alone.
-- **I tuned this harness on its own results.** Four runs: 1/12 memories learned with a 600-token cap and a generic lesson, again 1/12 with a stale installed package (my mistake: the fixes were not in the run), 1/12 with better remedies but the LLM sentence replacing them, then 12/12 once the template remedy was always kept. Treat the final numbers as optimistic. 12 tasks, one run, one sample per call: a difference of one task (8 points) is noise, but 7/12 against 11/12 is four tasks.
-- Sim-verified only (kinematic 2D sim). Nothing here is a Nav2 or hardware result.
+(mean, min to max over 5 repeats.)
+
+**Do not read this as "memory content helps".** A control (`zero-shot` vs one FIXED example that is unrelated to the held-out tasks, same 8 tasks, 5 repeats) gave **38% zero-shot and 100% with the single fixed example, all on the first try**. So almost all of the gain here is the example teaching the small model the output format (in particular, not to invent `timeout_ms`), which a static line in the prompt gives just as well. What the benchmark does show:
+- With *some* example in context the 2B model plans these tasks reliably; without one it does not.
+- Memory reuse of an already-validated plan is cheap (no LLM call) and was correct on the reuse split.
+- It does **not** show that task-specific memory, or lessons from failures, beat a generic fixed example. Reflection's extra 4 to 8 points over memory-only are within what this setup can resolve (8 to 12 tasks).
+- Learning (rehearsal) needed concrete lessons: the model's own were vague. With the concrete remedies rehearsal produced 10 to 11 of 12 memories; with only the model's lessons it produced 1 of 12 (earlier runs).
+
+Practical consequence: the cheapest improvement for the small model is a better static prompt (one example plus "do not invent timeout_ms"), independent of this feature. Whether task memory adds anything beyond that needs a harder task set where one fixed example does not already give about 100%.
+
+Limits: kinematic 2D sim only; 2B model only (a larger reflector was not tested: `--reflector-endpoint` exists but no larger model was available here); hand-written remedies in `llm.py`; one author-written task set.
