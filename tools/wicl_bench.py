@@ -53,6 +53,19 @@ HELDOUT = [
 ]
 
 
+# ALIAS tasks: the user names a place the planner must map to a real one (door, left_room, right_room, far_corner,
+# start). Written before any run on them; never tuned against. Rehearsed aliases differ from evaluated aliases, so the
+# task-specific mapping learned in rehearsal is the only thing that can help; a generic example cannot teach it.
+HARD_TRAIN = [('go to the doorway', 'door'), ('go to the west room', 'left_room'), ('go to the east room', 'right_room'),
+              ('go to the far end of the map', 'far_corner'), ('go to where you started', 'start')]
+HARD_EVAL = [('go to the entrance between the two rooms', 'door'), ('go to the room in the west', 'left_room'),
+             ('go to the room in the east', 'right_room'), ('go to the farthest corner from the start', 'far_corner'),
+             ('go to your starting spot', 'start'), ('go to the west room then the doorway', 'door'),
+             ('go to the east room then the far end of the map', 'far_corner'),
+             ('go to the doorway then the room in the west', 'left_room')]
+FIXED_EXAMPLE = ['Task: go to the door\nPlan: NavigateToPlace(place=door)']
+
+
 def check_install():
     """The packages install by copy: refuse to benchmark code that differs from the source tree."""
     import bt_memory
@@ -88,20 +101,22 @@ def one_run(a, env, chat, refl_chat):
     mem_dir = tempfile.mkdtemp(prefix='wicl_bench_')
     store, hint = MemoryStore(mem_dir), env['hint']
     learned = 0
-    for train, _, goal in TASKS:      # learn: rehearse every TRAINING phrasing with reflection
+    for train, goal in [(t, g) for t, _, g in TASKS] + HARD_TRAIN:      # learn: rehearse every TRAINING phrasing with reflection
         t = Task(train, goal)
         r = rehearse(t, LlmPlanner(chat, env['listing']), env['build'], env['validate'], env['sim'],
                      Reflector(refl_chat), a.attempts, hint=hint)
         if r.success:
             store.save(to_memory(t, r, 'kobuki', '0.1.0', 'bench'))
             learned += 1
-    arms = {'a_no_memory': (False, False, None), 'b_memory': (True, False, None),
+    arms = {'a_no_memory': (False, False, None), 'd_fixed_example': (False, False, None),
+            'b_memory': (True, False, None),
             'c_memory_reflection': (True, True, Reflector(refl_chat))}
-    splits = {'reuse': [(ev, g) for _, ev, g in TASKS], 'heldout': HELDOUT}
+    splits = {'reuse': [(ev, g) for _, ev, g in TASKS], 'heldout': HELDOUT, 'alias': HARD_EVAL}
     out = {'learned': learned}
     for sname, tasks in splits.items():
         for name, (use_mem, lessons, refl) in arms.items():
-            rows = [attempt_stats(Task(t, g), LlmPlanner(chat, env['listing']), env, refl, a.attempts, mem_dir,
+            rows = [attempt_stats(Task(t, g), LlmPlanner(chat, env['listing'], FIXED_EXAMPLE if name == 'd_fixed_example' else ()),
+                                  env, refl, a.attempts, mem_dir,
                                   use_mem, lessons, hint) for t, g in tasks]
             out[f'{sname}/{name}'] = (sum(ok for ok, _, _ in rows) / len(rows),
                                       [n for ok, n, _ in rows if ok])
