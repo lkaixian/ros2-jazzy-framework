@@ -1,6 +1,6 @@
 # WICL paper notes
 
-Fang et al., "World In-Context Learning for Agentic Robot Manipulation", arXiv:2611.12885v1 (9 Nov 2026).
+Fang, Guo, Zhang, Du, Liang, Bai, "World In-Context Learning for Agentic Robot Manipulation", arXiv:2611.12885v1 [cs.CV] (9 Nov 2026), https://arxiv.org/abs/2611.12885. Code: https://github.com/ArcheOne-AI/RoboScript (not used here).
 Read from the arXiv PDF (the HTML version does not exist). Section numbers refer to the paper.
 The paper's own system is called RoboScript. Its world is RoboTwin 2.0 (dual-arm manipulation sim).
 

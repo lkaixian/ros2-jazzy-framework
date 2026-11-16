@@ -162,6 +162,10 @@ Everything is also on the **[project wiki](https://github.com/lkaixian/ros2-jazz
 
 Tested in simulation and in CI on every push (Jazzy: build, unit tests, gtests, `check_params`, launch checks and the integration sims in `tools/integration/`; Humble: build and unit tests). **Not yet run on a real robot, a second machine, a real arm or real microphone audio.** The full list of what was and was not verified is in [docs/status.md](docs/status.md). Keep a hardware e-stop within reach: the software mux is not one.
 
+## References
+
+- World In-Context Learning (task memory, `docs/wicl.md`) adapts the idea of Fang et al., *World In-Context Learning for Agentic Robot Manipulation*, [arXiv:2611.12885](https://arxiv.org/abs/2611.12885) (2026). Independent implementation; not affiliated with the authors.
+
 ## License
 
 Apache-2.0, see [LICENSE](LICENSE).

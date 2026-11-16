@@ -3,7 +3,7 @@
 > [!WARNING]
 > Sim-verified at most: a **2D kinematic** nav sim (no Nav2, no manipulation physics, no hardware). Off by default.
 
-Inspired by Fang et al., *World In-Context Learning for Agentic Robot Manipulation* (arXiv:2611.12885). The model never changes: the planner tries a task in a simulator, learns from the feedback **in its context**, and a successful rehearsal is saved as a **Task Memory** (a JSON file). No fine-tuning, no gradient updates. Differences from the paper are in [notes/wicl_paper_notes.md](../notes/wicl_paper_notes.md).
+Based on the idea in Fang et al., *World In-Context Learning for Agentic Robot Manipulation* (arXiv:2611.12885; see [Reference](#reference)). The model never changes: the planner tries a task in a simulator, learns from the feedback **in its context**, and a successful rehearsal is saved as a **Task Memory** (a JSON file). No fine-tuning, no gradient updates. Differences from the paper are in [notes/wicl_paper_notes.md](../notes/wicl_paper_notes.md).
 
 ```
 rehearse (bt_rehearsal)                    deploy (bt_orchestrator, memory_enabled:=true)
@@ -72,3 +72,22 @@ BT.CPP built-ins (Sequence, Fallback, Sleep ...) pass through. Any other node mi
 Practical consequence: the cheapest improvement for the small model is a better static prompt (one example plus "do not invent timeout_ms"), independent of this feature. Whether task memory adds anything beyond that needs a harder task set where one fixed example does not already give about 100%.
 
 Limits: kinematic 2D sim only; 2B model only (a larger reflector was not tested: `--reflector-endpoint` exists but no larger model was available here); hand-written remedies in `llm.py`; one author-written task set.
+
+## Reference
+
+This feature adapts the idea of **World In-Context Learning (WICL)** from:
+
+> Heng Fang, Zehui Guo, Yuehan Zhang, Mingyang Du, Dingkang Liang, Xiang Bai.
+> **World In-Context Learning for Agentic Robot Manipulation.** arXiv:2611.12885 [cs.CV], 9 November 2026.
+> https://arxiv.org/abs/2611.12885 · code: https://github.com/ArcheOne-AI/RoboScript · project page: https://ArcheOne-AI.github.io/RoboScript
+
+```bibtex
+@article{fang2026wicl,
+  title   = {World In-Context Learning for Agentic Robot Manipulation},
+  author  = {Fang, Heng and Guo, Zehui and Zhang, Yuehan and Du, Mingyang and Liang, Dingkang and Bai, Xiang},
+  journal = {arXiv preprint arXiv:2611.12885},
+  year    = {2026}
+}
+```
+
+The code here is an independent implementation for BehaviorTree planning in a 2D navigation sim. It does not use or copy RoboScript, it is not affiliated with the authors, and it is **not a reproduction** of their results (they study dual-arm manipulation with frontier models; see `notes/wicl_paper_notes.md` for the differences). Any shortcoming of this feature is ours, not the paper's.
