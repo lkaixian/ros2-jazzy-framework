@@ -4,7 +4,7 @@ import os
 import pytest
 
 from bt_rehearsal.isolation import Observable
-from bt_rehearsal.llm import LlmPlanner, PlannerUnavailable, Reflector, template_lesson
+from bt_rehearsal.llm import LlmPlanner, Reflector, template_lesson
 from bt_rehearsal.loop import rehearse, to_memory
 from bt_rehearsal.sim import KinematicNavSim, Task
 

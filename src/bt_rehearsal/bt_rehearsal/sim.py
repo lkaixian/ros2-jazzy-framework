@@ -62,6 +62,7 @@ class KinematicNavSim:
             return None
         step = max(1, int(round(self.radius / self.occ.res)))
         # coarse grid (cell = radius) keeps the BFS small; fine enough for room-scale maps
+
         def key(r, c):
             return r // step, c // step
         seen, q = {key(r0, c0)}, deque([(r0, c0, 0.0)])

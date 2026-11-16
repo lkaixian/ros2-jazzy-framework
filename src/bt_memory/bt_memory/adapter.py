@@ -12,7 +12,6 @@ from dataclasses import replace
 
 import yaml
 
-from bt_memory.schema import TaskMemory
 
 # BehaviorTree.CPP built-ins present on every embodiment (never remapped).
 PASSTHROUGH = {'root', 'BehaviorTree', 'TreeNodesModel', 'SubTree', 'Sequence', 'ReactiveSequence', 'Fallback',

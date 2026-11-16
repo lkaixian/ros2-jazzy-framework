@@ -95,7 +95,8 @@ class Reflector:
         if self.chat:
             try:
                 text = self.chat('Write one short sentence: a lesson for a robot planner. No numbers, '
-                                 'coordinates or ids.', f'Task: {task}\n{obs.context_text()}' + (f'\n{detail}' if detail else '')).strip().splitlines()[0]
+                                 'coordinates or ids.', f'Task: {task}\n{obs.context_text()}' + (f'\n{detail}' if detail else '')
+                                 ).strip().splitlines()[0]
                 if text and not lint(text):
                     return f'{base}. {text}'      # the concrete remedy is never replaced by a vague LLM sentence
             except Exception:  # noqa: BLE001

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from bt_memory.schema import TaskMemory
 from bt_rehearsal.isolation import Observable, require_observable
-from bt_rehearsal.llm import PlannerUnavailable, Reflector
+from bt_rehearsal.llm import PlannerUnavailable
 
 
 @dataclass
