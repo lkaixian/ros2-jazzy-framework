@@ -1,0 +1,52 @@
+{
+  "runs": 3,
+  "max_attempts": 3,
+  "constrained_decoding": true,
+  "prompt": "production",
+  "lessons_file": "docs/wicl-lessons.json",
+  "separate_reflector": false,
+  "reflector_model": "same as planner",
+  "memories_learned": [
+    0,
+    0,
+    0
+  ],
+  "results": {
+    "external_gemini/a_no_memory": {
+      "success_mean": 0.6,
+      "success_min": 0.567,
+      "success_max": 0.633,
+      "mean_attempts_to_success": 1.13
+    },
+    "external_gemini/e_lessons_only": {
+      "success_mean": 0.744,
+      "success_min": 0.733,
+      "success_max": 0.767,
+      "mean_attempts_to_success": 1.25
+    },
+    "external_chatgpt/a_no_memory": {
+      "success_mean": 0.489,
+      "success_min": 0.433,
+      "success_max": 0.533,
+      "mean_attempts_to_success": 1.09
+    },
+    "external_chatgpt/e_lessons_only": {
+      "success_mean": 0.667,
+      "success_min": 0.633,
+      "success_max": 0.7,
+      "mean_attempts_to_success": 1.47
+    },
+    "external_claude/a_no_memory": {
+      "success_mean": 0.722,
+      "success_min": 0.633,
+      "success_max": 0.8,
+      "mean_attempts_to_success": 1.28
+    },
+    "external_claude/e_lessons_only": {
+      "success_mean": 0.778,
+      "success_min": 0.767,
+      "success_max": 0.8,
+      "mean_attempts_to_success": 1.29
+    }
+  }
+}

@@ -8,7 +8,9 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 
 INK, MUTED, GRID, BG = '#0b0b0b', '#52514e', '#e4e3df', '#fcfcfb'
-ARMS = [('No memory', '#8a8984'), ('One fixed example', '#2a78d6'), ('Memory', '#eb6834'), ('Memory + lessons', '#1baf7a')]
+ARMS = [('No memory', '#8a8984'), ('One fixed example', '#2a78d6'), ('Memory', '#eb6834'), ('Memory + lessons', '#1baf7a'),
+        ('Lessons only (no memory)', '#1baf7a')]
+HATCH = {4: '////'}
 
 fig = plt.figure(figsize=(14, 10.2), facecolor=BG)
 gs = fig.add_gridspec(2, 3, height_ratios=[0.95, 1], hspace=0.50, wspace=0.22, left=0.055, right=0.985, top=0.80, bottom=0.14)
@@ -20,7 +22,8 @@ def panel(ax, title, groups, series, label_arms=(0, 3), width=0.8, note=None):
     w = width / n
     for k, (arm, vals) in enumerate(series.items()):
         xs = [i - width / 2 + w * (k + 0.5) for i in range(len(groups))]
-        ax.bar(xs, vals, w * 0.86, color=ARMS[arm][1], zorder=3, linewidth=0)
+        ax.bar(xs, vals, w * 0.86, color=ARMS[arm][1], zorder=3, linewidth=0, hatch=HATCH.get(arm),
+               edgecolor='#fcfcfb' if arm in HATCH else None)
         if arm in label_arms:
             for x, v in zip(xs, vals):
                 ax.text(x, v + 1.8, f'{v:g}', ha='center', va='bottom', fontsize=8, color=INK)
@@ -66,12 +69,12 @@ ax.text(2, 106, '75 → 100', ha='center', fontsize=8.5, color=INK)
 
 # D: three independent AI writers, first repeat only
 ax = fig.add_subplot(gs[1, 2])
-panel(ax, 'D.  Three AI-written test sets (1 run)', ['Gemini', 'ChatGPT', 'Claude'],
-      {0: [67, 53, 67], 1: [73, 67, 70], 2: [67, 57, 80], 3: [80, 77, 83]}, label_arms=(0, 3),
-      note='30 tasks each (1 task = 3.3 points). Memory + lessons is the\nbest arm for all three writers; memory alone is not.')
+panel(ax, 'D.  Three AI-written test sets (2 to 5 runs)', ['Gemini', 'ChatGPT', 'Claude'],
+      {0: [64, 49, 69], 1: [76, 62, 66], 2: [65, 57, 80], 4: [74, 67, 78], 3: [80, 75, 88]}, label_arms=(0, 4, 3),
+      note='30 tasks each (1 task = 3.3 points). Lessons alone\n(hatched) give most of the gain; memory adds a\nsmaller extra on top.')
 
-handles = [plt.Rectangle((0, 0), 1, 1, color=c) for _, c in ARMS]
-fig.legend(handles, [a for a, _ in ARMS], loc='upper left', bbox_to_anchor=(0.05, 0.855), ncol=4, frameon=False, fontsize=10)
+handles = [plt.Rectangle((0, 0), 1, 1, facecolor=c, hatch=HATCH.get(i), edgecolor='#fcfcfb') for i, (_, c) in enumerate(ARMS)]
+fig.legend(handles, [a for a, _ in ARMS], loc='upper left', bbox_to_anchor=(0.05, 0.855), ncol=5, frameon=False, fontsize=10)
 fig.text(0.055, 0.955, 'WICL task memory: how the result changed, step by step', fontsize=15, fontweight='bold', color=INK)
 fig.text(0.055, 0.925, 'Planner: Gemma 4 E2B (2B) in a 2D kinematic nav sim on the sample map. Sim only: nothing here ran on the robot.\n'
          'Each panel is a different test set: compare bars inside a panel, not across panels.', fontsize=9.5, color=MUTED, va='top')
