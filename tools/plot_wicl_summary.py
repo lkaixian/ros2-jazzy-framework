@@ -37,7 +37,7 @@ ax.spines['bottom'].set_color(GRID)
 ax.tick_params(length=0)
 fig.text(0.04, 0.95, 'Lessons help most; memory adds a smaller extra on top', fontsize=14.5, fontweight='bold',
          color=INK, va='top')
-fig.text(0.04, 0.885, 'Average success over three AI-written test sets (30 tasks each). Planner: Gemma 4 E2B (2B), 2D nav sim, sample map.\n'
+fig.text(0.04, 0.885, 'Average success over three AI-written test sets (30 tasks each). Planner: Gemma 4 E2B (2B), 2D nav sim.\n'
          'A single run moves 4 to 10 points, so smaller gaps are not meaningful. Sim only: nothing here ran on the robot.',
          fontsize=9, color=MUTED, va='top')
 plt.subplots_adjust(left=0.24, right=0.97, top=0.76, bottom=0.1)
