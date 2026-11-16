@@ -106,11 +106,25 @@ def mk_refl(a, refl_chat):
     return LessonBook(a.lessons_file) if a.lessons_file else Reflector(refl_chat)
 
 
+def load_external(path):
+    d = json.load(open(path))
+    places = {'start', 'left_room', 'door', 'right_room', 'far_corner'}
+    out = {}
+    for k in ('train', 'eval'):
+        items = d[k]
+        bad = [i for i in items if i.get('goal') not in places or not str(i.get('task', '')).strip()]
+        if bad:
+            sys.exit(f'{path}: {k} has items with a missing task or unknown goal: {bad[:3]}')
+        out[k] = [(i['task'].strip(), i['goal']) for i in items]
+    return out
+
+
 def one_run(a, env, chat, refl_chat):
     mem_dir = tempfile.mkdtemp(prefix='wicl_bench_')
     store, hint = MemoryStore(mem_dir), env['hint']
     learned = 0
-    for train, goal in [(t, g) for t, _, g in TASKS] + HARD_TRAIN:      # learn: rehearse every TRAINING phrasing with reflection
+    ext = load_external(a.tasks_file) if a.tasks_file else None
+    for train, goal in [(t, g) for t, _, g in TASKS] + HARD_TRAIN + (ext['train'] if ext else []):      # learn: rehearse every TRAINING phrasing with reflection
         t = Task(train, goal)
         r = rehearse(t, mk_planner(a, env, chat), env['build'], env['validate'], env['sim'],
                      mk_refl(a, refl_chat), a.attempts, hint=hint)
@@ -121,6 +135,8 @@ def one_run(a, env, chat, refl_chat):
             'b_memory': (True, False, None),
             'c_memory_reflection': (True, True, mk_refl(a, refl_chat))}
     splits = {'reuse': [(ev, g) for _, ev, g in TASKS], 'heldout': HELDOUT, 'alias': HARD_EVAL}
+    if ext:
+        splits['external'] = ext['eval']
     out = {'learned': learned}
     for sname, tasks in splits.items():
         for name, (use_mem, lessons, refl) in arms.items():
@@ -141,6 +157,7 @@ def main():
     ap.add_argument('--lessons-file', default='', help='lessons by situation key (see tools/wicl_situations.py)')
     ap.add_argument('--prompt', choices=('production', 'bare'), default='production',
                     help='production = param/llm_knowledge.md + schema (what llm_bridge uses); bare = grammar only')
+    ap.add_argument('--tasks-file', default='', help='JSON {"train": [{task, goal}], "eval": [...]} written by someone else (docs/wicl-task-writer-prompt.md)')
     ap.add_argument('--attempts', type=int, default=3)
     ap.add_argument('--runs', type=int, default=5)
     ap.add_argument('--out', default='')
