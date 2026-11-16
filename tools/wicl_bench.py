@@ -144,7 +144,8 @@ def main():
         print(f'run {i + 1}/{a.runs}:', {k: (round(v[0], 2) if isinstance(v, tuple) else v) for k, v in runs[-1].items()}, flush=True)
     report = {'runs': a.runs, 'max_attempts': a.attempts, 'constrained_decoding': True,
               'separate_reflector': bool(a.reflector_endpoint or a.reflector_anthropic_key_file),
-              'reflector_model': a.reflector_model if a.reflector_anthropic_key_file else 'same as planner', 'memories_learned': [r['learned'] for r in runs], 'results': {}}
+              'reflector_model': a.reflector_model if a.reflector_anthropic_key_file else 'same as planner',
+              'memories_learned': [r['learned'] for r in runs], 'results': {}}
     for k in runs[0]:
         if k == 'learned':
             continue
