@@ -68,6 +68,10 @@ BT.CPP built-ins (Sequence, Fallback, Sleep ...) pass through. Any other node mi
 
 ## Benchmark
 
+![How the WICL benchmark result changed, iteration by iteration](img/wicl-journey.png)
+
+*Regenerate with `python3 tools/plot_wicl_journey.py`. Each panel is a different test set: compare bars inside a panel, not across panels.*
+
 `tools/wicl_bench.py`, 12 navigation tasks: memories learned from one phrasing, evaluated on a paraphrase. ### Results on the production prompt (the fair baseline)
 
 Raw output: `docs/wicl-benchmark-production.json`. Planner: Gemma 4 E2B Q4_0 (GTX 1650) with the **production prompt** (`param/llm_knowledge.md`, which already has about 9 worked examples) and the same JSON-schema constrained decoding as `llm_bridge`. 5 full repeats (learn + evaluate), 3 attempts; 16 memories learned per repeat. Lessons written by an outside AI (`gemini-4-hydrogen-high`, one sentence, `docs/wicl-lessons.json`) through `LessonBook`.
@@ -84,6 +88,21 @@ Read this carefully:
 - **Caveats:** only 8 alias tasks; the evaluated aliases are close paraphrases of the rehearsed ones ("the west room" to "the room in the west"), so word-overlap retrieval makes this the best case; retrieval is deterministic, so the 5 repeats show almost no spread (they do not make 8 tasks into a large sample); I wrote this split and one lesson was written by one outside AI.
 - **The outside lesson added nothing measurable**: memory alone already reaches 100%, and every success was on the first attempt, so no lesson was ever used. It is also generic (it repeats the valid place names that the prompt already lists).
 - Sim-verified only (kinematic 2D sim). Nothing here is a Nav2 or hardware result.
+
+### Independent task sets (three AI writers), first repeat only
+
+Three AIs (Gemini, ChatGPT, Claude) each wrote 15 train and 30 eval tasks from `docs/wicl-task-writer-prompt.md`, which gave them only the world description and the output format (the Claude set is the same model family as the author of this code, so it is the least independent). Learning used all 61 train tasks (57 became memories). Success rates, production prompt, one repeat, 30 tasks per writer (one task = 3.3 points). Raw: `docs/wicl-benchmark-external-run1.json`.
+
+| Writer | No memory | Fixed example | Memory | Memory + lessons |
+|---|---|---|---|---|
+| Gemini | 67% | 73% | 67% | **80%** |
+| ChatGPT | 53% | 67% | 57% | **77%** |
+| Claude | 67% | 70% | 80% | **83%** |
+
+- **Memory alone is not clearly better than no memory** (+0, +4, +13 points) and not clearly better than one fixed example.
+- **Memory plus lessons is the best arm for all three writers** (+13, +24, +16 points over no memory; +7, +10, +13 over the fixed example). The direction is the same for all three writers, which is more convincing than any single number.
+- **Why the lessons arm differs:** it also retries with the lesson as feedback, and its stored examples carry lessons. The only outside lesson is one generic sentence ("use only valid place names"), so this is a modest, specific effect, not general learning.
+- **Caveats:** one repeat; 30 tasks per writer; retrieval changed with the larger memory store (the alias split's memory arm moved from 100% to 88%), so numbers are sensitive to what is stored; kinematic 2D sim on the sample map; 2B planner only.
 
 ### Earlier benchmark on a bare prompt (superseded, kept for the record)
 
