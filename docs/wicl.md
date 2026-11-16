@@ -42,6 +42,12 @@ Memories live in `~/.local/share/robocup_fw/bt_memory` (override with `memory_di
 - **Offline.** Rule generator and SLM are unchanged. With no LLM endpoint, rehearsal degrades (`planner_unavailable`), reflection falls back to a template lesson, and retrieval of existing memories works with no network. 4 GB VRAM: nothing here loads a model; the LLM is whatever endpoint you point at.
 - **Not covered.** The kinematic sim models Sequence/Fallback/Retry/Repeat/Sleep/Speak and navigation (grid reachability) only. Any other node fails with "unsupported node", so a tree using perception or speech cannot be rehearsed yet. The ROS-driven simulator backend (real `bt_executor` + `nav_sim` + Nav2) is **not implemented**; the `Simulator` protocol is the seam for it.
 
+## Using a stronger model for the lessons
+
+The benchmark can write lessons with a bigger model while the small one plans: `--reflector-endpoint URL` (another llama-server) or
+`--reflector-anthropic-key-file ~/.anthropic_key [--reflector-model claude-haiku-5-5]` (Anthropic API; the key is read from that file, never
+from an argument or the repo). Only the reflector's own inputs are sent: task text, the plan's ports, validator and sim feedback, no ground truth. Weights stay frozen either way.
+
 ## Cross-embodiment capability file
 
 ```yaml

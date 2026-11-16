@@ -79,3 +79,30 @@ def test_full_loop(llm, tmp_path):
 
     # a memory that no longer validates is not offered
     assert first_candidate(hits, lambda x: ['catalog changed']) is None
+
+
+def test_anthropic_chat_request_shape(tmp_path):
+    from bt_rehearsal.llm import anthropic_chat
+    seen = {}
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            seen['path'], seen['key'] = self.path, self.headers['x-api-key']
+            seen['ver'] = self.headers['anthropic-version']
+            seen['body'] = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            data = json.dumps({'content': [{'type': 'text', 'text': 'use a listed place'}]}).encode()
+            self.send_response(200)
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+    srv = HTTPServer(('127.0.0.1', 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    kf = tmp_path / 'key'
+    kf.write_text('sk-test-123\n')
+    out = anthropic_chat(str(kf), 'm', base_url=f'http://127.0.0.1:{srv.server_port}')('sys', 'prompt')
+    srv.shutdown()
+    assert out == 'use a listed place' and seen['path'] == '/v1/messages' and seen['key'] == 'sk-test-123'
+    assert seen['ver'] == '2023-06-01' and seen['body']['model'] == 'm' and seen['body']['system'] == 'sys'

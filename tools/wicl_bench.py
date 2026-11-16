@@ -19,7 +19,7 @@ import time
 
 from bt_memory.retrieve import first_candidate, format_examples, retrieve
 from bt_memory.schema import MemoryStore
-from bt_rehearsal.llm import LlmPlanner, Reflector, http_chat
+from bt_rehearsal.llm import LlmPlanner, Reflector, anthropic_chat, http_chat
 from bt_rehearsal.loop import rehearse, to_memory
 from bt_rehearsal.sim import Task
 from bt_rehearsal.wiring import make_env
@@ -127,6 +127,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--endpoint', required=True)
     ap.add_argument('--reflector-endpoint', default='', help='separate (e.g. larger) model for lessons')
+    ap.add_argument('--reflector-anthropic-key-file', default='', help='use the Anthropic API for lessons (key read from this file)')
+    ap.add_argument('--reflector-model', default='claude-haiku-5-5')
     ap.add_argument('--attempts', type=int, default=3)
     ap.add_argument('--runs', type=int, default=5)
     ap.add_argument('--out', default='')
@@ -134,13 +136,15 @@ def main():
     check_install()
     env = make_env(scene={'objects': [], 'num_persons': 0})
     chat = http_chat(a.endpoint, timeout=60, schema=env['schema'])
-    refl_chat = http_chat(a.reflector_endpoint, timeout=60) if a.reflector_endpoint else chat
+    refl_chat = (anthropic_chat(a.reflector_anthropic_key_file, a.reflector_model) if a.reflector_anthropic_key_file
+                 else http_chat(a.reflector_endpoint, timeout=60) if a.reflector_endpoint else chat)
     runs = []
     for i in range(a.runs):
         runs.append(one_run(a, env, chat, refl_chat))
         print(f'run {i + 1}/{a.runs}:', {k: (round(v[0], 2) if isinstance(v, tuple) else v) for k, v in runs[-1].items()}, flush=True)
     report = {'runs': a.runs, 'max_attempts': a.attempts, 'constrained_decoding': True,
-              'separate_reflector': bool(a.reflector_endpoint), 'memories_learned': [r['learned'] for r in runs], 'results': {}}
+              'separate_reflector': bool(a.reflector_endpoint or a.reflector_anthropic_key_file),
+              'reflector_model': a.reflector_model if a.reflector_anthropic_key_file else 'same as planner', 'memories_learned': [r['learned'] for r in runs], 'results': {}}
     for k in runs[0]:
         if k == 'learned':
             continue

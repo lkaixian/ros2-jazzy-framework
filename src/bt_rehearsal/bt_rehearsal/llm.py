@@ -4,6 +4,7 @@
 or, inside ROS, a client of llm_bridge. Any exception from `chat` means "endpoint unreachable".
 """
 import json
+import os
 import urllib.request
 
 from bt_memory.schema import lint
@@ -32,6 +33,23 @@ def http_chat(endpoint, timeout=30.0, api_key='', schema=None):
                                       **({'Authorization': f'Bearer {api_key}'} if api_key else {})})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.load(r)['choices'][0]['message']['content']
+    return chat
+
+
+def anthropic_chat(key_file, model='claude-haiku-5-5', timeout=60.0, base_url='https://api.anthropic.com'):
+    """Messages API as a `chat(system, prompt)`. The key is read from a file (never an argument or the repo).
+    Sends only what the reflector already sees: task text, plan ports, validator/sim feedback."""
+    with open(os.path.expanduser(key_file)) as f:
+        key = f.read().strip()
+
+    def chat(system, prompt):
+        body = json.dumps({'model': model, 'max_tokens': 300, 'system': system,
+                           'messages': [{'role': 'user', 'content': prompt}]}).encode()
+        req = urllib.request.Request(base_url.rstrip('/') + '/v1/messages', body,
+                                     {'Content-Type': 'application/json', 'x-api-key': key,
+                                      'anthropic-version': '2023-06-01'})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.load(r)['content'][0]['text']
     return chat
 
 
