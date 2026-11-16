@@ -41,7 +41,8 @@ def main():
     f = os.path.join(params, 'pipeline.yaml')
     txt = open(f).read()
     assert 'max_repairs: 0' in txt
-    open(f, 'w').write(txt.replace('max_repairs: 0', 'max_repairs: 1'))
+    # recovery_policy off: this test checks the LLM re-plan path; with the policy on, the first failure is a plain retry (mode_test.py)
+    open(f, 'w').write(txt.replace('max_repairs: 0', 'max_repairs: 1\n    recovery_policy: false'))
     spec_file = os.path.join(work, 'spec.json')
     json.dump(SPEC, open(spec_file, 'w'))
     procs, res = [], {}

@@ -1,0 +1,90 @@
+{
+  "runs": 5,
+  "max_attempts": 3,
+  "constrained_decoding": true,
+  "prompt": "production",
+  "lessons_file": "docs/wicl-lessons.json",
+  "separate_reflector": false,
+  "reflector_model": "same as planner",
+  "memories_learned": [
+    16,
+    16,
+    16,
+    16,
+    16
+  ],
+  "results": {
+    "reuse/a_no_memory": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "reuse/d_fixed_example": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "reuse/b_memory": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "reuse/c_memory_reflection": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "heldout/a_no_memory": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "heldout/d_fixed_example": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "heldout/b_memory": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "heldout/c_memory_reflection": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "alias/a_no_memory": {
+      "success_mean": 0.75,
+      "success_min": 0.75,
+      "success_max": 0.75,
+      "mean_attempts_to_success": 1
+    },
+    "alias/d_fixed_example": {
+      "success_mean": 0.525,
+      "success_min": 0.5,
+      "success_max": 0.625,
+      "mean_attempts_to_success": 1
+    },
+    "alias/b_memory": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    },
+    "alias/c_memory_reflection": {
+      "success_mean": 1.0,
+      "success_min": 1.0,
+      "success_max": 1.0,
+      "mean_attempts_to_success": 1
+    }
+  }
+}

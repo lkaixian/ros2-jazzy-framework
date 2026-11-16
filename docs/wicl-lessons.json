@@ -1,0 +1,3 @@
+{
+  "NavigateToPlace|unknown place '<x>'": "When using NavigateToPlace, ensure the 'place' port is strictly populated with one of the recognized valid location names—specifically door, far_corner, left_room, right_room, or start—rather than substituting unmapped directional synonyms or unvalidated room labels."
+}

@@ -60,6 +60,43 @@ BT.CPP built-ins (Sequence, Fallback, Sleep ...) pass through. Any other node mi
 
 ## Benchmark
 
+`tools/wicl_bench.py`, 12 navigation tasks: memories learned from one phrasing, evaluated on a paraphrase. ### Results on the production prompt (the fair baseline)
+
+Raw output: `docs/wicl-benchmark-production.json`. Planner: Gemma 4 E2B Q4_0 (GTX 1650) with the **production prompt** (`param/llm_knowledge.md`, which already has about 9 worked examples) and the same JSON-schema constrained decoding as `llm_bridge`. 5 full repeats (learn + evaluate), 3 attempts; 16 memories learned per repeat. Lessons written by an outside AI (`gemini-4-hydrogen-high`, one sentence, `docs/wicl-lessons.json`) through `LessonBook`.
+
+| Split (tasks) | No memory | Fixed example | Memory | Memory + lessons |
+|---|---|---|---|---|
+| reuse: paraphrases of rehearsed tasks (12) | 100% | 100% | 100% | 100% |
+| held-out: new goal compositions (8) | 100% | 100% | 100% | 100% |
+| **alias**: unfamiliar names for known places (8) | **75%** | 52.5% | **100%** | **100%** |
+
+Read this carefully:
+- **Most of it is a ceiling.** With the production prompt, the 2B model plans the first two splits perfectly with no help, so memory cannot show a gain there. The earlier "35% to 100%" came from a bare prompt that production does not use, and it was prompt priming (see the control below).
+- **The alias split is the only place memory had room to help**, and there it did: 75% without, 100% with. A single generic example made it *worse* (52.5%), which supports the claim that the gain is task-specific content (rehearsed alias to place mappings), not any example.
+- **Caveats:** only 8 alias tasks; the evaluated aliases are close paraphrases of the rehearsed ones ("the west room" to "the room in the west"), so word-overlap retrieval makes this the best case; retrieval is deterministic, so the 5 repeats show almost no spread (they do not make 8 tasks into a large sample); I wrote this split and one lesson was written by one outside AI.
+- **The outside lesson added nothing measurable**: memory alone already reaches 100%, and every success was on the first attempt, so no lesson was ever used. It is also generic (it repeats the valid place names that the prompt already lists).
+- Sim-verified only (kinematic 2D sim). Nothing here is a Nav2 or hardware result.
+
+### Earlier benchmark on a bare prompt (superseded, kept for the record)
+
+## Using a stronger model for the lessons
+
+The benchmark can write lessons with a bigger model while the small one plans: `--reflector-endpoint URL` (another llama-server) or
+`--reflector-anthropic-key-file ~/.anthropic_key [--reflector-model claude-haiku-5-5]` (Anthropic API; the key is read from that file, never
+from an argument or the repo). Only the reflector's own inputs are sent: task text, the plan's ports, validator and sim feedback, no ground truth. Weights stay frozen either way.
+
+## Cross-embodiment capability file
+
+```yaml
+embodiment: other_bot
+actions:                       # source node id -> target spelling
+  NavigateToPlace: {name: GoToPlace, ports: {place: target}, defaults: {speed: "0.2"}}
+  Speak: {name: Say, ports: {text: message}}
+```
+BT.CPP built-ins (Sequence, Fallback, Sleep ...) pass through. Any other node missing from `actions` raises `AdaptError`; the adapted XML is re-validated against the target catalog.
+
+## Benchmark
+
 `tools/wicl_bench.py`, 12 navigation tasks: memories learned from one phrasing, evaluated on a paraphrase. Raw output: `docs/wicl-benchmark.json`. Planner: Gemma 4 E2B Q4_0 on the GTX 1650 through llama-server with the same JSON-schema constrained decoding as `llm_bridge`, max 3 attempts. 5 full repeats (learn + evaluate each time); memories learned per repeat: 10 to 11 of 12. Two splits: **reuse** (paraphrases of rehearsed tasks) and **held-out** (8 new goal compositions, never rehearsed, never used for tuning).
 
 | Split | No memory | Memory | Memory + reflection |
