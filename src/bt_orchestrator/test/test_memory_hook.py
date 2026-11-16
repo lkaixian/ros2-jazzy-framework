@@ -39,3 +39,11 @@ def test_report_lists_scores_and_offer(tmp_path):
     assert '1.00' in h.report[0] and '[offered: re-validated]' in h.report[0]
     h.on_task('dance', {}, lambda x: [])
     assert 'no memory scored' in h.report[0]
+
+
+def test_place_missing_on_current_map_is_not_offered(tmp_path):
+    h = hook(tmp_path, places=lambda: {'start', 'kitchen'})        # the map changed: no 'door' any more
+    cand, text = h.on_task('go to the door', {}, lambda x: [])
+    assert cand is None and 'Similar tasks' in text               # still an example, never the plan
+    h.places = lambda: {'door'}
+    assert h.on_task('go to the door', {}, lambda x: [])[0] is not None

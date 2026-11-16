@@ -39,6 +39,7 @@ class OrchestratorNode(Node):
         self.declare_parameter('memory_enabled', False)   # WICL: retrieve Task Memories (bt_memory) before planning
         self.declare_parameter('memory_dir', '')          # '' = ~/.local/share/robocup_fw/bt_memory
         self.declare_parameter('memory_verbose', False)   # log every retrieval: scores, ids, which memory was offered
+        self.declare_parameter('memory_places_file', '')   # '' = param/places.yaml; read per task (new map = no restart)
         self.declare_parameter('memory_k', 3)
         self.declare_parameter('memory_min_score', 0.5)
         self.declare_parameter('memory_embodiment', 'kobuki')
@@ -73,7 +74,8 @@ class OrchestratorNode(Node):
             from bt_orchestrator.memory_hook import MemoryHook
             p = self.get_parameter
             self.memory = MemoryHook(p('memory_dir').value, p('memory_embodiment').value, p('memory_k').value,
-                                     p('memory_min_score').value, p('memory_use_candidate').value)
+                                     p('memory_min_score').value, p('memory_use_candidate').value,
+                                     places=self._places)
             self.scene = {}
             self.ctx_pub = self.create_publisher(String, 'bt/task_ctx', 10)   # the bridge listens here (see pipeline.launch.py)
             self.create_subscription(String, 'scene/summary', self._on_scene, 1, callback_group=cb)
@@ -83,6 +85,17 @@ class OrchestratorNode(Node):
 
     def _publish_state(self):
         self.state_pub.publish(String(data=json.dumps(self.fsm.snapshot())))
+
+    def _places(self):
+        """Names in the current places file; raises (-> memory skipped, planning continues) if it cannot be read."""
+        import os
+
+        import yaml
+        from ament_index_python.packages import get_package_share_directory
+        path = self.get_parameter('memory_places_file').value or os.path.join(
+            get_package_share_directory('framework_bringup'), 'param', 'places.yaml')
+        with open(path) as f:
+            return set((yaml.safe_load(f) or {}).get('places') or {})
 
     def _on_scene(self, msg):
         try:

@@ -42,6 +42,14 @@ Memories live in `~/.local/share/robocup_fw/bt_memory` (override with `memory_di
 - **Offline.** Rule generator and SLM are unchanged. With no LLM endpoint, rehearsal degrades (`planner_unavailable`), reflection falls back to a template lesson, and retrieval of existing memories works with no network. 4 GB VRAM: nothing here loads a model; the LLM is whatever endpoint you point at.
 - **Not covered.** The kinematic sim models Sequence/Fallback/Retry/Repeat/Sleep/Speak and navigation (grid reachability) only. Any other node fails with "unsupported node", so a tree using perception or speech cannot be rehearsed yet. The ROS-driven simulator backend (real `bt_executor` + `nav_sim` + Nav2) is **not implemented**; the `Simulator` protocol is the seam for it.
 
+## The final map does not exist yet
+
+Everything above ran on the sample map (`maps/test_room.yaml`, 12 x 8 m) with its five placeholder places (`param/places.yaml`). The real map and places are not made, so:
+- **Results are about the sample map.** The five names (`start`, `left_room`, `door`, `right_room`, `far_corner`) and the room layout are the sample's. Redo the benchmark on the real places once they exist.
+- **Memories are tied to place names.** A memory stores `NavigateToPlace place=door`. The validator does not know place names, so such a plan still validates after the map changes. The orchestrator therefore also checks every remembered `NavigateToPlace` against the CURRENT `places.yaml` (`memory_places_file`, read per task) and never offers a plan naming a place that is gone. It stays available as an example only.
+- **Same name, different place.** If the new map reuses a name for a different location, nothing can detect it. **Delete or re-rehearse `~/.local/share/robocup_fw/bt_memory` after you re-map.**
+- Memories made on the sample map should not be used on the robot.
+
 ## Using a stronger model for the lessons
 
 The benchmark can write lessons with a bigger model while the small one plans: `--reflector-endpoint URL` (another llama-server) or

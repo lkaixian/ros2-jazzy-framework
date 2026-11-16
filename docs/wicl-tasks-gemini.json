@@ -1,0 +1,186 @@
+{
+ "train": [
+  {
+   "task": "Go to the door.",
+   "goal": "door"
+  },
+  {
+   "task": "Head over to the left room please.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Can you drive to the right room?",
+   "goal": "right_room"
+  },
+  {
+   "task": "Return to the start position.",
+   "goal": "start"
+  },
+  {
+   "task": "Move all the way to the far corner.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Please proceed to the west room.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Zip over to the east room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Park yourself back at the beginning.",
+   "goal": "start"
+  },
+  {
+   "task": "Wait in the doorway between the two rooms.",
+   "goal": "door"
+  },
+  {
+   "task": "Drive down to the distant corner on the right side.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "First go to the door, then enter the right room.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Check the left room and afterward head back to start.",
+   "goal": "start"
+  },
+  {
+   "task": "Visit the right room first, then stop at the doorway.",
+   "goal": "door"
+  },
+  {
+   "task": "Go from your starting spot straight to the far corner.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Pass through the doorway and park in the west room.",
+   "goal": "left_room"
+  }
+ ],
+ "eval": [
+  {
+   "task": "Position yourself right at the dividing threshold.",
+   "goal": "door"
+  },
+  {
+   "task": "Roll over to the eastern chamber.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Take a trip to the western quarters.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Head back to your home base.",
+   "goal": "start"
+  },
+  {
+   "task": "Drive all the way to the furthest eastern nook.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Stand guard at the central archway.",
+   "goal": "door"
+  },
+  {
+   "task": "Go to the single opening in the partition wall that connects the two halves of the building.",
+   "goal": "door"
+  },
+  {
+   "task": "Return to the bottom-left spot where you were originally powered on.",
+   "goal": "start"
+  },
+  {
+   "task": "Drive to the most remote point on the eastern side, as far from your origin as possible.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Navigate to the main space occupying the western half of the floor plan.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Proceed to the primary room situated on the opposite side from the west wing.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Move to the exact boundary point separating the western and eastern rooms.",
+   "goal": "door"
+  },
+  {
+   "task": "Swing by the western quarters, pass through the central opening, and finally settle in the eastern chamber.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Start by rolling to the dividing threshold, then continue into the eastern space, and finish at its furthest nook.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Head from your origin over to the western wing, then come right back to your home base.",
+   "goal": "start"
+  },
+  {
+   "task": "Visit the furthest eastern recess first, then backtrack to the central archway.",
+   "goal": "door"
+  },
+  {
+   "task": "Go to the eastern chamber, cross the partition opening, and end your run in the western space.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Make a quick stop at your initial spawn point, roll through the western wing, and halt at the dividing threshold.",
+   "goal": "door"
+  },
+  {
+   "task": "You do not need to visit the western wing today; just report directly to the eastern chamber.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Even though we were just talking about the central archway, your actual destination is your home base.",
+   "goal": "start"
+  },
+  {
+   "task": "Ignore the eastern chamber and instead park yourself inside the western quarters.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Don't stop at the dividing threshold or linger in the western wing—go straight to the furthest eastern nook.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Skip the furthest eastern recess altogether and simply hold position at the central opening.",
+   "goal": "door"
+  },
+  {
+   "task": "Rather than returning to your origin point, I want you to stay put in the eastern space.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Take me to the western quarters—no, scratch that, go to the central archway instead.",
+   "goal": "door"
+  },
+  {
+   "task": "Head over to your home base... actually, hold on, drive to the furthest eastern nook instead.",
+   "goal": "far_corner"
+  },
+  {
+   "task": "Go to the eastern chamber, wait, I misspoke, I meant the western wing.",
+   "goal": "left_room"
+  },
+  {
+   "task": "Roll up to the dividing threshold—sorry, change of plans, head back to your initial origin spot.",
+   "goal": "start"
+  },
+  {
+   "task": "Drive to the furthest eastern recess, uh, never mind that, just park in the eastern chamber.",
+   "goal": "right_room"
+  },
+  {
+   "task": "Proceed to the western space—actually, forget it, take yourself over to the eastern quarters.",
+   "goal": "right_room"
+  }
+ ]
+}

@@ -61,3 +61,12 @@ def first_candidate(hits, validate):
         if not validate(m.xml):
             return m
     return None
+
+
+def unknown_places(xml, places):
+    """Errors for NavigateToPlace ports naming a place the CURRENT map does not have. The validator does not know
+    places, so without this a memory made on an old map would still look valid after the map changed.
+    Blackboard references ({x}) cannot be checked statically and are skipped."""
+    return [f"place '{e.get('place')}' is not in the current places file"
+            for e in ET.fromstring(xml).iter('NavigateToPlace')
+            if e.get('place') and not e.get('place').startswith('{') and e.get('place') not in places]

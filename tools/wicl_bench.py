@@ -123,9 +123,9 @@ def one_run(a, env, chat, refl_chat):
     mem_dir = tempfile.mkdtemp(prefix='wicl_bench_')
     store, hint = MemoryStore(mem_dir), env['hint']
     learned = 0
-    ext = load_external(a.tasks_file) if a.tasks_file else None
+    ext = {os.path.basename(f)[len('wicl-tasks-'):-len('.json')]: load_external(f) for f in a.tasks_file}
     # learn: rehearse every TRAINING phrasing with reflection
-    for train, goal in [(t, g) for t, _, g in TASKS] + HARD_TRAIN + (ext['train'] if ext else []):
+    for train, goal in [(t, g) for t, _, g in TASKS] + HARD_TRAIN + [x for e in ext.values() for x in e['train']]:
         t = Task(train, goal)
         r = rehearse(t, mk_planner(a, env, chat), env['build'], env['validate'], env['sim'],
                      mk_refl(a, refl_chat), a.attempts, hint=hint)
@@ -136,8 +136,8 @@ def one_run(a, env, chat, refl_chat):
             'b_memory': (True, False, None),
             'c_memory_reflection': (True, True, mk_refl(a, refl_chat))}
     splits = {'reuse': [(ev, g) for _, ev, g in TASKS], 'heldout': HELDOUT, 'alias': HARD_EVAL}
-    if ext:
-        splits['external'] = ext['eval']
+    for name, e in ext.items():
+        splits[f'external_{name}'] = e['eval']
     out = {'learned': learned}
     for sname, tasks in splits.items():
         for name, (use_mem, lessons, refl) in arms.items():
@@ -158,7 +158,7 @@ def main():
     ap.add_argument('--lessons-file', default='', help='lessons by situation key (see tools/wicl_situations.py)')
     ap.add_argument('--prompt', choices=('production', 'bare'), default='production',
                     help='production = param/llm_knowledge.md + schema (what llm_bridge uses); bare = grammar only')
-    ap.add_argument('--tasks-file', default='', help='JSON {"train": [{task, goal}], "eval": [...]} written by someone else '
+    ap.add_argument('--tasks-file', nargs='+', default=[], help='JSON {"train": [{task, goal}], "eval": [...]} written by someone else '
                     '(docs/wicl-task-writer-prompt.md)')
     ap.add_argument('--attempts', type=int, default=3)
     ap.add_argument('--runs', type=int, default=5)
