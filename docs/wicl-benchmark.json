@@ -1,0 +1,23 @@
+{
+  "tasks": 12,
+  "memories_learned": 1,
+  "max_attempts": 3,
+  "arms": {
+    "a_no_memory": {
+      "sim_success_rate": 0.333,
+      "first_plan_validate_rate": 0.75,
+      "mean_attempts_to_success": 2.25
+    },
+    "b_memory": {
+      "sim_success_rate": 0.25,
+      "first_plan_validate_rate": 0.667,
+      "mean_attempts_to_success": 2
+    },
+    "c_memory_reflection": {
+      "sim_success_rate": 0.0,
+      "first_plan_validate_rate": 0.5,
+      "mean_attempts_to_success": null
+    }
+  },
+  "note": "kinematic 2D sim, one run per arm, single LLM sample per call: differences of 1 task (8 pts) are noise"
+}

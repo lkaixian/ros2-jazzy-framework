@@ -153,6 +153,7 @@ Everything is also on the **[project wiki](https://github.com/lkaixian/ros2-jazz
 | **Plan** | [Task spec grammar](docs/task-spec-grammar.md) · [Macros](docs/macros.md) · [BT node catalog](docs/node-catalog.md) · [Validator rules](docs/validator-rules.md) · [Behaviour trees](docs/behavior-trees.md) · [LLM and models](docs/llm-and-models.md) |
 | **Operate** | [Operator guide](docs/operator-guide.md) · [Configuration and launch](docs/configuration.md) · [Parameters](docs/parameters.md) · [Dashboard and Groot2](docs/dashboard.md) · [Troubleshooting](docs/troubleshooting.md) |
 | **Robot** | [Perception](docs/perception.md) · [Navigation](docs/navigation.md) · [Audio](docs/audio.md) · [Writing an extension](docs/writing-an-extension.md) |
+| **Learning** | [World In-Context Learning (task memory, sim-only, off by default)](docs/wicl.md) |
 | **Models** | [Evaluation](docs/evaluation.md) · [SLM training](docs/slm-training.md) · [SLM benchmark](docs/slm-benchmark.md) |
 | **Many machines** | [Cluster](docs/cluster.md) · [Workspaces and security](docs/workspaces-security.md) |
 | **Reference** | [Messages](docs/messages.md) · [Testing and CI](docs/testing-and-ci.md) · engineering notes in [notes/](notes/README.md) |
