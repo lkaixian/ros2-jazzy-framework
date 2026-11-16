@@ -14,5 +14,8 @@ setup(
     maintainer_email='lkaixian91@gmail.com',
     description='WICL rehearsal loop and simulator interface',
     license='Apache-2.0',
-    entry_points={'console_scripts': []},
+    entry_points={'console_scripts': [
+        'wicl = bt_rehearsal.cli:main',
+        'rehearsal_node = bt_rehearsal.rehearsal_node:main',
+    ]},
 )

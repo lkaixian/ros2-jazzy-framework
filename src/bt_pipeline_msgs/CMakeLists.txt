@@ -7,7 +7,7 @@
 find_package(action_msgs REQUIRED)
 
         rosidl_generate_interfaces(${PROJECT_NAME}
-          "msg/BtNodeSpec.msg" "msg/ExtensionManifest.msg" "msg/BtPlan.msg" "srv/LlmQuery.srv" "srv/GenerateXml.srv" "srv/ValidateTree.srv" "srv/GetCatalog.srv" "action/ExecuteNode.action"
+          "msg/BtNodeSpec.msg" "msg/ExtensionManifest.msg" "msg/BtPlan.msg" "srv/LlmQuery.srv" "srv/GenerateXml.srv" "srv/ValidateTree.srv" "srv/GetCatalog.srv" "srv/RehearseTask.srv" "srv/ListMemories.srv" "action/ExecuteNode.action"
           DEPENDENCIES std_msgs action_msgs
         )
 

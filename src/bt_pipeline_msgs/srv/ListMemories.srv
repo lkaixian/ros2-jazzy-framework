@@ -1,0 +1,6 @@
+string memory_id           # "" = list all; else return that memory as JSON
+---
+string[] ids
+string[] summaries
+string json
+string[] problems          # unreadable or incompatible files
