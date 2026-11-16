@@ -42,12 +42,14 @@ def main():
     exe = subprocess.Popen(['ros2', 'run', 'bt_executor', 'bt_executor_node', '--ros-args', '-p', 'dry_run:=false'],
                            start_new_session=True)
     res = {}
+    ex = spin_thread = n = fake = None
     try:
         rclpy.init(args=['--ros-args', '-p', f'manifest_file:={f.name}'])
         fake = Fake()
         ex = MultiThreadedExecutor(num_threads=4)
         ex.add_node(fake)
-        threading.Thread(target=ex.spin, daemon=True).start()
+        spin_thread = threading.Thread(target=ex.spin, daemon=True)
+        spin_thread.start()
         n = rclpy.create_node('tree_probe')
         status, tree, nodes = [], [], []
         n.create_subscription(String, 'bt/status', lambda m: status.append(json.loads(m.data)), 10)
@@ -90,6 +92,15 @@ def main():
     finally:
         os.killpg(os.getpgid(exe.pid), 15)
         os.unlink(f.name)
+        # stop the executor and wait for its thread BEFORE shutting rclpy down: shutting down under a spinning
+        # executor aborted the process at exit on slow CI machines ("terminate called without an active exception")
+        if ex is not None:
+            ex.shutdown()
+        if spin_thread is not None:
+            spin_thread.join(timeout=5)
+        for node in (n, fake):
+            if node is not None:
+                node.destroy_node()
         rclpy.try_shutdown()
     for k, v in res.items():
         print(('PASS ' if v else 'FAIL ') + k)
