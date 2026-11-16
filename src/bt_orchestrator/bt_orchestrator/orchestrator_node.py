@@ -38,6 +38,7 @@ class OrchestratorNode(Node):
         self.declare_parameter('max_repairs', 0)      # 0 = never re-plan a failed run on its own
         self.declare_parameter('memory_enabled', False)   # WICL: retrieve Task Memories (bt_memory) before planning
         self.declare_parameter('memory_dir', '')          # '' = ~/.local/share/robocup_fw/bt_memory
+        self.declare_parameter('memory_verbose', False)   # log every retrieval: scores, ids, which memory was offered
         self.declare_parameter('memory_k', 3)
         self.declare_parameter('memory_min_score', 0.5)
         self.declare_parameter('memory_embodiment', 'kobuki')
@@ -105,6 +106,8 @@ class OrchestratorNode(Node):
         except Exception as e:  # noqa: BLE001
             self.get_logger().warn(f'task memory unavailable, planning normally: {type(e).__name__}: {e}')
             cand, planner_text = None, text
+        if self.get_parameter('memory_verbose').value:
+            self.get_logger().info('task memory: ' + ('; '.join(self.memory.report) or 'nothing retrieved'))
         if cand:
             plan = BtPlan(task=text, xml=cand.xml, valid=True, attempts=0)
             plan.header.stamp = self.get_clock().now().to_msg()
@@ -112,7 +115,7 @@ class OrchestratorNode(Node):
             with self.fsm_lock:
                 self.fsm.on_plan(True)
                 self._publish_state()
-            self.get_logger().info(f'plan from task memory {cand.id} (re-validated)')
+            self.get_logger().info(f'plan from task memory {cand.id} (re-validated), planner skipped')
         else:
             self.ctx_pub.publish(String(data=planner_text))
 

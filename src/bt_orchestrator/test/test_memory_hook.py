@@ -31,3 +31,11 @@ def test_few_shot_only_mode(tmp_path):
 
 def test_empty_store(tmp_path):
     assert MemoryHook(str(tmp_path / 'none')).on_task('x', {}, lambda x: []) == (None, 'x')
+
+
+def test_report_lists_scores_and_offer(tmp_path):
+    h = hook(tmp_path)
+    h.on_task('go to the door', {}, lambda x: [])
+    assert '1.00' in h.report[0] and '[offered: re-validated]' in h.report[0]
+    h.on_task('dance', {}, lambda x: [])
+    assert 'no memory scored' in h.report[0]

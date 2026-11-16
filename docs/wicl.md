@@ -29,8 +29,8 @@ ros2 run bt_rehearsal wicl rehearse "go to the right room" --goal-place right_ro
 ros2 run bt_rehearsal wicl list
 ros2 run bt_rehearsal wicl show <id>
 ros2 run bt_rehearsal wicl adapt <id> capabilities.yaml   # new memory for another robot, or a loud error
-# deployment: retrieval on
-ros2 launch framework_bringup pipeline.launch.py wicl_memory:=true
+# deployment: retrieval on (wicl_verbose:=true logs every retrieval: scores, ids, which memory was offered)
+ros2 launch framework_bringup pipeline.launch.py wicl_memory:=true wicl_verbose:=true
 # ROS services: wicl/rehearse (RehearseTask), wicl/memories (ListMemories); node: ros2 run bt_rehearsal rehearsal_node
 ```
 Memories live in `~/.local/share/robocup_fw/bt_memory` (override with `memory_dir`). Parameters are in `param/pipeline.yaml` (`memory_*`).

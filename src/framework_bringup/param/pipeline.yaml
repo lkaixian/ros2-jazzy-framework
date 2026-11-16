@@ -51,6 +51,7 @@ orchestrator_node:
     call_timeout_sec: 60.0
     memory_enabled: false   # WICL task memory (notes/wicl_design.md): retrieve before planning; a retrieved plan is re-validated, never trusted
     memory_dir: ""          # "" = ~/.local/share/robocup_fw/bt_memory
+    memory_verbose: false   # true: log each retrieval (score, id, whether a memory was offered as the plan)
     memory_k: 3
     memory_min_score: 0.5
     memory_embodiment: kobuki

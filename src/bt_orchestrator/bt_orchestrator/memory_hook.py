@@ -15,12 +15,15 @@ class MemoryHook:
         self.store = MemoryStore(store_dir or DEFAULT_DIR)
         self.embodiment, self.k, self.min_score = embodiment, k, min_score
         self.use_candidate, self.retriever = use_candidate, retriever
+        self.report = []       # last on_task: human-readable lines (score, id, valid-now?) for verbose logging
 
     def on_task(self, text, scene, validate):
         """-> (candidate_memory | None, planner_text). validate(xml) -> [errors] against the current catalog.
         planner_text = the task plus few-shot examples (the plain task when nothing matched)."""
         hits = retrieve(self.store, text, scene, self.embodiment, self.k, self.min_score, self.retriever)
         cand = first_candidate(hits, validate) if self.use_candidate else None
+        self.report = [f'{sc:.2f} {m.id} "{m.task}"' + (' [offered: re-validated]' if m is cand else '') for sc, m in hits] \
+            or [f'no memory scored >= {self.min_score} for this task']
         if not hits:
             return None, text
         return cand, text + '\n\nSimilar tasks done before (examples, may not fit this scene):\n' + \
