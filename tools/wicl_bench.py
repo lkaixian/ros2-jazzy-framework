@@ -124,8 +124,11 @@ def one_run(a, env, chat, refl_chat):
     store, hint = MemoryStore(mem_dir), env['hint']
     learned = 0
     ext = {os.path.basename(f)[len('wicl-tasks-'):-len('.json')]: load_external(f) for f in a.tasks_file}
+    want = {x for x in a.only_arms.split(',') if x}
+    need_memory = not want or want & {'b', 'c'}        # memories are only built when an arm uses them
     # learn: rehearse every TRAINING phrasing with reflection
-    for train, goal in [(t, g) for t, _, g in TASKS] + HARD_TRAIN + [x for e in ext.values() for x in e['train']]:
+    for train, goal in ([(t, g) for t, _, g in TASKS] + HARD_TRAIN + [x for e in ext.values() for x in e['train']]
+                        if need_memory else []):
         t = Task(train, goal)
         r = rehearse(t, mk_planner(a, env, chat), env['build'], env['validate'], env['sim'],
                      mk_refl(a, refl_chat), a.attempts, hint=hint)
@@ -133,11 +136,17 @@ def one_run(a, env, chat, refl_chat):
             store.save(to_memory(t, r, 'kobuki', '0.1.0', 'bench'))
             learned += 1
     arms = {'a_no_memory': (False, False, None), 'd_fixed_example': (False, False, None),
+            'e_lessons_only': (False, False, mk_refl(a, refl_chat)),
             'b_memory': (True, False, None),
             'c_memory_reflection': (True, True, mk_refl(a, refl_chat))}
     splits = {'reuse': [(ev, g) for _, ev, g in TASKS], 'heldout': HELDOUT, 'alias': HARD_EVAL}
     for name, e in ext.items():
         splits[f'external_{name}'] = e['eval']
+    if want:
+        arms = {k: v for k, v in arms.items() if k.split('_')[0] in want}
+    prefixes = tuple(x for x in a.only_splits.split(',') if x)
+    if prefixes:
+        splits = {k: v for k, v in splits.items() if k.startswith(prefixes)}
     out = {'learned': learned}
     for sname, tasks in splits.items():
         for name, (use_mem, lessons, refl) in arms.items():
@@ -160,6 +169,8 @@ def main():
                     help='production = param/llm_knowledge.md + schema (what llm_bridge uses); bare = grammar only')
     ap.add_argument('--tasks-file', nargs='+', default=[], help='JSON {"train": [{task, goal}], "eval": [...]} written by someone else '
                     '(docs/wicl-task-writer-prompt.md)')
+    ap.add_argument('--only-arms', default='', help='comma list of arm letters to run, e.g. a,e (skips learning if none needs memory)')
+    ap.add_argument('--only-splits', default='', help='comma list of split-name prefixes, e.g. external')
     ap.add_argument('--attempts', type=int, default=3)
     ap.add_argument('--runs', type=int, default=5)
     ap.add_argument('--out', default='')
