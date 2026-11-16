@@ -46,6 +46,7 @@ class TaskMemory:
     model_version: str = ''
     schema_version: int = SCHEMA_VERSION
     task_norm: str = ''
+    adapted_from: str = ''       # source embodiment when produced by the adapter
 
     def __post_init__(self):
         self.task_norm = self.task_norm or norm_task(self.task)
