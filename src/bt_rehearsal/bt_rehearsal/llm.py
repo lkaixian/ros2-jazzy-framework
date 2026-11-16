@@ -27,7 +27,7 @@ def http_chat(endpoint, timeout=30.0, api_key='', schema=None):
                            'temperature': 0.2, 'max_tokens': 1500,
                            **({'response_format': {'type': 'json_schema',
                                                    'json_schema': {'name': 'task_spec', 'schema': schema}}}
-                              if schema and system is GRAMMAR else {})}).encode()
+                              if schema and system.endswith(GRAMMAR) else {})}).encode()
         req = urllib.request.Request(endpoint.rstrip('/') + '/v1/chat/completions', body,
                                      {'Content-Type': 'application/json',
                                       **({'Authorization': f'Bearer {api_key}'} if api_key else {})})
@@ -72,12 +72,14 @@ def _json_only(text):
 
 
 class LlmPlanner:
-    def __init__(self, chat, listing, examples=()):
+    def __init__(self, chat, listing, examples=(), knowledge=''):
+        """knowledge: the production prompt text (param/llm_knowledge.md); '' = the bare grammar only."""
         self.chat, self.listing, self.examples = chat, listing, list(examples)
+        self.system = f'{knowledge}\n\n{GRAMMAR}' if knowledge else GRAMMAR
 
     def propose(self, task, feedback=()):
         try:
-            text = self.chat(GRAMMAR, planner_prompt(task, self.listing, feedback, self.examples))
+            text = self.chat(self.system, planner_prompt(task, self.listing, feedback, self.examples))
         except Exception as e:  # noqa: BLE001  any transport failure = unreachable
             raise PlannerUnavailable(f'{type(e).__name__}: {e}') from e
         return _json_only(text)

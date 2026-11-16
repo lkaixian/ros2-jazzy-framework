@@ -19,6 +19,7 @@ import time
 
 from bt_memory.retrieve import first_candidate, format_examples, retrieve
 from bt_memory.schema import MemoryStore
+from bt_rehearsal.lessonbook import LessonBook
 from bt_rehearsal.llm import LlmPlanner, Reflector, anthropic_chat, http_chat
 from bt_rehearsal.loop import rehearse, to_memory
 from bt_rehearsal.sim import Task
@@ -97,25 +98,33 @@ def attempt_stats(task, planner, env, reflector, max_attempts, memories_dir, use
     return r.success, r.attempts, r.validated_first_try
 
 
+def mk_planner(a, env, chat, examples=()):
+    return LlmPlanner(chat, env['listing'], examples, env['knowledge'] if a.prompt == 'production' else '')
+
+
+def mk_refl(a, refl_chat):
+    return LessonBook(a.lessons_file) if a.lessons_file else Reflector(refl_chat)
+
+
 def one_run(a, env, chat, refl_chat):
     mem_dir = tempfile.mkdtemp(prefix='wicl_bench_')
     store, hint = MemoryStore(mem_dir), env['hint']
     learned = 0
     for train, goal in [(t, g) for t, _, g in TASKS] + HARD_TRAIN:      # learn: rehearse every TRAINING phrasing with reflection
         t = Task(train, goal)
-        r = rehearse(t, LlmPlanner(chat, env['listing']), env['build'], env['validate'], env['sim'],
-                     Reflector(refl_chat), a.attempts, hint=hint)
+        r = rehearse(t, mk_planner(a, env, chat), env['build'], env['validate'], env['sim'],
+                     mk_refl(a, refl_chat), a.attempts, hint=hint)
         if r.success:
             store.save(to_memory(t, r, 'kobuki', '0.1.0', 'bench'))
             learned += 1
     arms = {'a_no_memory': (False, False, None), 'd_fixed_example': (False, False, None),
             'b_memory': (True, False, None),
-            'c_memory_reflection': (True, True, Reflector(refl_chat))}
+            'c_memory_reflection': (True, True, mk_refl(a, refl_chat))}
     splits = {'reuse': [(ev, g) for _, ev, g in TASKS], 'heldout': HELDOUT, 'alias': HARD_EVAL}
     out = {'learned': learned}
     for sname, tasks in splits.items():
         for name, (use_mem, lessons, refl) in arms.items():
-            rows = [attempt_stats(Task(t, g), LlmPlanner(chat, env['listing'], FIXED_EXAMPLE if name == 'd_fixed_example' else ()),
+            rows = [attempt_stats(Task(t, g), mk_planner(a, env, chat, FIXED_EXAMPLE if name == 'd_fixed_example' else ()),
                                   env, refl, a.attempts, mem_dir,
                                   use_mem, lessons, hint) for t, g in tasks]
             out[f'{sname}/{name}'] = (sum(ok for ok, _, _ in rows) / len(rows),
@@ -129,6 +138,9 @@ def main():
     ap.add_argument('--reflector-endpoint', default='', help='separate (e.g. larger) model for lessons')
     ap.add_argument('--reflector-anthropic-key-file', default='', help='use the Anthropic API for lessons (key read from this file)')
     ap.add_argument('--reflector-model', default='claude-haiku-5-5')
+    ap.add_argument('--lessons-file', default='', help='lessons by situation key (see tools/wicl_situations.py)')
+    ap.add_argument('--prompt', choices=('production', 'bare'), default='production',
+                    help='production = param/llm_knowledge.md + schema (what llm_bridge uses); bare = grammar only')
     ap.add_argument('--attempts', type=int, default=3)
     ap.add_argument('--runs', type=int, default=5)
     ap.add_argument('--out', default='')
@@ -142,7 +154,7 @@ def main():
     for i in range(a.runs):
         runs.append(one_run(a, env, chat, refl_chat))
         print(f'run {i + 1}/{a.runs}:', {k: (round(v[0], 2) if isinstance(v, tuple) else v) for k, v in runs[-1].items()}, flush=True)
-    report = {'runs': a.runs, 'max_attempts': a.attempts, 'constrained_decoding': True,
+    report = {'runs': a.runs, 'max_attempts': a.attempts, 'constrained_decoding': True, 'prompt': a.prompt, 'lessons_file': a.lessons_file,
               'separate_reflector': bool(a.reflector_endpoint or a.reflector_anthropic_key_file),
               'reflector_model': a.reflector_model if a.reflector_anthropic_key_file else 'same as planner',
               'memories_learned': [r['learned'] for r in runs], 'results': {}}

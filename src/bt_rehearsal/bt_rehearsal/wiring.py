@@ -26,6 +26,7 @@ def make_env(map_yaml='', places_yaml='', scene=None):
     return {
         'schema': spec_schema(list(cat.all().values()), macros),
         'hint': 'Valid places: ' + ', '.join(sorted(places)) + '.',
+        'knowledge': open(os.path.join(fb, 'param', 'llm_knowledge.md')).read(),
         'catalog': cat, 'sim': sim, 'places': places,
         'listing': format_listing(cat.all().values(), with_desc=True) + '\nPlaces: ' + ', '.join(sorted(places)),
         'build': lambda spec: build_xml(json.dumps(expand(json.loads(spec), macros, whitelist)), ids),
