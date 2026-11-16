@@ -124,7 +124,8 @@ def one_run(a, env, chat, refl_chat):
     store, hint = MemoryStore(mem_dir), env['hint']
     learned = 0
     ext = load_external(a.tasks_file) if a.tasks_file else None
-    for train, goal in [(t, g) for t, _, g in TASKS] + HARD_TRAIN + (ext['train'] if ext else []):      # learn: rehearse every TRAINING phrasing with reflection
+    # learn: rehearse every TRAINING phrasing with reflection
+    for train, goal in [(t, g) for t, _, g in TASKS] + HARD_TRAIN + (ext['train'] if ext else []):
         t = Task(train, goal)
         r = rehearse(t, mk_planner(a, env, chat), env['build'], env['validate'], env['sim'],
                      mk_refl(a, refl_chat), a.attempts, hint=hint)
@@ -157,7 +158,8 @@ def main():
     ap.add_argument('--lessons-file', default='', help='lessons by situation key (see tools/wicl_situations.py)')
     ap.add_argument('--prompt', choices=('production', 'bare'), default='production',
                     help='production = param/llm_knowledge.md + schema (what llm_bridge uses); bare = grammar only')
-    ap.add_argument('--tasks-file', default='', help='JSON {"train": [{task, goal}], "eval": [...]} written by someone else (docs/wicl-task-writer-prompt.md)')
+    ap.add_argument('--tasks-file', default='', help='JSON {"train": [{task, goal}], "eval": [...]} written by someone else '
+                    '(docs/wicl-task-writer-prompt.md)')
     ap.add_argument('--attempts', type=int, default=3)
     ap.add_argument('--runs', type=int, default=5)
     ap.add_argument('--out', default='')
