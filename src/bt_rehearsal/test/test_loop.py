@@ -86,7 +86,7 @@ def test_reflector_falls_back_and_lints(sim):
     def down(*_):
         raise OSError
     assert Reflector(down).lesson('t', obs) == template_lesson(obs)
-    assert Reflector(lambda *_: 'Check the place name.\nextra').lesson('t', obs) == 'Check the place name.'
+    assert Reflector(lambda *_: 'Check the place name.\nextra').lesson('t', obs) == template_lesson(obs) + '. Check the place name.'
 
 
 def test_to_memory(sim):

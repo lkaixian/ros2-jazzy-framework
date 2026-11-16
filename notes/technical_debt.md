@@ -58,7 +58,7 @@ Severity: **S1** can hurt people/hardware or invalidate results; **S2** likely t
 | ID | Debt | Next step |
 |---|---|---|
 | T-32 | **Rehearsal sim is kinematic only**: models control nodes + navigation by grid reachability; every other node fails as unsupported. The ROS-driven backend (real `bt_executor` + `nav_sim` + Nav2) is not built. | Implement a second `Simulator`; it must never un-dry-run the executor on a real robot. |
-| T-33 | **WICL benchmark inconclusive**: 1/12 memories learned with E2B; harness uses its own prompt, 600-token cap, no constrained decoding. | Route rehearsal planning through `llm_bridge` (`llm/query` + schema) and re-run with a larger model / more attempts. |
+| T-33 | **WICL benchmark is tuned on its own results and optimistic**: 12 tasks, one run, paraphrases of rehearsed tasks, harness uses its own prompt (not `llm_bridge` constrained decoding); lesson remedies are hand-written (`_REMEDY`). | Hold-out tasks never used for tuning; route planning through `llm_bridge`; repeat runs for variance. |
 | T-34 | **Retrieval is lexical** (token overlap + scene objects); paraphrases score low. `Retriever` is the seam for embeddings. | Add an embedding retriever on CPU. |
 | T-35 | **Memory hook not exercised in a live launch**: unit-tested and launch args checked; the `bt/task_ctx` remap was not run end to end with the bridge. | Add an integration script under `tools/integration/`. |
 | T-36 | `rehearsal_node` (ROS services) was built but only the CLI path was run. | Service smoke test with a fake `llm/query`. |

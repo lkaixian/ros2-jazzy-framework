@@ -10,7 +10,8 @@ from bt_memory.schema import lint
 
 GRAMMAR = ('Reply with ONE JSON object only: {"goal": str, "steps": [STEP, ...]} where '
            'STEP = {"node": "<NodeId>", "ports": {"<port>": "<value>"}} or '
-           '{"group": "Sequence|Fallback", "retry": N?, "steps": [STEP, ...]}. Use only the nodes listed.')
+           '{"group": "Sequence|Fallback", "retry": N?, "steps": [STEP, ...]}. "node" is always a plain string. '
+           'Use only the nodes listed, and only the ports a task needs.')
 
 
 class PlannerUnavailable(RuntimeError):
@@ -22,7 +23,7 @@ def http_chat(endpoint, timeout=30.0, api_key=''):
     def chat(system, prompt):
         body = json.dumps({'messages': [{'role': 'system', 'content': system},
                                         {'role': 'user', 'content': prompt}],
-                           'temperature': 0.2, 'max_tokens': 600}).encode()
+                           'temperature': 0.2, 'max_tokens': 1500}).encode()
         req = urllib.request.Request(endpoint.rstrip('/') + '/v1/chat/completions', body,
                                      {'Content-Type': 'application/json',
                                       **({'Authorization': f'Bearer {api_key}'} if api_key else {})})
@@ -61,18 +62,27 @@ class LlmPlanner:
         return _json_only(text)
 
 
+# shortcut: remedies are hand-written per failure message, not learned; add a row when a new failure shows up
+_REMEDY = (('timeout', 'leave out timeout_ms (do not invent time limits)'),
+           ('unknown place', 'use only the place names listed under Places, spelled exactly'),
+           ('no path', 'pick a reachable place or go via the door first'),
+           ('unsupported', 'use only navigation and control nodes'))
+
+
 def template_lesson(obs):
     """Deterministic lesson from Observable data only. Works offline."""
     if obs.validator_errors:
         return f'The validator rejected the plan: {obs.validator_errors[0]}'
     o = obs.outcome
     if o.get('result') == 'FAILURE':
-        return f"{o.get('failed_node') or 'a node'} failed ({o.get('message') or 'no message'}); choose another approach for that step"
+        msg = o.get('message') or 'no message'
+        fix = next((r for k, r in _REMEDY if k in msg), 'choose another approach for that step')
+        return f"{o.get('failed_node') or 'a node'} failed ({msg}); {fix}"
     return 'The run succeeded but did not reach the goal; check the destination'
 
 
 class Reflector:
-    """One short lesson per failed attempt. LLM when reachable and the reply lints clean, else template."""
+    """One lesson per failed attempt: the template remedy, plus the LLM's sentence when reachable and lint-clean."""
 
     def __init__(self, chat=None):
         self.chat = chat
@@ -84,7 +94,7 @@ class Reflector:
                 text = self.chat('Write one short sentence: a lesson for a robot planner. No numbers, '
                                  'coordinates or ids.', f'Task: {task}\n{obs.context_text()}').strip().splitlines()[0]
                 if text and not lint(text):
-                    return text
+                    return f'{base}. {text}'      # the concrete remedy is never replaced by a vague LLM sentence
             except Exception:  # noqa: BLE001
                 pass
         return base

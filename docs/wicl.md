@@ -54,16 +54,17 @@ BT.CPP built-ins (Sequence, Fallback, Sleep ...) pass through. Any other node mi
 
 ## Benchmark
 
-`tools/wicl_bench.py`, 12 navigation tasks: memories learned from one phrasing, evaluated on a paraphrase. Raw output: `docs/wicl-benchmark.json`. Planner: Gemma 4 E2B Q4_0 on the GTX 1650 through llama-server, max 3 attempts, one run.
+`tools/wicl_bench.py`, 12 navigation tasks: memories learned from one phrasing, evaluated on a paraphrase. Raw output: `docs/wicl-benchmark.json`. Planner: Gemma 4 E2B Q4_0 on the GTX 1650 through llama-server, max 3 attempts, one run, 12/12 training tasks rehearsed into memories.
 
 | Arm | Sim success | First plan validates | Mean attempts to success |
 |---|---|---|---|
-| (a) no memory | 4/12 | 9/12 | 2.25 |
-| (b) memory retrieval | 3/12 | 8/12 | 2.0 |
-| (c) memory + reflection | 0/12 | 6/12 | n/a |
+| (a) no memory (raw feedback retries) | 7/12 | 12/12 | 2.14 |
+| (b) memory retrieval | 11/12 | 12/12 | 1.0 |
+| (c) memory + reflection | 11/12 | 12/12 | 1.0 |
 
-**This does not show that memory helps, and it does not show that it hurts.** Only 1 of 12 training tasks was learned (rehearsal succeeded), so there was almost nothing to retrieve, and in (b) and (c) the injected examples were mostly unrelated or failed plans. Causes seen in a spot check, all in the harness or the small model, not the method:
-- the E2B model invents `timeout_ms=5000`, which the sim correctly fails as a timeout;
-- for multi-step tasks it emits nested or truncated JSON (the harness caps replies at 600 tokens, and it does not use the production `llm_bridge` schema-constrained decoding);
-- 12 tasks, one sample per call: a one-task difference is noise.
-A fair test needs the bridge's constrained decoding and a larger model or more attempts, so that memories exist to retrieve. Until then, treat retrieval and reflection as unproven here.
+What this does and does not show:
+- **Memory helped here**, mostly by *reuse*: in (b) and (c) a stored plan that still validated was run first, with zero LLM calls. The evaluation tasks are paraphrases of tasks already rehearsed, so this is the best case for retrieval, not a general-planning gain.
+- **Reflection added nothing measurable**: (b) equals (c). It mattered during *learning*: with the concrete template remedies (e.g. "leave out timeout_ms") rehearsal produced 12/12 memories, versus 1/12 earlier.
+- **Hand-written knowledge is doing work.** The remedies in `bt_rehearsal/llm.py` (`_REMEDY`) are authored by a person, not learned. The 2B model's own lessons were vague ("verify the destination") and did not help alone.
+- **I tuned this harness on its own results.** Four runs: 1/12 memories learned with a 600-token cap and a generic lesson, again 1/12 with a stale installed package (my mistake: the fixes were not in the run), 1/12 with better remedies but the LLM sentence replacing them, then 12/12 once the template remedy was always kept. Treat the final numbers as optimistic. 12 tasks, one run, one sample per call: a difference of one task (8 points) is noise, but 7/12 against 11/12 is four tasks.
+- Sim-verified only (kinematic 2D sim). Nothing here is a Nav2 or hardware result.
