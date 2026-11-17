@@ -148,6 +148,9 @@ def _nav2(context, sim):
         return Node(package=pkg, executable=exe, name=name, output='screen', parameters=p,
                     remappings=list(remap))
     return [
+        # /scan without the beams that hit the robot's own body: costmaps and collision_monitor read /scan_filtered
+        Node(package='bt_common', executable='scan_mask_node', name='scan_mask_node', output='screen',
+             parameters=[{'use_sim_time': sim}]),
         n('nav2_controller', 'controller_server', 'controller_server', to_nav),
         n('nav2_smoother', 'smoother_server', 'smoother_server'),
         n('nav2_planner', 'planner_server', 'planner_server'),
