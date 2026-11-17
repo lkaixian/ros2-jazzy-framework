@@ -60,7 +60,7 @@ class FaceRecognitionNode(Yolo11Node):
         out.header = header
         h, w = frame.shape[:2]
         out.image_height, out.image_width = h, w
-        annotated = result.plot()
+        annotated = result.plot(labels=False)      # our own identity label below; the built-in one sits on top of it
         biggest, biggest_emb = 0.0, None
         for box in result.boxes:
             x1, y1, x2, y2 = (float(v) for v in box.xyxy[0])
@@ -74,9 +74,11 @@ class FaceRecognitionNode(Yolo11Node):
                     f.embedding = [float(v) for v in emb]
                 if (x2 - x1) * (y2 - y1) > biggest:
                     biggest, biggest_emb = (x2 - x1) * (y2 - y1), emb
-                cv2.putText(annotated, f'{f.identity} {f.similarity:.2f}',
-                            (int(x1), max(12, int(y1) - 6)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                label = f'{f.identity} {f.similarity:.2f}'
+                pos = (max(0, int(x1)), min(h - 6, int(y2) + 20))     # below the box: never hidden by it
+                col = (0, 255, 0) if f.identity != 'unknown' else (0, 200, 255)
+                cv2.putText(annotated, label, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 4)
+                cv2.putText(annotated, label, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.65, col, 2)
             out.faces.append(f)
         if biggest_emb is not None:
             self.last = (time.monotonic(), biggest_emb)
