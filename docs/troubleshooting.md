@@ -21,6 +21,7 @@ Find the symptom, read the cause, apply the fix. Everything here cost real time 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `error creating node` | the DDS domain ran out of participants (leaked or duplicated stacks) | stop everything, check `ps`, use a fresh `ROS_DOMAIN_ID`; never start `extensions.launch.py` twice |
+| Nodes die at start (`RCLError: error creating node`, exit 1 or -6; the lidar and extension nodes start last) with the full stack plus Nav2 | Cyclone's default allows ~32 DDS participants per machine and every ROS process is one; Nav2 pushes the stack past it, so no scans, no `map` frame, costmap "Timed out waiting for transform" | `export CYCLONEDDS_URI=file://$PWD/tools/net/cyclonedds_local.xml` (limit 200) in **every** terminal (`dash`, `teleop` and `ros2` CLI too) and restart everything. The name is all caps: `CycloneDDS_URI` is silently ignored |
 | Tests see someone else's robot | shared domain | own `ROS_DOMAIN_ID` + `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` |
 | Extension nodes unknown to the validator | its manifest was missed (latched publication loses races at startup) | manifests are republished every 3 s; start extensions **before** sending tasks; check `bt_validator/catalog` |
 | A parameter in my YAML does nothing | unknown keys are ignored silently | `ros2 run framework_bringup check_params` |

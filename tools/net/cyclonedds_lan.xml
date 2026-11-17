@@ -13,7 +13,7 @@
     </General>
     <Discovery>
       <ParticipantIndex>auto</ParticipantIndex>
-      <MaxAutoParticipantIndex>40</MaxAutoParticipantIndex>
+      <MaxAutoParticipantIndex>200</MaxAutoParticipantIndex>
       <Peers>
         <Peer address="${ROBOCUP_PEER:-localhost}"/>
       </Peers>
