@@ -3,6 +3,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,7 @@ struct ExecContext
 {
   rclcpp::Node::SharedPtr node;   // may be null when dry_run (tests)
   bool dry_run = true;
+  std::set<std::string> dry_run_exempt;   // extensions that run for real even in a dry run (speech: no motion)
   std::function<void(const std::string &)> log = [](const std::string &) {};
   rclcpp_action::Client<ExecuteNode>::SharedPtr client(const std::string & extension);
 
@@ -65,6 +67,13 @@ private:
 void register_perception(
   BT::BehaviorTreeFactory & f, std::shared_ptr<const PerceptionCache> cache,
   double max_age_sec);
+
+/// True when `xml` uses a node of an extension that a dry run would skip (one not in `exempt`): decides whether to say
+/// "dry run" for a plan. A plan made only of exempt (e.g. speech) nodes runs for real, so it is not a dry run.
+bool plan_skips_nodes(
+  const std::string & xml,
+  const std::map<std::string, bt_pipeline_msgs::msg::ExtensionManifest> & manifests,
+  const std::set<std::string> & exempt);
 
 /// Register every Action/Condition node advertised in the extension manifests. Each runs
 /// as a goal to `<extension>/execute`. Returns the number of registered nodes; Control and

@@ -219,7 +219,7 @@ public:
       desc << (i ? ", " : "") << goal.port_names[i] << "=" << goal.port_values[i];
     }
     desc << ")";
-    if (ctx_->dry_run) {
+    if (ctx_->dry_run && !ctx_->dry_run_exempt.count(ext_)) {
       ctx_->log("[dry-run] " + desc.str());
       return BT::NodeStatus::SUCCESS;
     }
@@ -324,4 +324,22 @@ int register_extensions(
   }
   return n;
 }
+bool plan_skips_nodes(
+  const std::string & xml,
+  const std::map<std::string, bt_pipeline_msgs::msg::ExtensionManifest> & manifests,
+  const std::set<std::string> & exempt)
+{
+  for (const auto & [ext, man] : manifests) {
+    if (exempt.count(ext)) {continue;}
+    for (const auto & spec : man.nodes) {
+      const std::string tag = "<" + spec.id;
+      for (auto at = xml.find(tag); at != std::string::npos; at = xml.find(tag, at + 1)) {
+        const size_t end = at + tag.size();        // "<Speak" must not match "<SpeakLoud"
+        if (end >= xml.size() || xml[end] == ' ' || xml[end] == '/' || xml[end] == '>' || xml[end] == '\n') {return true;}
+      }
+    }
+  }
+  return false;
+}
+
 }  // namespace bt_executor

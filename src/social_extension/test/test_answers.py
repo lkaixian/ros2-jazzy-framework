@@ -1,6 +1,6 @@
 import pytest
 
-from social_extension.answers import extract_drink, extract_name
+from social_extension.answers import extract_drink, extract_name, is_yes
 
 
 @pytest.mark.parametrize('said,name', [
@@ -16,3 +16,11 @@ def test_extract_name(said, name):
     ('Coffee', 'coffee'), ('I would like some tea', 'tea'), ('hmm what a long sentence about nothing at all', '')])
 def test_extract_drink(said, drink):
     assert extract_drink(said) == drink
+
+
+@pytest.mark.parametrize('said,yes', [
+    ('Yes.', True), ('Yeah, that is right', True), ('yep', True), ('Sure!', True), ('correct', True),
+    ('No.', False), ('Nope, it is Larm', False), ("No, that's wrong", False), ('yes... no', False),
+    ('my name is Larm', False), ('', False)])
+def test_is_yes(said, yes):
+    assert is_yes(said) is yes
