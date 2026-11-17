@@ -88,6 +88,7 @@ class TtsNode(Node):
         proc = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
         proc.stdin.write(text.encode() + b'\n')
         proc.stdin.close()
+        proc.stdin = None      # else communicate() flushes the closed pipe: ValueError "flush of closed file"
         return proc
 
     def _worker(self):
