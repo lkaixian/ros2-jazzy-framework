@@ -8,6 +8,7 @@
 
 Node states: ONLINE (in the ROS graph), BUSY (bt_executor running a tree), ERROR (logged an
 error in the last 30 s, or llm_bridge reports `down`), OFFLINE (expected but not in the graph).
+The devices section lists the hardware in param/devices.yaml: device file present, driver topic rate.
 Expected nodes = the table in check_params. Each LLM endpoint line also shows the link to it: local / wired / wireless (the interface this
 machine routes through) and the TCP connect time in ms, measured every 3 s in the background.
 
@@ -18,6 +19,8 @@ running task (bt_executor/halt); t shows/hides the plan tree (live node status f
 s/S/w/W ask y/n first. Without keys it only reads.
 """
 import argparse
+import collections
+import glob
 import importlib.machinery
 import json
 import ipaddress
@@ -35,11 +38,14 @@ import tty
 from urllib.parse import urlparse
 
 import rclpy
+import yaml
+from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 from bt_common.battery_guard import battery_level
 from cluster_msgs.msg import ClusterStatus
 from rcl_interfaces.msg import Log
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from std_msgs.msg import String
+from rosidl_runtime_py.utilities import get_message
 from std_srvs.srv import Trigger
 
 try:
@@ -177,8 +183,11 @@ def find_pids(name):
 
 
 def launch_pids():
-    return [p for p, a in cmdlines()
-            if len(a) > 2 and os.path.basename(a[1]) == 'ros2' and a[2] == 'launch']
+    """`ros2 launch` processes that s/w target: framework.launch.py when it runs (the Kobuki driver, started
+    separately, must not count), else every `ros2 launch`."""
+    out = [(p, a) for p, a in cmdlines()
+           if len(a) > 2 and os.path.basename(a[1]) == 'ros2' and a[2] == 'launch']
+    return [p for p, a in out if 'framework.launch.py' in a] or [p for p, _ in out]
 
 
 def kill(pid, force):
@@ -186,6 +195,42 @@ def kill(pid, force):
         pg = os.getpgid(pid)
         return os.killpg(pg, signal.SIGKILL) if pg != os.getpgid(0) else os.kill(pid, signal.SIGKILL)
     os.kill(pid, signal.SIGINT)
+
+
+RATE_WINDOW = 5.0
+
+
+def load_devices():
+    """param/devices.yaml from the install, else from the source tree next to this script."""
+    here = os.path.dirname(os.path.realpath(__file__))
+    for d in (os.path.join(get_package_share_directory('framework_bringup'), 'param'),
+              os.path.join(here, '..', 'param')):
+        try:
+            with open(os.path.join(d, 'devices.yaml')) as f:
+                return (yaml.safe_load(f) or {}).get('devices', [])
+        except (OSError, PackageNotFoundError):
+            continue
+    return []
+
+
+def device_state(present, rate, topic, optional=False):
+    """present: device file exists; rate: Hz of its topic (None = not subscribed yet)."""
+    if not present:
+        return 'OFFLINE' if optional else 'ERROR'
+    if not topic or rate:
+        return 'ONLINE'
+    return 'WARN'      # plugged in, but the driver is not publishing
+
+
+def usb_name(path):
+    """Short hardware name from udev (cached by the caller); '' when udev knows nothing."""
+    try:
+        out = subprocess.run(['udevadm', 'info', '-q', 'property', '-n', path], timeout=2,
+                             capture_output=True, text=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ''
+    p = dict(ln.split('=', 1) for ln in out.splitlines() if '=' in ln)
+    return p.get('ID_MODEL_FROM_DATABASE') or p.get('ID_MODEL') or p.get('ID_VENDOR') or ''
 
 
 def expected_nodes():
@@ -215,6 +260,9 @@ class Dash:
             node.create_subscription(SensorState, 'sensors/core', lambda m: setattr(
                 self, 'battery', (m.battery, m.charger, time.monotonic())), 5)
         self.names, self.sel, self.msg, self.pending = [], 0, '', None
+        self.devices, self.hw_name = load_devices(), {}
+        self.since = {}
+        self.stamps = {}     # topic -> deque of arrival times (raw subscriptions: no deserialising)
         self.tree, self.nstate, self.show_tree = [], {}, True
         node.create_subscription(String, 'bt/tree', self._on_tree, TL)
         node.create_subscription(String, 'bt/node_status', self._on_node_status, 10)
@@ -319,6 +367,55 @@ class Dash:
                              stdin=subprocess.DEVNULL, start_new_session=True)
         self.say('system relaunched, output in /tmp/robocup_launch.log')
 
+    def rate(self, topic):
+        """Hz over the last RATE_WINDOW s; subscribes the first time the topic's type is known."""
+        if topic not in self.stamps:
+            types = dict(self.n.get_topic_names_and_types()).get(topic)
+            if not types:
+                return None
+            dq = self.stamps[topic] = collections.deque(maxlen=1000)
+            self.since[topic] = time.monotonic()
+            self.n.create_subscription(get_message(types[0]), topic,
+                                       lambda _m, dq=dq: dq.append(time.monotonic()),
+                                       qos_profile_sensor_data, raw=True)
+        now = time.monotonic()
+        span = max(1.0, min(RATE_WINDOW, now - self.since[topic]))
+        return sum(1 for t in self.stamps[topic] if now - t < span) / span
+
+    def device_rows(self):
+        out = []
+        for d in self.devices:
+            hits = glob.glob(d['path'])
+            path = hits[0] if hits else None
+            topic = d.get('topic', '')
+            rate = self.rate(topic) if path and topic else None
+            s = device_state(bool(path), rate, topic, d.get('optional', False))
+            if path and path not in self.hw_name:
+                self.hw_name[path] = usb_name(path)
+            what = {'ONLINE': ('present' if not topic else f'{rate or 0:.0f} Hz {topic}'),
+                    'WARN': f'no data on {topic}' if rate is not None else f'{topic} not advertised',
+                    'ERROR': 'missing', 'OFFLINE': 'absent'}[s]
+            out.append({'name': d['name'], 'path': d['path'], 'hw': self.hw_name.get(path, ''),
+                        'state': s, 'what': what})
+        return out
+
+    def device_lines(self, c):
+        return [f"   {r['name']:<8}{r['path'][:26]:<27}{r['hw'][:21]:<22}" +
+                paint(f"{r['state']:<8}", COL[r['state']], c) + r['what'] for r in self.device_rows()]
+
+    def node_rows(self, names, online, now):
+        busy_node = 'bt_executor_node' if self.bt.get('state') == 'running' else None
+        out = []
+        for name in names:
+            err = self.err.get(name)
+            s = classify(name in online, now - err[0] if err else None,
+                         busy=name == busy_node,
+                         down=name == 'llm_bridge_node' and self.llm.get('state') == 'down')
+            note = (err[1][:70] if err and s == 'ERROR' else
+                    self.bt.get('message', '') if s == 'BUSY' else '')
+            out.append((name, s, note))
+        return out
+
     def frame(self, expected):
         c, now = self.color, time.monotonic()
         online = {n for n, _ in self.n.get_node_names_and_namespaces()}
@@ -372,18 +469,13 @@ class Dash:
                     j.job_state, 'OFFLINE' if j.state != 'placed' else 'ONLINE')
                 out.append(f'   {j.job_id:<18} {j.host_id or "-":<12} ' +
                            paint(j.job_state if j.state == "placed" else j.state, COL[col], c))
+        if self.devices:
+            out += ['', 'devices'] + self.device_lines(c)
         # nodes
         out += ['', 'nodes']
-        busy_node = 'bt_executor_node' if self.bt.get('state') == 'running' else None
         self.names = names
         self.sel = min(self.sel, max(len(names) - 1, 0))
-        for i, name in enumerate(names):
-            err = self.err.get(name)
-            s = classify(name in online, now - err[0] if err else None,
-                         busy=name == busy_node,
-                         down=name == 'llm_bridge_node' and self.llm.get('state') == 'down')
-            note = (err[1][:70] if err and s == 'ERROR' else
-                    self.bt.get('message', '') if s == 'BUSY' else '')
+        for i, (name, s, note) in enumerate(self.node_rows(names, online, now)):
             out.append(('>> ' if i == self.sel and self.keys else '   ') + f'{name:<30}' + paint(f'{s:<8}', COL[s], c) + note)
         if self.keys:
             out += ['', paint(self.msg, COL['WARN'], c) if self.msg else '',
@@ -426,6 +518,10 @@ def main(argv=None):
             old_tty = termios.tcgetattr(sys.stdin)
             tty.setcbreak(sys.stdin)
         end = time.monotonic() + 2.5      # let latched topics and the graph arrive
+        while time.monotonic() < end:
+            rclpy.spin_once(node, timeout_sec=0.1)
+        d.device_lines(False)             # subscribe to the device topics, then measure ~2 s
+        end = time.monotonic() + 2.0
         while time.monotonic() < end:
             rclpy.spin_once(node, timeout_sec=0.1)
         if a.once:     # give the background link check one round before the single frame
