@@ -20,6 +20,8 @@ from std_srvs.srv import Trigger
 KEYS = {'w': (1.0, 0.0), 's': (-1.0, 0.0), 'a': (0.0, 1.0), 'd': (0.0, -1.0), ' ': (0.0, 0.0)}
 LINEAR, ANGULAR = 0.2, 0.6      # m/s, rad/s before the mux clamp
 
+HELP = '\n'.join(ln.strip() for ln in __doc__.splitlines() if 'w/s' in ln)      # the key help line printed at start
+
 
 def twist_for(key):
     """Key -> (linear m/s, angular rad/s), or None for a key that means nothing."""
@@ -37,7 +39,7 @@ def main(argv=None):
     halt = node.create_client(Trigger, 'bt_executor/halt')
     old = termios.tcgetattr(sys.stdin)
     halted = False
-    print(__doc__.split('\n\n')[0].split('\n', 1)[1].strip())
+    print(HELP)
     try:
         tty.setcbreak(sys.stdin)
         while rclpy.ok():
