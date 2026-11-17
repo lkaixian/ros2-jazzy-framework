@@ -6,18 +6,27 @@
 # AMCL drift, and obstacles appear in the wrong place. Measure from the `base` frame origin
 # (Kobuki: centre of the wheel axis, on the floor plane unless your URDF says otherwise):
 #   x forward (m), y left (m), z up (m); yaw/pitch/roll in radians.
-# Check with:  ros2 run tf2_ros tf2_echo base laser
+# Check with:  ros2 run tf2_ros tf2_echo base laser     (and  tf2_echo odom laser  to see the whole chain connect)
 
 static_tf:
-  base_to_laser:                  # RPLIDAR A1 (driver frame_id: laser)
-    parent: base
-    child: laser
-    x: 0.00                       # PLACEHOLDER
-    y: 0.00                       # PLACEHOLDER
-    z: 0.25                       # PLACEHOLDER
+  footprint_to_base:              # the Kobuki driver publishes odom -> base_footprint (verified on /tf), everything here uses `base`
+    parent: base_footprint        # both sit at the centre of the wheel axis on the floor: identity. Delete this entry if a
+    child: base                   # driver build already publishes `base` itself (two parents for one frame break TF)
+    x: 0.0
+    y: 0.0
+    z: 0.0
     roll: 0.0
     pitch: 0.0
-    yaw: 0.0                      # PLACEHOLDER (0 = lidar 0 deg points forward)
+    yaw: 0.0
+  base_to_laser:                  # RPLIDAR A2M8 (driver frame_id: laser)
+    parent: base
+    child: laser
+    x: 0.15                       # WALL TEST: lidar 41.2 cm from a wall, robot front edge ~40 cm (+-2): x = 17.6 + D - 41.2 (D=37..40 -> 14..16 cm)
+    y: 0.00                       # on the centreline (by eye)
+    z: 0.14                       # measured: Kobuki 10.5 cm + lidar head ~3.5 cm (scan plane ~ the head); 2D mapping barely depends on it
+    roll: 0.0
+    pitch: 0.0
+    yaw: 3.1416                   # MEASURED: lidar 0 deg points to the robot's rear (hand over the front -> blind rear arc, centre bumper hit)
   base_to_camera:                 # RealSense camera_link (published by realsense2_camera)
     parent: base
     child: camera_link
