@@ -151,9 +151,9 @@ local_costmap:
           marking: true
           data_type: LaserScan
           raytrace_max_range: 4.0
-          raytrace_min_range: 0.0
+          raytrace_min_range: 0.25   # ignore returns closer than this: the robot's own standoffs are at 0.10-0.20 m
           obstacle_max_range: 3.0
-          obstacle_min_range: 0.0
+          obstacle_min_range: 0.25
         depth_scan:
           topic: /depth_scan
           max_obstacle_height: 2.0
@@ -186,9 +186,9 @@ global_costmap:
           marking: true
           data_type: LaserScan
           raytrace_max_range: 4.0
-          raytrace_min_range: 0.0
+          raytrace_min_range: 0.25   # ignore returns closer than this: the robot's own standoffs are at 0.10-0.20 m
           obstacle_max_range: 3.0
-          obstacle_min_range: 0.0
+          obstacle_min_range: 0.25
         depth_scan:
           topic: /depth_scan
           max_obstacle_height: 2.0
