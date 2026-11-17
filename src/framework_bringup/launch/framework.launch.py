@@ -30,6 +30,10 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_params_dir(),
+        # the safety mux must publish where the Kobuki driver listens, else PID / odom / Nav2 commands go nowhere
+        # (nav_sim.launch.py keeps `cmd_vel` for the simulator). Motion is still gated by dry_run (default true).
+        DeclareLaunchArgument('cmd_vel_topic', default_value='commands/velocity',
+                              description='topic cmd_vel_mux publishes to; the Kobuki driver listens on commands/velocity'),
         DeclareLaunchArgument('enable_audio', default_value='false',
                               description='STT/TTS pipeline (opens the microphone; needs an '
                                           'STT engine installed, see param/audio.yaml)'),

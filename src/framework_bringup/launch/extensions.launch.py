@@ -7,7 +7,7 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 
 ARGS = ('odom_topic', 'cmd_vel_topic', 'cmd_vel_stamped', 'max_linear', 'max_angular',
         'persons_topic', 'arm_group', 'arm_ee_link', 'arm_base_frame', 'move_group_action',
-        'gripper_action')
+        'gripper_action', 'scan_yaw_offset', 'scan_required')
 F = 'extensions.yaml'
 
 
@@ -20,11 +20,13 @@ def _nodes(context):
     if flag(context, 'enable_odom'):
         out.append(n('odom_extension', 'odom_extension_node', 'odom_extension_node', F,
                      {'odom_topic': 'odom_topic', 'max_linear': 'max_linear',
-                      'max_angular': 'max_angular'}))
+                      'max_angular': 'max_angular', 'scan_yaw_offset': 'scan_yaw_offset',
+                      'scan_required': 'scan_required'}))
     if flag(context, 'enable_pid'):
         out.append(n('pid_extension', 'pid_extension_node', 'pid_extension_node', F,
                      {'odom_topic': 'odom_topic', 'persons_topic': 'persons_topic',
-                      'max_angular': 'max_angular'}))
+                      'max_angular': 'max_angular', 'scan_yaw_offset': 'scan_yaw_offset',
+                      'scan_required': 'scan_required'}))
     if flag(context, 'enable_pose'):
         out.append(n('pose_extension', 'pose_extension_node', 'pose_extension_node', F,
                      {'persons_topic': 'persons_topic'}))
