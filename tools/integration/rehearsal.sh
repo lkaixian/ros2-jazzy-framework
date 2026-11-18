@@ -9,6 +9,8 @@ export OUT="${OUT:-/tmp/robocup_rehearsal}"; mkdir -p "$OUT"
 # retry path silently drops the unknown steps (seen once: scout_room ran only its CountPeople steps)
 export ITEST_ACTION_SERVERS="odom_extension/execute,social_extension/execute,nav_extension/execute,pose_extension/execute"
 export ITEST_SETTLE=5
+# a rehearsal checks the node sequence from the executor's [dry-run] log lines: nothing may run for real (pipeline.yaml exempts social_extension)
+export ITEST_PIPELINE_ARGS="dry_run_exempt:=none"
 fails=0
 # case NAME SPEC_JSON "expected node ids, space separated, in execution order"
 case_() {

@@ -6,7 +6,7 @@ from launch import LaunchDescription
 from launch.actions import ExecuteProcess, OpaqueFunction
 
 ARGS = ('start_llama_server', 'llama_model', 'llama_hf_repo', 'llama_port', 'llama_url',
-        'slm_model_path', 'max_attempts', 'dry_run', 'auto_run', 'groot2', 'mode_gate', 'wicl_memory', 'wicl_verbose')
+        'slm_model_path', 'max_attempts', 'dry_run', 'dry_run_exempt', 'auto_run', 'groot2', 'mode_gate', 'wicl_memory', 'wicl_verbose')
 
 
 def _nodes(context):
@@ -37,6 +37,7 @@ def _nodes(context):
                          'pipeline.yaml', {'llama_url': 'server_url'}, extra=derived,
                          **({'remappings': [('bt/task', 'bt/task_ctx')]} if wicl else {})))
     P = 'pipeline.yaml'
+    exempt = given(context, 'dry_run_exempt')   # comma list; a name no extension has (e.g. none) = nothing runs for real
     out += [
         make_node(context, 'bt_slm', 'bt_slm_node', 'bt_slm_node', P, {'slm_model_path': 'model_path'}),
         make_node(context, 'bt_validator', 'bt_validator_node', 'bt_validator_node', P),
@@ -45,7 +46,8 @@ def _nodes(context):
         make_node(context, 'bt_orchestrator', 'scene_summarizer_node', 'scene_summarizer_node', P),
         make_node(context, 'bt_orchestrator', 'robot_mode_node', 'robot_mode_node', P),
         make_node(context, 'bt_executor', 'bt_executor_node', 'bt_executor_node', P,
-                  {'dry_run': 'dry_run', 'auto_run': 'auto_run', 'groot2': 'groot2', 'mode_gate': 'mode_gate'}),
+                  {'dry_run': 'dry_run', 'auto_run': 'auto_run', 'groot2': 'groot2', 'mode_gate': 'mode_gate'},
+                  extra={'dry_run_exempt': exempt.split(',')} if exempt else None),
     ]
     return out
 
