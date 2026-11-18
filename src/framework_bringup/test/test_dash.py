@@ -109,7 +109,8 @@ def test_teleop_keys_and_priority():
     assert tp.twist_for('a')[1] > 0 > tp.twist_for('d')[1] and tp.twist_for(' ') == (0.0, 0.0)
     assert tp.twist_for('x') is None
     assert 'w/s' in tp.HELP and 'quit' in tp.HELP and 'r reset' in tp.HELP
-    assert tp.twist_for('r') is None       # r resets the stop latch, it never drives       # the start-up help line (its old lookup raised IndexError)
+    assert tp.twist_for('r') is None       # r resets the stop latch, it never drives
+    # (the start-up help line above: its old lookup raised IndexError)
     import yaml
     cfg = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), '..', 'param', 'extensions.yaml')))
     assert cfg['cmd_vel_mux_node']['ros__parameters']['inputs'][0] == 'teleop/cmd_vel'   # manual override wins
