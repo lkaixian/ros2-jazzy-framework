@@ -51,6 +51,7 @@ PERCEPTION = {
     'object_detection_node': ('object_detection', 'object_detection_node', 'perception.yaml', {}),
     'person_detection_node': ('person_detection', 'person_detection_node', 'perception.yaml', {}),
     'face_recognition_node': ('face_recognition', 'face_recognition_node', 'perception.yaml', {}),
+    'auto_register_node': ('face_recognition', 'auto_register_node', 'perception.yaml', {}),
 }
 
 
@@ -111,7 +112,7 @@ def check_node(rclpy, probe, node, spec, params_dir, wait):
                 if proc.poll() is not None else ['did not come up in time']
             return [f'node did not start: {" | ".join(err)}']
         fut = lst.call_async(ListParameters.Request())
-        rclpy.spin_until_future_complete(probe, fut, timeout_sec=5.0)
+        rclpy.spin_until_future_complete(probe, fut, timeout_sec=30.0)   # a node loading a model answers only after it
         if fut.result() is None:
             return [died_message(proc, 'parameter service did not answer')]
         declared = set(fut.result().result.names)
@@ -122,7 +123,7 @@ def check_node(rclpy, probe, node, spec, params_dir, wait):
         if keys:
             req = GetParameters.Request(names=keys)
             fut = get.call_async(req)
-            rclpy.spin_until_future_complete(probe, fut, timeout_sec=5.0)
+            rclpy.spin_until_future_complete(probe, fut, timeout_sec=30.0)   # a node loading a model answers only after it
             if fut.result() is None:
                 return problems + [died_message(proc, 'get_parameters did not answer')]
             for k, pv in zip(keys, fut.result().values):

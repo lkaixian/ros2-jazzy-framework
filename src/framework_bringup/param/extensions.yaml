@@ -38,8 +38,8 @@ odom_extension_node:
     stop_distance: 0.30         # m
     guard_half_width_deg: 35.0
     scan_stale_sec: 0.5
-    scan_required: false        # true: no fresh scan = refuse to drive (use on the real robot; false keeps lidar-less sims working)
-    scan_yaw_offset: 0.0        # rad, lidar yaw relative to the base forward axis
+    scan_required: true         # no fresh scan = refuse to drive (real robot). Lidar-less sims (nav_sim has its own scan): set false
+    scan_yaw_offset: 3.1416     # rad, lidar yaw relative to the base forward axis: must match base_to_laser yaw in navigation.yaml
     turn_clearance: 0.22        # m: RotateBy refuses to turn with anything closer than this in any direction (Kobuki radius 0.18 + margin; 0 = off)
     rate_hz: 20.0
     republish_sec: 3.0
@@ -59,8 +59,8 @@ pid_extension_node:
     stop_distance: 0.40          # m (people: keep at least this far)
     guard_half_width_deg: 35.0
     scan_stale_sec: 0.5
-    scan_required: false
-    scan_yaw_offset: 0.0
+    scan_required: true         # no fresh scan = refuse to drive (real robot)
+    scan_yaw_offset: 3.1416     # rad: lidar faces backwards on this robot (= base_to_laser yaw in navigation.yaml)
     blocked_give_up_sec: 3.0     # blocked this long -> the node fails instead of waiting forever
 
 pose_extension_node:

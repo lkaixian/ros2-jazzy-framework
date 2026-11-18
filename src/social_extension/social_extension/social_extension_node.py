@@ -11,7 +11,7 @@ from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
 from face_recognition.gallery import valid_name
-from social_extension.answers import extract_drink, extract_name
+from social_extension.answers import extract_drink, extract_name, is_yes
 
 MAX_TEXT = 300
 
@@ -105,8 +105,10 @@ class SocialExtension(ExtensionExecutor):
 
     def _extract(self, ports, ctl):
         kind, text = port_str(ports, 'kind'), port_str(ports, 'text')
+        if kind == 'yes':      # a yes/no question: succeeds on an affirmative answer, fails on no or anything unclear
+            return (True, 'yes', {'out_value': 'yes'}) if is_yes(text) else (False, f'not a yes: {text!r}')
         if kind not in ('name', 'drink'):
-            return False, "kind must be 'name' or 'drink'"
+            return False, "kind must be 'name', 'drink' or 'yes'"
         value = (extract_name if kind == 'name' else extract_drink)(text)
         if not value:
             return False, f'no {kind} found in {text!r}'

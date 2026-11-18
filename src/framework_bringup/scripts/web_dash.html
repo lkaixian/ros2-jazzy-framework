@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robot Dashboard</title>
+<style>
+:root {
+  --bg: #eef0f5; --card: #ffffff; --ink: #172033; --mute: #667085; --line: #e2e6ee; --accent: #3b5bdb;
+  --ok: #138a53; --busy: #0b72c0; --warn: #a15c00; --err: #c8372d; --off: #8590a2;
+  --ok-bg: #def5e9; --busy-bg: #dcecfa; --warn-bg: #fdefd2; --err-bg: #fbe3e0; --off-bg: #eaedf2;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 14px rgba(16, 24, 40, .05);
+  --plot: #0e1420; --plot-ink: #7ee0a8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e121a; --card: #171d28; --ink: #e8ebf2; --mute: #8d97aa; --line: #263042; --accent: #7b93ff;
+    --ok: #55cf90; --busy: #62b3f2; --warn: #f2b455; --err: #f58177; --off: #7a8497;
+    --ok-bg: #153327; --busy-bg: #15304a; --warn-bg: #382c12; --err-bg: #3b1f1d; --off-bg: #212938;
+    --shadow: none; --plot: #0a0e15;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.app { display: grid; grid-template-columns: 220px 1fr; min-height: 100%; }
+
+/* navigation */
+nav { background: var(--card); border-right: 1px solid var(--line); padding: 18px 12px; display: flex; flex-direction: column;
+  gap: 4px; position: sticky; top: 0; height: 100vh; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 18px; font-weight: 700; font-size: 16px; }
+.brand i { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center;
+  color: #fff; font-style: normal; font-size: 15px; }
+nav a { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border-radius: 10px;
+  color: var(--mute); text-decoration: none; font-weight: 600; }
+nav a:hover { background: var(--bg); color: var(--ink); }
+nav a.on { background: var(--accent); color: #fff; }
+nav .badge { font-size: 11px; min-width: 20px; text-align: center; padding: 1px 6px; border-radius: 999px; font-weight: 700; }
+nav .foot { margin-top: auto; padding: 10px; color: var(--mute); font-size: 12px; line-height: 1.7; }
+
+/* main */
+.content { min-width: 0; display: flex; flex-direction: column; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 22px; position: sticky; top: 0; z-index: 3;
+  background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); }
+.top h1 { margin: 0; font-size: 20px; }
+.spacer { flex: 1; }
+button { font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  padding: 7px 14px; border-radius: 10px; cursor: pointer; box-shadow: var(--shadow); }
+button:hover { border-color: var(--mute); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.danger { color: var(--err); }
+button.small { padding: 2px 10px; font-size: 12px; box-shadow: none; }
+.page { display: none; padding: 4px 22px 40px; gap: 16px; }
+.page.on { display: grid; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.tile { background: var(--card); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); border: 1px solid var(--line); }
+.tile .k { color: var(--mute); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.tile .v { font-size: 24px; font-weight: 700; margin: 2px 0; }
+.tile .s { color: var(--mute); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile.ok { border-left: 4px solid var(--ok); } .tile.warn { border-left: 4px solid var(--warn); }
+.tile.err { border-left: 4px solid var(--err); } .tile.off { border-left: 4px solid var(--off); }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+.card { background: var(--card); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow); border: 1px solid var(--line); min-width: 0; }
+.card h2 { font-size: 13px; margin: 0 0 8px; color: var(--mute); text-transform: uppercase; letter-spacing: .06em; }
+.row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: 0; }
+.row .name { width: 150px; flex: none; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .detail { color: var(--mute); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: .03em; flex: none; }
+.ONLINE, .ok { color: var(--ok); background: var(--ok-bg); }
+.BUSY { color: var(--busy); background: var(--busy-bg); }
+.WARN, .low { color: var(--warn); background: var(--warn-bg); }
+.ERROR, .critical { color: var(--err); background: var(--err-bg); }
+.OFFLINE, .unknown { color: var(--off); background: var(--off-bg); }
+.live { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.view { position: relative; background: var(--plot); border-radius: 10px; overflow: hidden; aspect-ratio: 4 / 3;
+  display: grid; place-items: center; }
+.view img, .view canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+.view .none { position: absolute; color: #8d97aa; font-size: 13px; text-align: center; padding: 16px; }
+.tree { font: 13px/1.6 ui-monospace, Menlo, Consolas, monospace; max-height: 70vh; overflow: auto; }
+.tree div { white-space: pre; }
+.g-R { color: var(--busy); font-weight: 700; } .g-S { color: var(--ok); } .g-F { color: var(--err); font-weight: 700; }
+.g-K, .g-N { color: var(--off); }
+.empty { color: var(--mute); padding: 8px 0; }
+.meter { position: relative; height: 22px; background: var(--off-bg); border-radius: 11px; overflow: hidden; margin: 6px 0 8px; }
+#mic-bar { height: 100%; width: 0; background: var(--ok); transition: width .12s linear; }
+.meter .mark { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--err); }
+.logbox .k { display: inline-block; min-width: 82px; font-weight: 700; }
+.logbox .k.heard { color: #7ee0a8; } .logbox .k.said { color: #7fb4f0; } .logbox .k.utterance { color: #f2b455; }
+.logbox .k.tts { color: #f58177; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+  color: var(--mute); background: var(--card); box-shadow: none; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+select { font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+.logbox { font: 12.5px/1.55 ui-monospace, Menlo, Consolas, monospace; background: var(--plot); color: #cdd5e3; border-radius: 10px;
+  padding: 10px 12px; height: 62vh; overflow: auto; }
+.logbox div { white-space: pre-wrap; word-break: break-word; }
+.logbox .t { color: #6f7b90; } .logbox .n { color: #7fb4f0; }
+.logbox .l40, .logbox .l50 { color: #f58177; } .logbox .l30 { color: #f2b455; } .logbox .l10 { color: #8590a2; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--err); margin-right: 6px; }
+.dot.on { background: var(--ok); }
+#toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+  padding: 9px 18px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 9; }
+#toast.show { opacity: 1; }
+
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  nav { flex-direction: row; height: auto; position: sticky; top: 0; z-index: 4; padding: 8px; overflow-x: auto; border-right: 0;
+    border-bottom: 1px solid var(--line); }
+  .brand, nav .foot { display: none; }
+  nav a { flex: none; }
+  .top { position: static; padding: 12px 14px; } .page { padding: 4px 14px 30px; }
+  .grid, .live { grid-template-columns: 1fr; }
+  .row .name { width: 110px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav>
+    <div class="brand"><i>R</i>Robot</div>
+    <a href="#overview" data-p="overview">Overview</a>
+    <a href="#live" data-p="live">Live</a>
+    <a href="#voice" data-p="voice">Voice</a>
+    <a href="#logs" data-p="logs">Logs</a>
+    <a href="#plan" data-p="plan">Plan <span class="badge" id="b-plan"></span></a>
+    <a href="#nodes" data-p="nodes">Nodes <span class="badge" id="b-nodes"></span></a>
+    <div class="foot"><span class="dot" id="dot"></span><span id="clock">connecting...</span><br><span id="domain"></span></div>
+  </nav>
+  <div class="content">
+    <div class="top">
+      <h1 id="title">Overview</h1>
+      <span class="spacer"></span>
+      <button id="halt" class="primary">Halt task</button>
+      <button id="restart" class="danger">Restart system</button>
+      <button id="stop" class="danger">Stop system</button>
+    </div>
+
+    <section class="page" id="p-overview">
+      <div class="tiles" id="tiles"></div>
+      <div class="grid"><div class="card" id="c-llm"></div><div class="card" id="c-robot"></div>
+        <div class="card" id="c-devices"></div><div class="card" id="c-cluster" hidden></div></div>
+    </section>
+
+    <section class="page" id="p-live">
+      <div class="live">
+        <div class="card"><h2>Camera <span class="chips" id="vsrc" style="margin-left:8px"></span></h2><div class="view"><img id="video" alt=""><div class="none" id="no-video">no image</div></div></div>
+        <div class="card"><h2>Lidar <span id="scan-info" style="text-transform:none;letter-spacing:0"></span></h2>
+          <div class="view"><canvas id="scan" width="640" height="480"></canvas><div class="none" id="no-scan" hidden>no /scan data</div></div></div>
+        <div class="card"><h2>SLAM map <span id="map-info" style="text-transform:none;letter-spacing:0"></span></h2>
+          <div class="view"><img id="map" alt=""><div class="none" id="no-map">no map yet: start navigation with slam:=... or map:=...</div></div></div>
+      </div>
+    </section>
+
+    <section class="page" id="p-voice">
+      <div class="card">
+        <h2>Microphone <span id="mic-num" style="text-transform:none;letter-spacing:0"></span></h2>
+        <div class="meter"><div id="mic-bar"></div><div class="mark" title="voice detector threshold (500)"></div></div>
+        <div class="empty">Bar = microphone level; the line is the voice detector's threshold. Speak and watch it cross the line.
+          Each crossing should produce an <b>utterance</b> line below, then a <b>heard</b> line with the words.</div>
+      </div>
+      <div class="card"><h2>Speech</h2><div class="logbox" id="voicebox"></div></div>
+    </section>
+
+    <section class="page" id="p-logs">
+      <div class="card">
+        <div class="bar">
+          <div class="chips" id="chips"></div>
+          <span class="spacer"></span>
+          <select id="lvl" title="minimum level"><option value="0">all levels</option><option value="20">info+</option>
+            <option value="30">warn+</option><option value="40">error</option></select>
+          <button class="small" id="pause">Pause</button><button class="small" id="clear">Clear</button>
+        </div>
+        <div class="logbox" id="logbox"></div>
+        <div class="empty">Shows what nodes publish on /rosout at their log level; llama-server's own output is in the launch terminal.</div>
+      </div>
+    </section>
+
+    <section class="page" id="p-plan"><div class="card"><h2 id="plan-h">Plan tree</h2><div class="tree" id="tree"></div></div></section>
+    <section class="page" id="p-nodes"><div class="card" id="c-nodes"></div></section>
+  </div>
+</div>
+<div id="toast"></div>
+<script>
+const token = new URLSearchParams(location.search).get('t') || '';
+const H = {'X-Token': token};
+const GLYPH = {R: '>', S: '+', F: 'x', K: '-'};
+const TITLES = {overview: 'Overview', live: 'Live', voice: 'Voice', logs: 'Logs', plan: 'Plan', nodes: 'Nodes'};
+let vsrc = 'objects', page = 'overview', lastMsg = '', mapV = 0, scanBusy = false;
+
+function el(tag, cls, text, kids) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = text;
+  (kids || []).forEach(k => e.appendChild(k));
+  return e;
+}
+const $ = id => document.getElementById(id);
+const pill = (state, text) => el('span', 'pill ' + state, text || state);
+function row(name, state, detail, extra) {
+  const r = el('div', 'row', null, [el('span', 'name', name), pill(state), el('span', 'detail', detail || '')]);
+  if (extra) r.appendChild(extra);
+  r.title = name + '  ' + (detail || '');
+  return r;
+}
+function fill(node, title, kids) { node.replaceChildren(el('h2', '', title), ...kids); }
+function tile(k, v, s, cls) {
+  return el('div', 'tile ' + cls, null, [el('div', 'k', k), el('div', 'v', v), el('div', 's', s || '')]);
+}
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3500);
+}
+async function post(path, body) {
+  try {
+    const r = await fetch(path, {method: 'POST', headers: Object.assign({'Content-Type': 'application/json'}, H),
+                                 body: JSON.stringify(body || {})});
+    toast(r.ok ? 'sent' : 'refused (' + r.status + ')');
+  } catch (e) { toast('request failed'); }
+}
+
+function show(p) {
+  page = TITLES[p] ? p : 'overview';
+  document.querySelectorAll('.page').forEach(x => x.classList.toggle('on', x.id === 'p-' + page));
+  document.querySelectorAll('nav a').forEach(a => a.classList.toggle('on', a.dataset.p === page));
+  $('title').textContent = TITLES[page];
+  // the camera stream is only open while the Live page is
+  setVideo();
+  if (page === 'live') pollScan();
+  if (page === 'logs') pollLogs();
+  if (page === 'voice') pollVoice();
+}
+window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+function setVideo() {
+  if (page === 'live') $('video').src = '/video.mjpg?src=' + vsrc + '&t=' + encodeURIComponent(token);
+  else $('video').removeAttribute('src');
+}
+$('vsrc').replaceChildren(...['objects', 'persons', 'faces', 'raw'].map(v => {
+  const b = el('button', 'chip' + (v === vsrc ? ' on' : ''), v);
+  b.onclick = () => { vsrc = v; document.querySelectorAll('#vsrc .chip').forEach(c => c.classList.toggle('on', c === b)); setVideo(); };
+  return b;
+}));
+
+function badge(id, n, cls) {
+  const b = $(id); b.textContent = n || ''; b.className = 'badge ' + (n ? cls : '');
+}
+
+function render(s) {
+  const llm = s.llm || {}, ls = llm.state || '?';
+  const lcls = ls === 'down' ? 'err' : ls === 'degraded' ? 'warn' : 'ok';
+  const nodes = s.nodes || [], devs = s.devices || [];
+  const nErr = nodes.filter(n => n.state === 'ERROR').length;
+  const nOn = nodes.filter(n => n.state === 'ONLINE' || n.state === 'BUSY').length;
+  const dBad = devs.filter(d => d.state === 'ERROR' || d.state === 'WARN').length;
+  const t = s.task || {}, b = s.battery;
+  $('tiles').replaceChildren(
+    tile('LLM', ls, llm.reason || '', lcls),
+    tile('Battery', b ? b.text.replace('base battery ', '') : '-', b ? '' : 'no reading',
+         !b ? 'off' : b.level === 'ok' ? 'ok' : b.level === 'low' ? 'warn' : 'err'),
+    tile('Task', t.state || 'idle', t.detail || t.task || '', t.state === 'failed' ? 'err' : 'ok'),
+    tile('Devices', devs.filter(d => d.state === 'ONLINE').length + ' / ' + devs.filter(d => d.state !== 'OFFLINE').length,
+         dBad ? dBad + ' need attention' : 'all present', dBad ? 'warn' : 'ok'),
+    tile('Nodes', nOn + ' / ' + nodes.length, nErr ? nErr + ' in error' : 'no errors', nErr ? 'err' : 'ok'));
+
+  fill($('c-llm'), 'LLM', [row('server', ls === 'down' ? 'ERROR' : ls === 'degraded' ? 'WARN' : 'ONLINE', ls + (llm.reason ? ' - ' + llm.reason : ''))]
+    .concat((llm.endpoints || []).map(e => {
+      const l = e.link;
+      return row(e.url, e.available ? 'ONLINE' : 'ERROR', !l ? 'checking...' : l.ms === null ? l.kind + ' unreachable' : l.kind + '  ' + l.ms.toFixed(1) + ' ms');
+    })));
+  fill($('c-robot'), 'Robot', [
+    b ? row('battery', b.level, b.text) : row('battery', 'OFFLINE', 'no reading'),
+    t.state ? row('task', t.state === 'failed' ? 'ERROR' : /running|repairing/.test(t.state) ? 'BUSY' : 'ONLINE',
+      t.state + '  repairs ' + (t.repairs || 0) + '/' + (t.max_repairs || 0) + '  ' + (t.detail || t.task || '')) : row('task', 'ONLINE', 'idle')]);
+  fill($('c-devices'), 'Devices', devs.map(d => row(d.name, d.state, d.what + (d.hw ? '   ' + d.hw : ''))));
+  const c = s.cluster;
+  $('c-cluster').hidden = !c;
+  if (c) fill($('c-cluster'), 'Cluster', [el('div', 'empty', 'scheduler ' + c.scheduler + '   alive: ' + (c.alive.join(', ') || '-') + '   dead: ' + (c.dead.join(', ') || '-'))]
+    .concat(c.jobs.map(j => row(j.id, j.state === 'running' ? 'ONLINE' : j.state === 'failed' ? 'ERROR' : 'WARN', j.host + '  ' + j.state))));
+
+  const tree = s.tree || [];
+  const done = tree.filter(n => n.s === 'S' || n.s === 'F').length;
+  $('plan-h').textContent = tree.length ? 'Plan tree  -  ' + done + ' / ' + tree.length + ' finished' : 'Plan tree';
+  $('tree').replaceChildren(...(tree.length ? tree.map(n => {
+    const ports = Object.entries(n.ports || {}).map(([k, v]) => k + '=' + v).join(',');
+    return el('div', '', null, [el('span', 'g-' + (n.s || 'N'), '  '.repeat(n.depth) + (GLYPH[n.s] || '.') + ' '),
+                                document.createTextNode(n.name + (ports ? '(' + ports + ')' : ''))]);
+  }) : [el('div', 'empty', 'No plan has run yet.')]));
+  const run = tree.filter(n => n.s === 'R').length;
+  badge('b-plan', run, 'BUSY');
+
+  fill($('c-nodes'), 'Nodes', nodes.map(n => {
+    const btn = el('button', 'small', 'Restart');
+    btn.onclick = () => confirm('Restart ' + n.name + '? The launch file respawns it.') && post('/api/node', {name: n.name});
+    return row(n.name, n.state, n.note, n.state === 'OFFLINE' ? null : btn);
+  }));
+  badge('b-nodes', nErr, 'ERROR');
+
+  $('no-video').hidden = (s.video || []).includes(vsrc);
+  const m = s.map;
+  $('no-map').hidden = !!m;
+  if (m) {
+    $('map-info').textContent = ' ' + m.w + 'x' + m.h + ' @ ' + m.res + ' m';
+    if (m.v !== mapV) { mapV = m.v; $('map').src = '/map.png?t=' + encodeURIComponent(token) + '&v=' + m.v; }
+  }
+  $('domain').textContent = 'domain ' + s.domain + (s.secure ? ' - SROS2' : ' - unsecured');
+  if (s.msg && s.msg !== lastMsg) { lastMsg = s.msg; toast(s.msg); }
+}
+
+function drawScan(d) {
+  const cv = $('scan'), g = cv.getContext('2d'), W = cv.width, Hh = cv.height, cx = W / 2, cy = Hh / 2;
+  const css = getComputedStyle(document.documentElement);
+  g.fillStyle = css.getPropertyValue('--plot'); g.fillRect(0, 0, W, Hh);
+  const rmax = Math.min(d.max || 12, 8), sc = (Math.min(W, Hh) / 2 - 12) / rmax;
+  g.strokeStyle = 'rgba(160,170,190,.22)'; g.fillStyle = 'rgba(160,170,190,.6)'; g.font = '12px system-ui';
+  for (let r = 2; r <= rmax; r += 2) { g.beginPath(); g.arc(cx, cy, r * sc, 0, 7); g.stroke(); g.fillText(r + ' m', cx + 4, cy - r * sc + 12); }
+  g.fillStyle = '#7ee0a8';
+  let n = 0;
+  (d.r || []).forEach((r, i) => {
+    if (r === null || r > rmax) return;
+    const a = d.a0 + i * d.da;     // 0 = straight ahead, counter-clockwise positive
+    g.fillRect(cx - r * Math.sin(a) * sc - 1, cy - r * Math.cos(a) * sc - 1, 3, 3); n++;
+  });
+  g.fillStyle = '#5aaef0'; g.beginPath(); g.moveTo(cx, cy - 11); g.lineTo(cx - 8, cy + 8); g.lineTo(cx + 8, cy + 8); g.fill();
+  $('scan-info').textContent = ' ' + n + ' points';
+  $('no-scan').hidden = n > 0;
+}
+async function pollScan() {
+  if (page !== 'live' || scanBusy) return;
+  scanBusy = true;
+  try { const r = await fetch('/api/scan', {headers: H}); drawScan(await r.json()); } catch (e) { $('no-scan').hidden = false; }
+  scanBusy = false;
+  setTimeout(pollScan, 250);
+}
+
+const GROUPS = {All: null, STT: /stt|vad|transcript|audio_capture|sound_event/, TTS: /tts|plan_announcer/,
+                LLM: /llm|llama/, SLM: /slm|validator/, Errors: null};
+let group = 'All', logSeq = 0, logs = [], paused = false, logBusy = false;
+function drawLogs() {
+  const re = GROUPS[group], min = group === 'Errors' ? 40 : +$('lvl').value;
+  const box = $('logbox'), stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  const rows = logs.filter(x => x[2] >= min && (!re || re.test(x[3]))).slice(-600).map(x =>
+    el('div', 'l' + x[2], null, [el('span', 't', x[1] + ' '), el('span', 'n', x[3] + ' '), document.createTextNode(x[4])]));
+  box.replaceChildren(...rows);
+  if (stick) box.scrollTop = box.scrollHeight;
+}
+async function pollLogs() {
+  if (page !== 'logs' || logBusy) return;
+  logBusy = true;
+  try {
+    if (!paused) {
+      const d = await (await fetch('/api/logs?since=' + logSeq, {headers: H})).json();
+      if (d.seq < logSeq) { logs = []; }                 // web_dash restarted
+      logSeq = d.seq;
+      if (d.items.length) { logs = logs.concat(d.items).slice(-2000); drawLogs(); }
+    }
+  } catch (e) { /* retried below */ }
+  logBusy = false;
+  setTimeout(pollLogs, 1000);
+}
+$('chips').replaceChildren(...Object.keys(GROUPS).map(g => {
+  const b = el('button', 'chip' + (g === group ? ' on' : ''), g);
+  b.onclick = () => { group = g; document.querySelectorAll('#chips .chip').forEach(c => c.classList.toggle('on', c === b)); drawLogs(); };
+  return b;
+}));
+$('lvl').onchange = drawLogs;
+$('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'Resume' : 'Pause'; };
+$('clear').onclick = () => { logs = []; drawLogs(); };
+
+const MIC_MAX = 8000, MIC_THRESHOLD = 500;       // level bar is logarithmic: quiet rooms (~300) and speech (~3000+) both show
+let voiceSeq = 0, voiceBusy = false;
+const lvl = v => Math.min(100, Math.max(0, 100 * Math.log10(1 + v) / Math.log10(1 + MIC_MAX)));
+document.querySelector('.meter .mark').style.left = lvl(MIC_THRESHOLD) + '%';
+async function pollVoice() {
+  if (page !== 'voice' || voiceBusy) return;
+  voiceBusy = true;
+  try {
+    const d = await (await fetch('/api/voice?since=' + voiceSeq, {headers: H})).json();
+    if (d.seq < voiceSeq) { $('voicebox').replaceChildren(); }
+    voiceSeq = d.seq;
+    $('mic-bar').style.width = lvl(d.mic) + '%';
+    $('mic-bar').style.background = d.mic >= MIC_THRESHOLD ? 'var(--warn)' : 'var(--ok)';
+    $('mic-num').textContent = ' level ' + d.mic;
+    const box = $('voicebox'), stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    d.items.forEach(x => box.appendChild(el('div', '', null, [el('span', 't', x[1] + ' '),
+      el('span', 'k ' + x[2].replace(' ', ''), x[2] + ' '), document.createTextNode((x[3] ? '"' + x[3] + '"  ' : '') + x[4])])));
+    while (box.childElementCount > 300) box.removeChild(box.firstChild);
+    if (stick && d.items.length) box.scrollTop = box.scrollHeight;
+  } catch (e) { /* retried */ }
+  voiceBusy = false;
+  setTimeout(pollVoice, 250);
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/api/state', {headers: H});
+    if (!r.ok) throw new Error(r.status);
+    const s = await r.json();
+    if (s.time) { render(s); $('clock').textContent = s.time; $('dot').className = 'dot on'; }
+  } catch (e) { $('dot').className = 'dot'; $('clock').textContent = 'no connection'; }
+  setTimeout(poll, 1000);
+}
+$('halt').onclick = () => confirm('Halt the running task?') && post('/api/halt');
+$('restart').onclick = () => confirm('Restart the whole system?') && post('/api/system', {act: 'restart'});
+$('stop').onclick = () => confirm('Stop the whole system?') && post('/api/system', {act: 'stop'});
+show(location.hash.slice(1));
+poll();
+</script>
+</body>
+</html>

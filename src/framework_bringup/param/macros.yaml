@@ -28,6 +28,7 @@ whitelist:
   - look_at_person
   - acknowledge_person
   - meet_guest
+  - register_person
   - introduce_guest
   - patrol_laps
   - wait_for_doorbell
@@ -330,6 +331,34 @@ macros:
               - {node: ExtractAnswer, ports: {kind: drink, text: "{${slot}_heard}", out_value: "{${slot}_drink}"}}
           - {node: Speak, ports: {text: "Sorry, please say only the drink"}}
       - {node: EnrollFace, ports: {person: "{${slot}_name}"}}
+
+  register_person:
+    description: "Ask the person in front of the camera who they are, repeat the name back and ask for a yes before enrolling their face under it, then welcome them (stays where it is; the person must face the camera); up to three tries; fails if no confirmed name or no face"
+    steps:
+      - group: Fallback
+        retry: 3
+        steps:
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "Hi, who are you? Please look at me."}}
+              - {node: WaitForTranscript, ports: {out_text: "{reg_heard}"}}
+              - {node: ExtractAnswer, ports: {kind: name, text: "{reg_heard}", out_value: "{reg_name}"}}
+              - {node: Speak, ports: {text: "Is your name {person}? Please say yes or no.", person: "{reg_name}"}}
+              - {node: WaitForTranscript, ports: {out_text: "{reg_reply}"}}
+              - {node: ExtractAnswer, ports: {kind: "yes", text: "{reg_reply}"}}
+          - group: Sequence       # nothing heard, no name, or "no": apologise, then FAIL so the retry asks again
+            steps:
+              - {node: Speak, ports: {text: "Sorry, let us try again."}}
+              - {node: AlwaysFailure}
+      - group: Fallback
+        retry: 3
+        steps:
+          - {node: EnrollFace, ports: {person: "{reg_name}"}}
+          - group: Sequence       # no face seen in the last 2 s: wait a second and try again
+            steps:
+              - {node: Sleep, ports: {msec: "1000"}}
+              - {node: AlwaysFailure}
+      - {node: Speak, ports: {text: "Hi {person}, welcome!", person: "{reg_name}"}}
 
   introduce_guest:
     description: "Say the name and favourite drink remembered for a slot (see meet_guest), e.g. to the host"

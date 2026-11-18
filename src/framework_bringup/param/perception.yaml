@@ -10,6 +10,7 @@ object_detection_node:
     conf: 0.4
     device: ""              # "" = auto, "cpu", "0" (GPU)
     image_topic: ""         # "" = open the webcam
+    raw_topic: /camera/image_raw   # also publish the raw webcam frames (person_detection reads them)
     camera_index: 0
     rate_hz: 30.0
     show: false
@@ -22,7 +23,8 @@ person_detection_node:
     openvino: false
     conf: 0.4
     device: ""
-    image_topic: ""
+    image_topic: /camera/image_raw   # raw webcam frames from object_detection_node (raw_topic); "" = open the webcam here
+    image_out: detections/person_image
     camera_index: 0
     rate_hz: 30.0
     show: false
@@ -32,11 +34,12 @@ person_detection_node:
 
 face_recognition_node:
   ros__parameters:
-    model: yolov11n-face.pt # user-supplied YOLO11 face weights
+    model: yolo26n-face.pt  # user-supplied face weights (YOLO26n, 5 landmarks); in the repo root
     openvino: false
     conf: 0.4
     device: ""
-    image_topic: ""
+    image_topic: /camera/image_raw   # raw webcam frames (object_detection_node raw_topic); "" = open the webcam here
+    image_out: detections/face_image
     camera_index: 0
     rate_hz: 30.0
     show: false
@@ -47,6 +50,16 @@ face_recognition_node:
     threshold: 0.6          # cosine similarity needed to name a face
     publish_embedding: true # required by the BT node ExtractFaceFeature
     enroll_max_age_sec: 2.0
+
+auto_register_node:         # unknown face in view -> ask who it is and enrol it (macro register_person); runs with enable_face
+  ros__parameters:
+    enabled: true
+    unknown_sec: 2.5        # the biggest face must stay unknown this long
+    gap_sec: 0.6            # a missed frame or two does not reset the timer
+    cooldown_sec: 60.0      # after asking once, stay quiet this long
+    min_conf: 0.6
+    min_width_px: 60.0      # ignore small (far away) faces
+    startup_grace_sec: 10.0 # wait this long after start, and for the tts/speak service, before asking anyone
 
 person_depth_node:          # optional: persons + aligned depth -> persons_ranged (distance_m)
   ros__parameters:

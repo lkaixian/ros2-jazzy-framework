@@ -59,6 +59,7 @@ orchestrator_node:
     memory_enabled: false   # WICL task memory (notes/wicl_design.md): retrieve before planning; a retrieved plan is re-validated, never trusted
     memory_dir: ""          # "" = ~/.local/share/robocup_fw/bt_memory
     memory_verbose: false   # true: log each retrieval (score, id, whether a memory was offered as the plan)
+    memory_places_file: ""   # "" = param/places.yaml; a remembered plan naming a place missing there is never offered
     memory_k: 3
     memory_min_score: 0.5
     memory_embodiment: kobuki
@@ -81,7 +82,8 @@ robot_mode_node:
 bt_executor_node:
   ros__parameters:
     dry_run: true           # true: extension nodes only log; false: commands hardware
-    auto_run: false         # true: run every valid plan immediately
+    dry_run_exempt: [social_extension]   # these run for real even in a dry run: speech and face enrolment, no motion
+    auto_run: true          # true: run every valid plan immediately (dry_run: true still keeps the hardware still)
     tick_hz: 20.0
     max_runtime_sec: 300.0
     perception_max_age_sec: 1.0
@@ -107,6 +109,7 @@ object_detection_node:
     conf: 0.4
     device: ""              # "" = auto, "cpu", "0" (GPU)
     image_topic: ""         # "" = open the webcam
+    raw_topic: /camera/image_raw   # also publish the raw webcam frames (person_detection reads them)
     camera_index: 0
     rate_hz: 30.0
     show: false
@@ -119,7 +122,8 @@ person_detection_node:
     openvino: false
     conf: 0.4
     device: ""
-    image_topic: ""
+    image_topic: /camera/image_raw   # raw webcam frames from object_detection_node (raw_topic); "" = open the webcam here
+    image_out: detections/person_image
     camera_index: 0
     rate_hz: 30.0
     show: false
@@ -129,11 +133,12 @@ person_detection_node:
 
 face_recognition_node:
   ros__parameters:
-    model: yolov11n-face.pt # user-supplied YOLO11 face weights
+    model: yolo26n-face.pt  # user-supplied face weights (YOLO26n, 5 landmarks); in the repo root
     openvino: false
     conf: 0.4
     device: ""
-    image_topic: ""
+    image_topic: /camera/image_raw   # raw webcam frames (object_detection_node raw_topic); "" = open the webcam here
+    image_out: detections/face_image
     camera_index: 0
     rate_hz: 30.0
     show: false
@@ -144,6 +149,16 @@ face_recognition_node:
     threshold: 0.6          # cosine similarity needed to name a face
     publish_embedding: true # required by the BT node ExtractFaceFeature
     enroll_max_age_sec: 2.0
+
+auto_register_node:         # unknown face in view -> ask who it is and enrol it (macro register_person); runs with enable_face
+  ros__parameters:
+    enabled: true
+    unknown_sec: 2.5        # the biggest face must stay unknown this long
+    gap_sec: 0.6            # a missed frame or two does not reset the timer
+    cooldown_sec: 60.0      # after asking once, stay quiet this long
+    min_conf: 0.6
+    min_width_px: 60.0      # ignore small (far away) faces
+    startup_grace_sec: 10.0 # wait this long after start, and for the tts/speak service, before asking anyone
 
 person_depth_node:          # optional: persons + aligned depth -> persons_ranged (distance_m)
   ros__parameters:
@@ -290,12 +305,13 @@ nav_extension_node:         # Nav2 BT nodes; needs navigation.launch.py (see doc
 audio_capture_node:
   ros__parameters:
     source: arecord         # arecord | file
-    device: ""              # ALSA device, e.g. plughw:2,0
+    device: "plughw:3,0"    # ALSA device (arecord -l). Laptop DMIC now; swap for the real mic, or "" = default
     file: ""                # 16 kHz mono 16-bit WAV when source: file
     loop: false
     sample_rate: 16000
     channels: 1
     chunk_ms: 100
+    dc_block: true          # remove a constant mic offset (the laptop DMIC has ~7400): else the VAD hears speech forever
     frame_id: microphone
 
 vad_node:
@@ -321,7 +337,7 @@ sound_event_node:           # steady-tone (doorbell) detector; tuned on syntheti
 stt_node:
   ros__parameters:
     engine: faster_whisper  # faster_whisper | vosk | mock
-    model: base.en
+    model: /home/larm/ros2-jazzy-robocup-fw/models/stt/models--Systran--faster-whisper-base.en/snapshots/3d3d5dee26484f91867d81cb899cfcf72b96be6c   # local folder: a bare name makes faster-whisper contact huggingface.co first, which hung start-up
     language: ""
     device: cpu
     compute_type: int8
@@ -329,15 +345,15 @@ stt_node:
 
 transcript_to_task_node:
   ros__parameters:
-    wake_word: ""           # e.g. robot
+    wake_word: robot        # "" = every transcript is a task; "robot, ..." or a bare "robot" then the task
     wake_window_sec: 8.0
 
 tts_node:
   ros__parameters:
-    engine: espeak          # espeak | piper | kokoro | mock
+    engine: piper           # espeak (robotic, no model) | piper | kokoro | mock
     voice: ""               # kokoro needs a voice name here
     rate: 160
-    piper_model: ""
+    piper_model: /home/larm/ros2-jazzy-robocup-fw/models/tts/en/en_US/lessac/medium/en_US-lessac-medium.onnx
     piper_rate: 22050
     audio_device: ""
     max_queue: 16
@@ -360,12 +376,12 @@ plan_announcer_node:
 # Use another folder with:  params_dir:=/path/to/my_param
 # Read by pipeline.launch.py only (not a ROS parameter file); keys: (check with: ros2 run framework_bringup check_params).
 
-start: false              # true: launch llama-server together with the pipeline
-model: ""                 # local GGUF path; if empty hf_repo is used
+start: true               # true: launch llama-server together with the pipeline
+model: /home/larm/ros2-jazzy-robocup-fw/models/llm/gemma-4-E2B-it-Q4_0.gguf   # local GGUF; "" = hf_repo below
 hf_repo: ggml-org/gemma-4-E2B-it-GGUF   # E2B: the 4 GB GTX 1650 cannot hold E4B Q4_0 (4.28 GiB) well
 port: 8080                # keep in step with llm_bridge_node.server_url (pipeline.yaml)
 # --reasoning off: Gemma 4 otherwise spends the 512-token reply budget on hidden "thinking" and the JSON is cut off
-extra_args: ["-ngl", "99", "-c", "4096", "--reasoning", "off"]
+extra_args: ["-ngl", "99", "-c", "8192", "-np", "1", "--reasoning", "off"]   # the planner prompt is ~4.3k tokens + 768 reply: 4096 rejected every request; -np 1: one request at a time gets the whole window
 ```
 
 ## `navigation.yaml`
@@ -406,7 +422,7 @@ navigation:
 
 lidar:
   launch_package: sllidar_ros2    # from ~/ros2_ws; used by sensors.launch.py when installed
-  launch_file: sllidar_a1_launch.py
+  launch_file: sllidar_a2m8_launch.py
   serial_port: /dev/ttyUSB0
   serial_baudrate: "115200"
   frame_id: laser

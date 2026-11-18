@@ -3,6 +3,7 @@ import threading
 import time
 import wave
 
+import numpy as np
 import rclpy
 from audio_msgr.msg import AudioChunk
 from rclpy.node import Node
@@ -14,17 +15,27 @@ def arecord_cmd(device, rate, channels):
     return cmd + (['-D', device] if device else [])
 
 
+def remove_dc(data, dc, ch, alpha=0.05):
+    """Subtract a slowly tracked per-channel mean from S16_LE bytes -> (bytes, new mean).
+    Some digital mics (e.g. the AMD DMIC) carry a large constant offset that makes the VAD hear speech forever."""
+    x = np.frombuffer(data[:len(data) // 2 * 2], '<i2')
+    x = x[:len(x) // ch * ch].astype(np.float32).reshape(-1, ch)
+    m = x.mean(axis=0)
+    dc = m if dc is None else dc + alpha * (m - dc)
+    return np.clip(x - dc, -32768, 32767).astype('<i2').tobytes(), dc
+
+
 class AudioCaptureNode(Node):
     def __init__(self):
         super().__init__('audio_capture_node')
         for k, v in dict(source='arecord', device='', file='', loop=False, sample_rate=16000,
-                         channels=1, chunk_ms=100, frame_id='microphone').items():
+                         channels=1, chunk_ms=100, frame_id='microphone', dc_block=True).items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         self.rate, self.ch = int(p('sample_rate')), int(p('channels'))
         self.nbytes = self.rate * self.ch * 2 * int(p('chunk_ms')) // 1000
         self.pub = self.create_publisher(AudioChunk, 'audio/raw', qos_profile_sensor_data)
-        self.proc = None
+        self.proc, self.dc = None, None
         self.stop = threading.Event()
         target = {'arecord': self._run_arecord, 'file': self._run_file}.get(p('source'))
         if target is None:
@@ -33,6 +44,8 @@ class AudioCaptureNode(Node):
         self.thread.start()
 
     def _publish(self, data):
+        if self.get_parameter('dc_block').value:
+            data, self.dc = remove_dc(data, self.dc, self.ch)
         msg = AudioChunk(sample_rate=self.rate, channels=self.ch, data=list(data))
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.get_parameter('frame_id').value

@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'face_recognition_node = face_recognition.face_recognition_node:main',
+            'auto_register_node = face_recognition.auto_register_node:main',
     'enroll_face = face_recognition.enroll_face:main',
         ],
     },

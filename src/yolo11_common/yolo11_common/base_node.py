@@ -60,6 +60,8 @@ class Yolo11Node(Node):
         self.declare_parameter('show', False)
         self.declare_parameter('publish_image', True)
         self.declare_parameter('frame_id', 'camera')
+        self.declare_parameter('image_out', 'detections/image')   # annotated frames; one topic per node
+        self.declare_parameter('raw_topic', '')   # webcam only: also publish the raw frames here for other nodes
 
         p = self.get_parameter
         self.conf = p('conf').value
@@ -68,7 +70,9 @@ class Yolo11Node(Node):
         self.frame_id = p('frame_id').value
         self.model = load_yolo(p('model').value, task, p('openvino').value,
                                self.get_logger())
-        self.image_pub = self.create_publisher(Image, 'detections/image', 10)
+        self.image_pub = self.create_publisher(Image, p('image_out').value, 10)
+        self.raw_pub = (self.create_publisher(Image, p('raw_topic').value, 1)
+                        if p('raw_topic').value else None)
 
         topic = p('image_topic').value
         self.cap = None
@@ -94,6 +98,8 @@ class Yolo11Node(Node):
         header = Image().header
         header.stamp = self.get_clock().now().to_msg()
         header.frame_id = self.frame_id
+        if self.raw_pub is not None and self.raw_pub.get_subscription_count() > 0:
+            self.raw_pub.publish(bgr_to_image(frame, header))
         self._handle(frame, header)
 
     def _handle(self, frame, header):

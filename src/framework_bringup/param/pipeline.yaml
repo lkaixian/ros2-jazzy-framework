@@ -74,8 +74,9 @@ robot_mode_node:
 
 bt_executor_node:
   ros__parameters:
-    dry_run: true           # true: extension nodes only log; false: commands hardware
-    auto_run: false         # true: run every valid plan immediately
+    dry_run: true           # default ON: extension nodes only log. Off for one run: ros2 launch ... dry_run:=false (hardware moves!)
+    dry_run_exempt: [social_extension]   # these run for real even in a dry run: speech and face enrolment, no motion
+    auto_run: true          # true: run every valid plan immediately (dry_run: true still keeps the hardware still)
     tick_hz: 20.0
     max_runtime_sec: 300.0
     perception_max_age_sec: 1.0

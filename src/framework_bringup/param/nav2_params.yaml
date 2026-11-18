@@ -24,7 +24,7 @@ amcl:
     lambda_short: 0.1
     laser_likelihood_max_dist: 2.0
     laser_max_range: 12.0
-    laser_min_range: 0.15
+    laser_min_range: 0.25         # as slam_toolbox min_laser_range: own hardware is at 0.10-0.20 m
     laser_model_type: likelihood_field
     max_beams: 60
     max_particles: 2000
@@ -145,15 +145,15 @@ local_costmap:
         enabled: true
         observation_sources: scan
         scan:
-          topic: /scan
+          topic: /scan_filtered     # scan_mask_node: /scan minus the beams on the robot's own body
           max_obstacle_height: 2.0
           clearing: true
           marking: true
           data_type: LaserScan
           raytrace_max_range: 4.0
-          raytrace_min_range: 0.0
+          raytrace_min_range: 0.25   # ignore returns closer than this: the robot's own standoffs are at 0.10-0.20 m
           obstacle_max_range: 3.0
-          obstacle_min_range: 0.0
+          obstacle_min_range: 0.25
         depth_scan:
           topic: /depth_scan
           max_obstacle_height: 2.0
@@ -180,15 +180,15 @@ global_costmap:
         enabled: true
         observation_sources: scan
         scan:
-          topic: /scan
+          topic: /scan_filtered     # scan_mask_node: /scan minus the beams on the robot's own body
           max_obstacle_height: 2.0
           clearing: true
           marking: true
           data_type: LaserScan
           raytrace_max_range: 4.0
-          raytrace_min_range: 0.0
+          raytrace_min_range: 0.25   # ignore returns closer than this: the robot's own standoffs are at 0.10-0.20 m
           obstacle_max_range: 3.0
-          obstacle_min_range: 0.0
+          obstacle_min_range: 0.25
         depth_scan:
           topic: /depth_scan
           max_obstacle_height: 2.0
@@ -305,7 +305,7 @@ collision_monitor:
     observation_sources: [scan]
     scan:
       type: scan
-      topic: scan
+      topic: scan_filtered       # scan_mask_node: the raw scan has no minimum range and the body counted as a collision
       min_height: 0.0
       max_height: 2.0
       enabled: true

@@ -108,6 +108,9 @@ def test_teleop_keys_and_priority():
     assert tp.twist_for('w') == (0.2, 0.0) and tp.twist_for('S') == (-0.2, 0.0)
     assert tp.twist_for('a')[1] > 0 > tp.twist_for('d')[1] and tp.twist_for(' ') == (0.0, 0.0)
     assert tp.twist_for('x') is None
+    assert 'w/s' in tp.HELP and 'quit' in tp.HELP and 'r reset' in tp.HELP
+    assert tp.twist_for('r') is None       # r resets the stop latch, it never drives
+    # (the start-up help line above: its old lookup raised IndexError)
     import yaml
     cfg = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), '..', 'param', 'extensions.yaml')))
     assert cfg['cmd_vel_mux_node']['ros__parameters']['inputs'][0] == 'teleop/cmd_vel'   # manual override wins
@@ -165,3 +168,23 @@ def test_preflight_chrony_offset():
     assert ok[0][0] == 'PASS' and 'ms (chrony)' in ok[0][1] and len(ok) == 2        # chrony replaces the NTP-flag line
     assert pf.local_checks(chrony(0.2, 'slow'), lambda p: N(free=50e9))[0][0] == 'WARN'
     assert pf.local_checks(chrony(2.0), lambda p: N(free=50e9))[0][0] == 'FAIL'
+
+
+def test_device_state():
+    s = dash.device_state
+    assert s(False, None, '/scan') == 'ERROR'
+    assert s(False, None, '', optional=True) == 'OFFLINE'
+    assert s(True, None, '/scan') == 'WARN'         # plugged in, topic not advertised
+    assert s(True, 0.0, '/scan') == 'WARN'          # advertised, nothing arriving
+    assert s(True, 10.0, '/scan') == 'ONLINE'
+    assert s(True, None, '') == 'ONLINE'            # presence-only device
+
+
+def test_launch_pids_ignores_the_kobuki_driver(monkeypatch):
+    ros = ['/usr/bin/python3', '/opt/ros/jazzy/bin/ros2', 'launch']
+    monkeypatch.setattr(dash, 'cmdlines', lambda: [
+        (1, ros + ['kobuki_node', 'kobuki_node-launch.py']),
+        (2, ros + ['framework_bringup', 'framework.launch.py', 'enable_audio:=true'])])
+    assert dash.launch_pids() == [2]
+    monkeypatch.setattr(dash, 'cmdlines', lambda: [(1, ros + ['kobuki_node', 'kobuki_node-launch.py'])])
+    assert dash.launch_pids() == [1]       # no framework launch: old behaviour

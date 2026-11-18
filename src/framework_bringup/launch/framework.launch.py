@@ -15,7 +15,7 @@ import os
 from ament_index_python.packages import get_package_share_directory as share
 from bt_common.launch_utils import declare_params_dir
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -30,12 +30,18 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_params_dir(),
+        # the safety mux must publish where the Kobuki driver listens, else PID / odom / Nav2 commands go nowhere
+        # (nav_sim.launch.py keeps `cmd_vel` for the simulator). Motion is still gated by dry_run (default true).
+        DeclareLaunchArgument('cmd_vel_topic', default_value='commands/velocity',
+                              description='topic cmd_vel_mux publishes to; the Kobuki driver listens on commands/velocity'),
         DeclareLaunchArgument('enable_audio', default_value='false',
                               description='STT/TTS pipeline (opens the microphone; needs an '
                                           'STT engine installed, see param/audio.yaml)'),
         DeclareLaunchArgument('enable_sensors', default_value='false',
                               description='RPLIDAR + RealSense drivers (sensors.launch.py); needs '
                                           'the devices attached'),
+        DeclareLaunchArgument('sensors_delay', default_value='10.0',
+                              description='seconds to wait before starting the sensors (lidar)'),
         DeclareLaunchArgument('enable_navigation', default_value='false',
                               description='Nav2 + SLAM/AMCL (navigation.launch.py); pass slam:=... '
                                           'to map or map:=<yaml> to navigate. The odom->base TF '
@@ -44,7 +50,9 @@ def generate_launch_description():
         include('extensions.launch.py'),
         include('pipeline.launch.py'),
         include('audio.launch.py', condition=IfCondition(LaunchConfiguration('enable_audio'))),
-        include('sensors.launch.py', condition=IfCondition(LaunchConfiguration('enable_sensors'))),
+        # the RPLIDAR died ~3 s after start when launched together with the other ~30 nodes
+        TimerAction(period=LaunchConfiguration('sensors_delay'), actions=[
+            include('sensors.launch.py', condition=IfCondition(LaunchConfiguration('enable_sensors')))]),
         include('navigation.launch.py',
                 condition=IfCondition(LaunchConfiguration('enable_navigation'))),
     ])

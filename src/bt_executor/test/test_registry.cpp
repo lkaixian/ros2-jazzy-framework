@@ -35,17 +35,39 @@ std::map<std::string, ExtensionManifest> manifests()
 }
 
 BT::NodeStatus run(const std::string & xml, std::shared_ptr<PerceptionCache> cache,
-  std::vector<std::string> * logs = nullptr)
+  std::vector<std::string> * logs = nullptr, std::set<std::string> exempt = {})
 {
   BT::BehaviorTreeFactory f;
   auto ctx = std::make_shared<ExecContext>();
   ctx->dry_run = true;
+  ctx->dry_run_exempt = exempt;
   if (logs) {ctx->log = [logs](const std::string & s) {logs->push_back(s);};}
   register_perception(f, cache, 1.0);
   register_extensions(f, manifests(), ctx);
   return f.createTreeFromText(xml).tickWhileRunning();
 }
 }  // namespace
+
+TEST(Registry, PlanSkipsNodesOnlyForNonExemptExtensions)
+{
+  const auto m = manifests();
+  const std::string xml = tree(R"(<DriveDistance meters="0.5" speed="0.1"/>)");
+  EXPECT_TRUE(plan_skips_nodes(xml, m, {}));
+  EXPECT_FALSE(plan_skips_nodes(xml, m, {"odom_extension"}));        // exempt: it will really run
+  EXPECT_FALSE(plan_skips_nodes(tree(R"(<AlwaysSuccess/>)"), m, {}));    // no extension node at all
+  EXPECT_FALSE(plan_skips_nodes(tree(R"(<DriveDistanceX meters="1"/>)"), m, {}));   // a longer name is a different node
+}
+
+TEST(Registry, ExemptExtensionIsNotDryRun)
+{
+  // No ROS node in this test: a real (non dry-run) call has nobody to send the goal to, so it must FAIL
+  // instead of the dry-run SUCCESS, and it must not log the "[dry-run]" line.
+  std::vector<std::string> logs;
+  auto st = run(tree(R"(<DriveDistance meters="0.5" speed="0.1"/>)"),
+    std::make_shared<PerceptionCache>(), &logs, {"odom_extension"});
+  EXPECT_EQ(st, BT::NodeStatus::FAILURE);
+  for (const auto & l : logs) {EXPECT_EQ(l.find("[dry-run]"), std::string::npos);}
+}
 
 TEST(Registry, DryRunExtensionNodeSucceedsAndLogsPorts)
 {

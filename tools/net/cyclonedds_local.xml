@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- Cyclone DDS, this machine only: same discovery as the defaults, but a higher participant limit.
+     Every ROS process is one DDS participant and Cyclone's default limit is ~32 per machine. The full stack
+     (perception, extensions, pipeline, audio, sensors) plus Nav2 starts 50+ processes: the ones that start last
+     (the lidar after sensors_delay, extension nodes) failed with "RCLError: error creating node" / exit -6.
+     env.sh exports it:  CYCLONEDDS_URI=file://<repo>/tools/net/cyclonedds_local.xml
+     EVERY terminal needs it (dash, teleop, ros2 CLI too): a process without it cannot join once 32 are taken.
+     Note the variable name is all caps: CYCLONEDDS_URI (a differently-cased name is silently ignored). -->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain id="any">
+    <Discovery>
+      <MaxAutoParticipantIndex>200</MaxAutoParticipantIndex>
+    </Discovery>
+  </Domain>
+</CycloneDDS>

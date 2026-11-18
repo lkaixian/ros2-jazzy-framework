@@ -67,3 +67,23 @@ def test_macro_docs_are_up_to_date():
     want = gen.render(LIB, load_whitelist(os.path.join(PARAM, 'macros.yaml')))
     have = open(os.path.join(root, 'docs', 'macros.md')).read()
     assert have == want, 'docs/macros.md is stale: run python3 tools/gen_macro_docs.py'
+
+
+def _port_values(steps):
+    for s in steps:
+        if s.get('group'):
+            yield from _port_values(s['steps'])
+        elif s.get('macro'):
+            yield from (s.get('args') or {}).items()
+        else:
+            yield from (s.get('ports') or {}).items()
+
+
+def test_macro_port_values_are_strings():
+    """YAML turns an unquoted yes/no/on/off/null into a bool/None (kind: yes -> True): every port value must be text."""
+    raw = yaml.safe_load(open(os.path.join(PARAM, 'macros.yaml')))
+    for name, m in (raw.get('macros') or raw).items():
+        if not isinstance(m, dict) or 'steps' not in m:
+            continue
+        for port, value in _port_values(m['steps']):
+            assert isinstance(value, str), f'{name}: port {port!r} is {value!r} ({type(value).__name__}): quote it'

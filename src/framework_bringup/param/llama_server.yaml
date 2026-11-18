@@ -3,9 +3,9 @@
 # Use another folder with:  params_dir:=/path/to/my_param
 # Read by pipeline.launch.py only (not a ROS parameter file); keys: (check with: ros2 run framework_bringup check_params).
 
-start: false              # true: launch llama-server together with the pipeline
-model: ""                 # local GGUF path; if empty hf_repo is used
+start: true               # true: launch llama-server together with the pipeline
+model: /home/larm/ros2-jazzy-robocup-fw/models/llm/gemma-4-E2B-it-Q4_0.gguf   # local GGUF; "" = hf_repo below
 hf_repo: ggml-org/gemma-4-E2B-it-GGUF   # E2B: the 4 GB GTX 1650 cannot hold E4B Q4_0 (4.28 GiB) well
 port: 8080                # keep in step with llm_bridge_node.server_url (pipeline.yaml)
 # --reasoning off: Gemma 4 otherwise spends the 512-token reply budget on hidden "thinking" and the JSON is cut off
-extra_args: ["-ngl", "99", "-c", "4096", "--reasoning", "off"]
+extra_args: ["-ngl", "99", "-c", "8192", "-np", "1", "--reasoning", "off"]   # the planner prompt is ~4.3k tokens + 768 reply: 4096 rejected every request; -np 1: one request at a time gets the whole window

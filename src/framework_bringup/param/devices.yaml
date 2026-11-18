@@ -1,0 +1,12 @@
+# Hardware shown in the `dash` Devices section (ros2 run framework_bringup dash).
+# Read-only: it checks that the device file exists and that its ROS topic is publishing.
+#   path      device file; a udev symlink is fine. Mic: /dev/snd/pcmC<card>D<dev>c (arecord -l)
+#   topic     topic the driver publishes; its message rate is shown ("" = presence only)
+#   optional  true = a missing device shows as "absent" instead of an error
+# Swapping hardware (real mic, RealSense) = edit the line here; no code change.
+devices:
+  - {name: base,   path: /dev/kobuki,           topic: /odom}
+  - {name: lidar,  path: /dev/rplidar,          topic: /scan}
+  - {name: camera, path: /dev/video0,           topic: /camera/image_raw}   # laptop webcam (published by object_detection_node)
+  - {name: mic,    path: /dev/snd/pcmC3D0c,     topic: /audio/raw}          # DMIC; match audio.yaml device
+  - {name: depth,  path: "/dev/v4l/by-id/*RealSense*", topic: "", optional: true}  # not fitted yet (globs allowed)

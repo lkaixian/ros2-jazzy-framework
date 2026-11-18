@@ -5,7 +5,7 @@
   ros2 launch framework_bringup nav_sim.launch.py slam:=slam_toolbox    # build a map in the sim
 
 Run the safety mux too (it forwards nav2/cmd_vel to the simulated robot's cmd_vel):
-  ros2 launch framework_bringup extensions.launch.py enable_arm:=false enable_pose:=false \
+  ros2 launch framework_bringup extensions.launch.py scan_yaw_offset:=0.0 scan_required:=false enable_arm:=false enable_pose:=false \
       enable_odom:=false enable_pid:=false enable_social:=false enable_nav:=true
 or skip it for a quick look:  cmd_vel_topic:=nav2/cmd_vel
 Without slam: AMCL gets the simulated start pose as its initial pose (override: initial_pose:=x,y,yaw).

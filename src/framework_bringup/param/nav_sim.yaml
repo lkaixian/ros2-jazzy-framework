@@ -9,10 +9,10 @@ nav_sim_node:                 # 2D simulator for testing Nav2/SLAM without a rob
     start_y: 0.5
     start_yaw: 0.0
     robot_radius: 0.17
-    lidar_x: 0.0              # must match static_tf base_to_laser in navigation.yaml
+    lidar_x: 0.15             # must match static_tf base_to_laser in navigation.yaml (measured mount, lidar 0 deg faces the rear)
     lidar_y: 0.0
-    lidar_z: 0.25
-    lidar_yaw: 0.0
+    lidar_z: 0.14
+    lidar_yaw: 3.1416
     lidar_range_min: 0.15
     lidar_range_max: 12.0
     lidar_beams: 360

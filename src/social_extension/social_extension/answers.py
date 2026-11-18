@@ -37,3 +37,13 @@ def extract_drink(text):
             return ' '.join(words[:4])
     words = [w for w in t.split() if w not in _FILLER]
     return ' '.join(words) if 0 < len(words) <= 3 else ''
+
+
+_YES = {'yes', 'yeah', 'yep', 'yup', 'yea', 'sure', 'correct', 'right', 'ok', 'okay', 'affirmative', 'definitely'}
+_NO = {'no', 'nope', 'nah', 'wrong', 'incorrect', 'not', "don't", 'negative'}
+
+
+def is_yes(text):
+    """True for an affirmative answer ('Yes, that is right'); False for a no, an unclear answer, or both ('yes... no')."""
+    words = set(_clean(text).split())
+    return bool(words & _YES) and not words & _NO

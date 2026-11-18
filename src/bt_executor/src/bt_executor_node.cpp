@@ -82,6 +82,7 @@ public:
   : Node("bt_executor_node")
   {
     declare_parameter("dry_run", true);
+    declare_parameter("dry_run_exempt", std::vector<std::string>{});   // extensions that run for real in a dry run
     declare_parameter("auto_run", false);
     declare_parameter("tick_hz", 20.0);
     declare_parameter("max_runtime_sec", 300.0);
@@ -218,6 +219,8 @@ private:
     auto ctx = std::make_shared<bt_executor::ExecContext>();
     ctx->node = shared_from_this();
     ctx->dry_run = dry;
+    const std::vector<std::string> exempt = get_parameter("dry_run_exempt").as_string_array();   // a copy: the Parameter is a temporary
+    ctx->dry_run_exempt.insert(exempt.begin(), exempt.end());
     ctx->log = [this](const std::string & s) {RCLCPP_INFO(get_logger(), "%s", s.c_str());};
     std::string result = "FAILURE";
     std::string failed;
@@ -260,7 +263,8 @@ private:
           tracker.dirty = false;
           last_pub = now;
         };
-      status("running", dry ? "dry run" : "LIVE");
+      // "dry run" only when this plan has nodes that are skipped; a plan of exempt (speech) nodes simply runs
+      status("running", !dry ? "LIVE" : bt_executor::plan_skips_nodes(xml, manifests, ctx->dry_run_exempt) ? "dry run" : "running");
       const auto period = std::chrono::duration<double>(1.0 / get_parameter("tick_hz").as_double());
       const auto deadline = std::chrono::steady_clock::now() +
         std::chrono::duration<double>(get_parameter("max_runtime_sec").as_double());

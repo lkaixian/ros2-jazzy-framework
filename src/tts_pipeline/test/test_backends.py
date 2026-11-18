@@ -40,3 +40,19 @@ def test_aplay_cmd():
 def test_kokoro_missing_is_loud():
     with pytest.raises(backends.TtsError):
         backends.Kokoro('m.onnx', 'v.bin')     # kokoro-onnx not installed here
+
+
+def test_piper_launch_can_be_communicated_with(monkeypatch):
+    """Regression: _launch closed stdin and communicate() then raised "flush of closed file" (every Piper utterance failed)."""
+    import rclpy
+    from tts_pipeline.tts_node import TtsNode
+    monkeypatch.setattr(backends, 'piper_cmd', lambda *a: 'cat > /dev/null')     # stands in for `piper | aplay`
+    rclpy.init(args=['--ros-args', '-p', 'engine:=piper', '-p', 'piper_model:=m.onnx'])
+    try:
+        node = TtsNode()
+        proc = node._launch('hello', '')
+        proc.communicate(timeout=10)
+        assert proc.returncode == 0
+        node.destroy_node()
+    finally:
+        rclpy.shutdown()
