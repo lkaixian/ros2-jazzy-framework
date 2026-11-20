@@ -1,4 +1,4 @@
-from bt_common.cmd_vel_mux import StopLatch, clamp, select
+from bt_common.cmd_vel_mux import BumpRecovery, CENTER, LEFT, RIGHT, StopLatch, clamp, select, slew
 
 
 def test_clamp():
@@ -56,3 +56,58 @@ def test_unavailable_sensor_blocks_reset():
 
 def test_reset_when_not_latched_is_ok():
     assert StopLatch().reset() == (True, 'not latched')
+
+
+def _run(ids, until=10.0, dt=0.05):
+    """Drive a BumpRecovery from t=0 and return the distinct (vx, wz) commands it gave."""
+    r = BumpRecovery()
+    r.begin(0.0, ids[0])
+    for b in ids[1:]:
+        r.hit(b)
+    seen, t = [], 0.0
+    while t < until:
+        c = r.cmd(t)
+        if c is None:
+            break
+        if not seen or seen[-1] != c:
+            seen.append(c)
+        t += dt
+    return seen, r
+
+
+def test_recovery_right_bump_backs_off_then_turns_left():
+    seen, r = _run([RIGHT])
+    assert seen == [(0.0, 0.0), (-0.1, 0.0), (0.0, 0.5)] and r.phase is None
+
+
+def test_recovery_left_bump_turns_right():
+    assert _run([LEFT])[0][-1] == (0.0, -0.5)
+
+
+def test_recovery_centre_or_two_bumpers_is_a_wall_and_turns_further():
+    for ids in ([CENTER], [LEFT, RIGHT]):
+        seen, _ = _run(ids)
+        assert seen[1] == (-0.1, 0.0) and seen[2] == (0.0, 0.5)
+        r = BumpRecovery()
+        r.begin(0.0, ids[0])
+        [r.hit(b) for b in ids[1:]]
+        r.cmd(0.4)                                   # past settle: verdict made
+        assert r.t_turn > 3.0                        # 1.57 rad vs 0.5 rad for one side
+
+
+def test_recovery_press_after_settle_cancels():
+    r = BumpRecovery()
+    r.begin(0.0, RIGHT)
+    assert r.cmd(0.5) == (-0.1, 0.0)
+    r.hit(LEFT)                                      # bumped again while backing
+    assert r.cmd(0.6) is None
+
+
+def test_slew_ramps_and_lands_exactly():
+    v, steps = 0.0, 0
+    while v != 0.2 and steps < 20:
+        v = slew(v, 0.2, 0.03)
+        steps += 1
+    assert v == 0.2 and steps == 7                    # 6 full steps, then the remainder
+    assert abs(slew(0.2, 0.0, 0.03) - 0.17) < 1e-9
+    assert slew(0.1, 0.11, 0.03) == 0.11

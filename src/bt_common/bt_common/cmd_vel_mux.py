@@ -23,6 +23,11 @@ def clamp(x, lim):
     return max(-lim, min(lim, x))
 
 
+def slew(cur, target, step):
+    """Move cur toward target by at most step."""
+    return cur + max(-step, min(step, target - cur))
+
+
 def select(last, now, timeout):
     """last: list of (stamp or None, Twist) in priority order -> chosen index or None."""
     for i, (stamp, _) in enumerate(last):
@@ -62,6 +67,68 @@ class StopLatch:
         return True, 'reset'
 
 
+LEFT, CENTER, RIGHT = 0, 1, 2     # BumperEvent.bumper
+
+
+class BumpRecovery:
+    """After a bumper latch: wait `settle` s for the other bumpers, back off, turn away.
+
+    One side only -> obstacle on that side, turn the other way a little. Centre, or more than one
+    bumper -> a wall ahead, turn a quarter circle. Open loop and timed (no odometry here), so the
+    distances are nominal. The latch stays set when it ends: a human or `safety_reset` decides.
+    """
+
+    def __init__(self, back_speed=0.1, back_dist=0.1, turn_rate=0.5, settle=0.3, log=lambda s: None):
+        self.back_speed, self.back_dist, self.turn_rate, self.settle = (
+            back_speed, back_dist, turn_rate, settle)
+        self.log = log
+        self.phase = None             # None | 'settle' | 'run'
+        self.ids = set()
+
+    def begin(self, now, bumper):
+        self.phase, self.t0, self.ids = 'settle', now, {bumper}
+
+    def cancel(self):
+        self.phase = None
+
+    def hit(self, bumper):
+        """A press while settling joins the verdict; any later press (or a cliff) ends recovery."""
+        if self.phase == 'settle':
+            self.ids.add(bumper)
+        else:
+            self.cancel()
+
+    def _plan(self):
+        if self.ids == {LEFT}:
+            name, sign, angle = 'left', -1.0, 0.5
+        elif self.ids == {RIGHT}:
+            name, sign, angle = 'right', 1.0, 0.5
+        else:
+            name, sign, angle = 'wall', 1.0, 1.57     # shortcut: always turns left, pick by scan if needed
+        self.t_back = self.back_dist / self.back_speed
+        self.t_turn = angle / self.turn_rate
+        self.wz = sign * self.turn_rate
+        self.phase = 'run'
+        self.log(f'bump recovery: {name} -> back {self.back_dist} m, turn {sign * angle:+.2f} rad')
+
+    def cmd(self, now):
+        """-> (linear.x, angular.z), or None when not running."""
+        if self.phase is None:
+            return None
+        t = now - self.t0
+        if t < self.settle:
+            return 0.0, 0.0
+        if self.phase == 'settle':
+            self._plan()
+        t -= self.settle
+        if t < self.t_back:
+            return -self.back_speed, 0.0
+        if t < self.t_back + self.t_turn:
+            return 0.0, self.wz
+        self.phase = None
+        return None
+
+
 class CmdVelMux(Node):
     def __init__(self):
         super().__init__('cmd_vel_mux_node')
@@ -73,12 +140,19 @@ class CmdVelMux(Node):
         self.declare_parameter('max_linear', 0.3)
         self.declare_parameter('max_angular', 0.8)
         self.declare_parameter('rate_hz', 20.0)
+        # Ramp for commanded changes (a step 0 -> 0.2 m/s rocks the robot and smears the map).
+        # Watchdog and latch stops are never ramped. 0 = off.
+        self.declare_parameter('accel_linear', 0.5)     # m/s^2
+        self.declare_parameter('accel_angular', 1.5)    # rad/s^2
         # Kobuki bumper/cliff latch. Empty topic = that sensor is not watched.
         self.declare_parameter('safety_events_enabled', True)
         self.declare_parameter('bumper_topic', 'events/bumper')
         self.declare_parameter('bumper_type', 'kobuki_ros_interfaces/msg/BumperEvent')
         self.declare_parameter('cliff_topic', 'events/cliff')
         self.declare_parameter('cliff_type', 'kobuki_ros_interfaces/msg/CliffEvent')
+        # Bumper-only latch: back off and turn away by itself. Off until tried on the real robot.
+        self.declare_parameter('bump_recovery_enabled', False)
+        self.declare_parameter('bump_back_dist', 0.10)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         self.stamped = p('stamped')
         self.last = []
@@ -88,7 +162,10 @@ class CmdVelMux(Node):
         self.pub = self.create_publisher(TwistStamped if self.stamped else Twist,
                                          p('output'), 10)
         self.active = None
+        self.cur = Twist()              # what was last published, the start of the next ramp step
         self.stop = StopLatch()
+        self.recovery = BumpRecovery(back_dist=p('bump_back_dist'), log=self.get_logger().info)
+        self.recovery_enabled = p('bump_recovery_enabled')
         self.state_pub = self.create_publisher(String, 'safety/stop_state', 10)
         self.create_service(Trigger, 'safety_reset', self._reset)
         if p('safety_events_enabled'):
@@ -115,9 +192,16 @@ class CmdVelMux(Node):
                 k, getattr(m, i), getattr(m, st) == 1), 10)
 
     def _on_event(self, kind, ident, hit):
-        if self.stop.event((kind, ident), hit, f'{kind} {ident}') and hit:
+        new = self.stop.event((kind, ident), hit, f'{kind} {ident}')
+        if hit and kind != 'bumper':
+            self.recovery.cancel()                  # a cliff never gets a blind manoeuvre
+        elif hit and not new:
+            self.recovery.hit(ident)
+        if new and hit:
             self.get_logger().error(f'STOP latched: {kind} {ident}')
             self._drop_commands()
+            if kind == 'bumper' and self.recovery_enabled:
+                self.recovery.begin(time.monotonic(), ident)
         self._publish_state()
 
     def _drop_commands(self):
@@ -127,6 +211,7 @@ class CmdVelMux(Node):
     def _reset(self, _req, resp):
         resp.success, resp.message = self.stop.reset()
         if resp.success:
+            self.recovery.cancel()
             self._drop_commands()
             self.get_logger().warn('stop latch reset: waiting for fresh commands')
         else:
@@ -151,27 +236,49 @@ class CmdVelMux(Node):
         else:
             self.pub.publish(tw)
 
+    def _stop(self):
+        self.cur = Twist()
+        self._out(self.cur)
+
+    def _drive(self, tgt):
+        """Publish tgt, ramped from the last output by accel_* (0 = no ramp)."""
+        dt = 1.0 / self.get_parameter('rate_hz').value
+        al = self.get_parameter('accel_linear').value * dt
+        aa = self.get_parameter('accel_angular').value * dt
+        out = Twist()
+        out.linear.x = slew(self.cur.linear.x, tgt.linear.x, al) if al else tgt.linear.x
+        out.linear.y = slew(self.cur.linear.y, tgt.linear.y, al) if al else tgt.linear.y
+        out.angular.z = slew(self.cur.angular.z, tgt.angular.z, aa) if aa else tgt.angular.z
+        self.cur = out
+        self._out(out)
+
     def _tick(self):
         if self.stop.latched:
-            self._out(Twist())
+            move = self.recovery.cmd(time.monotonic())
+            if move:
+                tgt = Twist()
+                tgt.linear.x, tgt.angular.z = move
+                self._drive(tgt)
+            else:
+                self._stop()
             self.active = None
             return
         idx = select(self.last, time.monotonic(), self.get_parameter('timeout_sec').value)
         if idx is None:
             if self.active is not None:     # fresh -> stale: stop once
-                self._out(Twist())
+                self._stop()
                 self.active = None
             return
         if idx != self.active:
             self.get_logger().info(f'cmd_vel source: input {idx}')
         self.active = idx
         src = self.last[idx][1]
-        out = Twist()
+        tgt = Twist()
         ml, ma = self.get_parameter('max_linear').value, self.get_parameter('max_angular').value
-        out.linear.x = clamp(src.linear.x, ml)
-        out.linear.y = clamp(src.linear.y, ml)
-        out.angular.z = clamp(src.angular.z, ma)
-        self._out(out)
+        tgt.linear.x = clamp(src.linear.x, ml)
+        tgt.linear.y = clamp(src.linear.y, ml)
+        tgt.angular.z = clamp(src.angular.z, ma)
+        self._drive(tgt)
 
 
 def main(args=None):
