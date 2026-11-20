@@ -164,7 +164,7 @@ step_llamacpp_prebuilt() {
 step_llamacpp() {
   [[ $BACKEND == prebuilt ]] && { step_llamacpp_prebuilt; return; }
   log "llama.cpp: llama-server (needs build >= $MIN_LLAMA_BUILD for Gemma 4)"
-  local be="$BACKEND" flags=(-DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON)
+  local be="$BACKEND" flags=(-DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -DLLAMA_USE_PREBUILT_UI=OFF)   # we use the API only; the HF-downloaded web UI can leave ui.cpp pointing at missing bundle*.js
   if [[ $be == auto ]]; then command -v nvcc >/dev/null && be=cuda || be=cpu; fi
   case "$be" in
     cpu) ;;
