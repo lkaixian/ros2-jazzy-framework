@@ -120,6 +120,7 @@ ros2 launch framework_bringup extensions.launch.py cmd_vel_topic:=commands/veloc
 ros2 launch framework_bringup navigation.launch.py slam:=slam_toolbox
 # then BT node SaveMap file="room1"  ->  navigate with map:=$HOME/maps/room1.yaml
 ```
+One terminal instead of five: `tools/map_session.sh room2` (starts all of it, teleop in front, saves `~/maps/room2` and stops everything on Ctrl-C). Untested on the robot.
 
 ## Local LLM + voice on this machine (set up 2026-11-14, GTX 1650 4 GB)
 - **llama.cpp**: official prebuilt release b12375 (CUDA 12.8 + bundled cudart, no toolkit, no sudo) in `~/llama.cpp`,
