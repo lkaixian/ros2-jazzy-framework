@@ -36,6 +36,7 @@ All motion goes through one gate in front of the robot:
 | Clamp | `max_linear` and `max_angular` hard limits (0.3 m/s linear by default) |
 | Watchdog | a zero Twist is sent when no input arrives for `timeout_sec` = 0.5 s, then once when all sources go stale; a crashed extension coasts at most about 0.5 s at its last command |
 | Latch | Kobuki bumper or cliff events latch the mux to zero; `safety_reset` clears it and is **refused while a sensor is still hit** |
+| Bump recovery | On in `extensions.yaml` (`bump_recovery_enabled`; the node default is off). A **bumper-only** latch backs off 0.1 m, then turns away: one side -> 0.5 rad the other way; centre or several bumpers = wall -> 1.57 rad left. Open loop, **no rear sensing**. A cliff or a second bump cancels it. The latch stays set afterwards |
 | State | `safety/stop_state` = `armed` or `latched: <reason>`; the robot mode node turns a latch into `safe_stop` and halts the plan |
 
 Sim-verified only: `tools/integration/stop_latch_test.py`.

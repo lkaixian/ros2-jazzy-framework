@@ -20,9 +20,13 @@ cmd_vel_mux_node:
     max_linear: 0.3         # hard clamp, m/s
     max_angular: 0.8        # hard clamp, rad/s
     rate_hz: 20.0
+    accel_linear: 0.5       # m/s^2 ramp on commanded changes; watchdog/latch stops are instant. 0 = off
+    accel_angular: 1.5      # rad/s^2
     safety_events_enabled: true   # false = bumper/cliff ignored (sim without kobuki msgs)
     bumper_topic: events/bumper   # Kobuki driver, relative to its namespace
     cliff_topic: events/cliff
+    bump_recovery_enabled: true   # bumper-only latch: back off bump_back_dist, turn away (side) or 90 deg (centre/both = wall); latch stays set. Unverified: backs up blind
+    bump_back_dist: 0.10          # m, timed open loop at 0.1 m/s
 
 odom_extension_node:
   ros__parameters:

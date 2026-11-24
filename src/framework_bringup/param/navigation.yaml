@@ -43,7 +43,7 @@ navigation:
 lidar:
   launch_package: sllidar_ros2    # from ~/ros2_ws; used by sensors.launch.py when installed
   launch_file: sllidar_a2m8_launch.py
-  serial_port: /dev/ttyUSB0
+  serial_port: /dev/rplidar       # udev symlink; ttyUSB0/1 swap between boots and the Kobuki driver defaults to ttyUSB0
   serial_baudrate: "115200"
   frame_id: laser
   angle_compensate: "true"
