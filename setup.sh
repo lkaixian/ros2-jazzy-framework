@@ -107,7 +107,8 @@ step_apt() {
   log "apt: build tools, audio, JSON/curl dev libraries, ROS helpers"
   local pk=(build-essential cmake git curl ca-certificates libcurl4-openssl-dev nlohmann-json3-dev
             alsa-utils espeak-ng python3-pip python3-yaml python3-numpy python3-opencv python3-pytest
-            python3-colcon-common-extensions python3-rosdep ros-$DISTRO-behaviortree-cpp)
+            python3-colcon-common-extensions python3-rosdep ros-$DISTRO-behaviortree-cpp
+            ros-$DISTRO-rmw-cyclonedds-cpp)   # the middleware this workspace runs on (tools/net/cyclonedds_local.xml)
   run sudo apt-get update
   run sudo apt-get install -y "${pk[@]}"
 }
@@ -268,11 +269,13 @@ step_robot() {
   log "robot: Kobuki, RPLIDAR, audio_common into $ROBOT_WS/src"
   local src="$ROBOT_WS/src"
   run mkdir -p "$src"
-  [[ -d $src/turtlebot2_ros2 ]] || run git clone -b jazzy https://github.com/lkaixian/turtlebot2_ros2_jazzy.git "$src/turtlebot2_ros2"
+  [[ -d $src/turtlebot2_ros2 ]] || run git clone -b main https://github.com/lkaixian/turtlebot2_ros2_jazzy.git "$src/turtlebot2_ros2"
   [[ -d $src/sllidar_ros2 ]] || run git clone https://github.com/Slamtec/sllidar_ros2.git "$src/sllidar_ros2"
   [[ -d $src/audio_common ]] || run git clone https://github.com/mgonzs13/audio_common.git "$src/audio_common"
   # its own script: submodules (kobuki_*, ecl_*), apt/rosdep, /dev/kobuki udev rule, dialout, build of kobuki_node
-  run bash "$src/turtlebot2_ros2/setup.sh"
+  # that script is `set -u` and then sources ROS, whose setup.bash reads unset variables: give it
+  # a sourced ROS env plus the ones sourcing never exports
+  run bash -c ". /opt/ros/$DISTRO/setup.bash && export AMENT_TRACE_SETUP_FILES= AMENT_PYTHON_EXECUTABLE=/usr/bin/python3 GZ_CONFIG_PATH=\"\${GZ_CONFIG_PATH:-}\" GZ_SIM_RESOURCE_PATH=\"\${GZ_SIM_RESOURCE_PATH:-}\" && bash '$src/turtlebot2_ros2/setup.sh'"
   run bash -c "cd '$ROBOT_WS' && . /opt/ros/$DISTRO/setup.bash && rosdep install --from-paths src --ignore-src -r -y --rosdistro $DISTRO"
   # whole workspace (Kobuki, sllidar, audio_common); same flags as the Kobuki script so ecl is not reconfigured
   run bash -c "cd '$ROBOT_WS' && export PATH=/usr/bin:\$PATH && . /opt/ros/$DISTRO/setup.bash && colcon build --symlink-install --executor sequential --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 -Wno-dev -DCMAKE_CXX_FLAGS=-Wno-error=overloaded-virtual"
