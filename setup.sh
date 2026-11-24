@@ -8,16 +8,18 @@
 #   ./setup.sh --skip models,llamacpp
 #   ./setup.sh --yes --backend cuda --minimal
 #
-# Steps (in order): apt rosdep python llamacpp models voice build   (optional, never default: slm, slmweights)
+# Steps (in order): apt rosdep python llamacpp models voice build robot   (optional, never default: slm, slmweights)
 # slmweights: download a published fine-tuned SLM instead of training one:  SLM_WEIGHTS_REPO=<user>/<repo> ./setup.sh --only slmweights
+# robot: Kobuki base (turtlebot2_ros2_jazzy + kobuki_*), RPLIDAR (sllidar_ros2), audio_common into ROBOT_WS (~/ros2_ws), plus udev rules. Jazzy only.
 # --backend prebuilt: download the official llama.cpp CUDA 12.8 release (no CUDA toolkit, no compiling).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ALL_STEPS=(apt rosdep python llamacpp models voice build)
+ALL_STEPS=(apt rosdep python llamacpp models voice build robot)
 DRY=0; YES=0; MINIMAL=0; BACKEND=auto
 ONLY=""; SKIP=""
 LLAMA_DIR="${LLAMA_DIR:-$HOME/llama.cpp}"
+ROBOT_WS="${ROBOT_WS:-$HOME/ros2_ws}"   # robot drivers live outside this repo
 LLM_REPO="${LLM_REPO:-ggml-org/gemma-4-E2B-it-GGUF}"   # E2B: E4B Q4_0 does not fit a 4 GB GPU well
 SLM_BASE="${SLM_BASE:-LiquidAI/LFM2.5-230M-Base}"
 MIN_LLAMA_BUILD=8637          # first llama.cpp build with Gemma 4 support
@@ -259,6 +261,27 @@ export PATH=/usr/bin:\$HOME/.local/bin:\$PATH
 EOF
     echo "  wrote $ROOT/env.sh   ->  source it in every new terminal"
   fi
+}
+
+step_robot() {
+  [[ $DISTRO == jazzy ]] || { warn "robot: the Kobuki fork is Jazzy only, skipping on $DISTRO"; return; }
+  log "robot: Kobuki, RPLIDAR, audio_common into $ROBOT_WS/src"
+  local src="$ROBOT_WS/src"
+  run mkdir -p "$src"
+  [[ -d $src/turtlebot2_ros2 ]] || run git clone -b jazzy https://github.com/lkaixian/turtlebot2_ros2_jazzy.git "$src/turtlebot2_ros2"
+  [[ -d $src/sllidar_ros2 ]] || run git clone https://github.com/Slamtec/sllidar_ros2.git "$src/sllidar_ros2"
+  [[ -d $src/audio_common ]] || run git clone https://github.com/mgonzs13/audio_common.git "$src/audio_common"
+  # its own script: submodules (kobuki_*, ecl_*), apt/rosdep, /dev/kobuki udev rule, dialout, build of kobuki_node
+  run bash "$src/turtlebot2_ros2/setup.sh"
+  run bash -c "cd '$ROBOT_WS' && . /opt/ros/$DISTRO/setup.bash && rosdep install --from-paths src --ignore-src -r -y --rosdistro $DISTRO"
+  # whole workspace (Kobuki, sllidar, audio_common); same flags as the Kobuki script so ecl is not reconfigured
+  run bash -c "cd '$ROBOT_WS' && export PATH=/usr/bin:\$PATH && . /opt/ros/$DISTRO/setup.bash && colcon build --symlink-install --executor sequential --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 -Wno-dev -DCMAKE_CXX_FLAGS=-Wno-error=overloaded-virtual"
+  # /dev/rplidar (CP210x), the name framework_bringup expects
+  if [[ $DRY -eq 1 ]]; then echo "  \$ write /etc/udev/rules.d/rplidar.rules (sudo)"; return; fi
+  echo 'KERNEL=="ttyUSB*", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE:="0777", SYMLINK+="rplidar"' \
+    | sudo tee /etc/udev/rules.d/rplidar.rules >/dev/null
+  sudo udevadm control --reload-rules && sudo udevadm trigger
+  echo "  source $ROBOT_WS/install/setup.bash in every robot terminal (log out/in once for the dialout group)"
 }
 
 step_slmweights() {
