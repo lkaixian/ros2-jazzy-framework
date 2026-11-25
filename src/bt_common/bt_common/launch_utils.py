@@ -4,7 +4,9 @@ import re
 
 import yaml
 from ament_index_python.packages import get_package_share_directory
-from launch.actions import DeclareLaunchArgument
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -104,3 +106,14 @@ def make_node(context, pkg, exe, node, filename, mapping=None, extra=None, **kw)
     if merged:
         params.append(merged)
     return Node(package=pkg, executable=exe, output='screen', parameters=params, **kw)
+
+
+def task_launch(preset):
+    """A launch file for ONE competition task: framework.launch.py with these arguments (enable_* switches, persons_topic ...).
+    A value given on the command line beats the preset; the preset is printed at start-up. dry_run is not touched (default true)."""
+    def include(context):
+        args = {**preset, **{k: v for k, v in ((k, given(context, k)) for k in preset) if v is not None}}
+        print('[task] ' + ' '.join(f'{k}={v}' for k, v in sorted(args.items())))
+        path = os.path.join(get_package_share_directory('framework_bringup'), 'launch', 'framework.launch.py')
+        return [IncludeLaunchDescription(PythonLaunchDescriptionSource(path), launch_arguments=args.items())]
+    return LaunchDescription([declare_params_dir(), *declare_overrides(*preset), OpaqueFunction(function=include)])
