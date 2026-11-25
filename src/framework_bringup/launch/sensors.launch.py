@@ -5,7 +5,9 @@ depth -> 2D scan). Opens real devices: only run it on the robot.
   ros2 launch framework_bringup sensors.launch.py enable_camera:=false lidar_port:=/dev/ttyUSB1
   ros2 launch framework_bringup sensors.launch.py depth_scan:=true # /depth_scan for the costmaps
 
-Parameters: param/navigation.yaml (lidar:, depth_scan:), param/realsense.yaml (rs_launch args).
+  ros2 launch framework_bringup sensors.launch.py enable_oak:=true  # + the arm camera (Luxonis OAK)
+
+Parameters: param/navigation.yaml (lidar:, depth_scan:), param/realsense.yaml (rs_launch args), param/oak.yaml (depthai args).
 The Kobuki base driver is not started here:  ros2 launch kobuki_node kobuki_node-launch.py
 (it publishes TF odom -> base and listens on commands/velocity).
 """
@@ -52,6 +54,17 @@ def _camera(context):
         launch_arguments=args.items())]
 
 
+def _oak(context):
+    try:
+        pkg = share('depthai_ros_driver')
+    except PackageNotFoundError:
+        return [LogInfo(msg='[sensors] depthai_ros_driver not installed (sudo apt install ros-jazzy-depthai-ros-driver): OAK NOT started')]
+    args = {k: (str(v).lower() if isinstance(v, bool) else str(v)) for k, v in load_yaml(param_path(context, 'oak.yaml')).items()}
+    return [IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(pkg, 'launch', 'camera.launch.py')),
+        launch_arguments=args.items())]
+
+
 def _depth_scan(context, cfg):
     rs = load_yaml(param_path(context, 'realsense.yaml'))
     cam = f"/{rs.get('camera_namespace', 'camera')}/{rs.get('camera_name', 'camera')}"
@@ -70,6 +83,8 @@ def _actions(context):
         out += _lidar(context, cfg)
     if flag(context, 'enable_camera'):
         out += _camera(context)
+    if flag(context, 'enable_oak'):
+        out += _oak(context)
     if flag(context, 'depth_scan'):
         out += _depth_scan(context, cfg)
     return out
@@ -80,6 +95,8 @@ def generate_launch_description():
         declare_params_dir(),
         DeclareLaunchArgument('enable_lidar', default_value='true'),
         DeclareLaunchArgument('enable_camera', default_value='true'),
+        DeclareLaunchArgument('enable_oak', default_value='false',
+                              description='the arm camera (Luxonis OAK-D-LITE, param/oak.yaml)'),
         DeclareLaunchArgument('depth_scan', default_value='false',
                               description='publish /depth_scan from the RealSense depth image'),
         *declare_overrides('lidar_port', 'lidar_frame'),

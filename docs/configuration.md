@@ -20,7 +20,7 @@ Precedence, low to high: **package defaults < `param/*.yaml` < launch arguments 
 | `extensions.yaml` | odom, pid, social, nav, arm, pose extensions, mux, guards |
 | `audio.yaml` | capture, VAD, sound events, STT, wake word, TTS, plan announcer |
 | `llama_server.yaml` | the managed `llama-server` |
-| `navigation.yaml`, `nav2_params.yaml`, `slam_toolbox.yaml`, `cartographer/`, `rtabmap.yaml`, `realsense.yaml`, `nav_sim.yaml`, `places.yaml` | navigation stack and the sample map |
+| `navigation.yaml`, `nav2_params.yaml`, `slam_toolbox.yaml`, `cartographer/`, `rtabmap.yaml`, `realsense.yaml`, `oak.yaml`, `nav_sim.yaml`, `places.yaml` | navigation stack and the sample map |
 | `cluster.yaml`, `cluster_jobs.yaml` | scheduler, agents and the job catalog |
 | `macros.yaml`, `llm_knowledge.md` | macros and what the LLM is told |
 
