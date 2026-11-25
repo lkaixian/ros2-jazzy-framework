@@ -29,6 +29,16 @@
   <exec_depend>stt_pipeline</exec_depend>
   <exec_depend>tts_pipeline</exec_depend>
   <exec_depend>cluster_core</exec_depend>
+  <exec_depend>cluster_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>kobuki_ros_interfaces</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>
