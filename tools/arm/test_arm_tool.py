@@ -294,6 +294,9 @@ def test_touch_test_marker_detection_and_depth_window():
     import cv2
     import numpy as np
     from touch_test import MARKER_PX_DICT, depth_at, detect_marker
+    if not hasattr(cv2.aruco, 'ArucoDetector'):      # touch_test needs OpenCV >= 4.7; older apt builds (CI) lack it
+        import pytest
+        pytest.skip('OpenCV is older than 4.7 (no cv2.aruco.ArucoDetector)')
     marker = cv2.aruco.generateImageMarker(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, MARKER_PX_DICT)), 0, 200)
     canvas = np.full((480, 640), 255, np.uint8)
     canvas[100:300, 300:500] = marker                                    # marker centre at (399.5, 199.5)

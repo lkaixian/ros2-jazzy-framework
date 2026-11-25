@@ -48,6 +48,19 @@ class ScanGuard:
                                 self.half, max(s.range_min, 0.05), s.range_max or 12.0)
         return d if d is not None and d < self.stop else None
 
+    def freer_side(self):
+        """+1 (turn left) or -1 (turn right): the side ahead with more room, from the nearest valid beam in each 20-80 degree sector;
+        0 without a fresh scan (then the caller just stops). shortcut: reactive only, no path planning."""
+        if self.scan is None or self.clock() - self.t > self.stale:
+            return 0
+        s = self.scan
+        lo, hi = max(s.range_min, 0.05), s.range_max or 12.0
+
+        def room(c):
+            d = min_range_in_sector(s.ranges, s.angle_min, s.angle_increment, c - self.yaw_offset, 0.5, lo, hi)
+            return hi if d is None else d
+        return 1 if room(0.9) >= room(-0.9) else -1
+
     def too_close(self, clearance):
         """Turning in place sweeps the whole footprint: the nearest valid beam in ANY direction closer than `clearance` m
         (None = clear, or guard off with clearance <= 0, or no fresh scan and not required)."""

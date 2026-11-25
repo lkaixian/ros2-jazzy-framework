@@ -6,7 +6,7 @@ from launch import LaunchDescription
 from launch.actions import ExecuteProcess, OpaqueFunction
 
 ARGS = ('start_llama_server', 'llama_model', 'llama_hf_repo', 'llama_port', 'llama_url',
-        'slm_model_path', 'max_attempts', 'dry_run', 'dry_run_exempt', 'auto_run', 'groot2', 'mode_gate', 'wicl_memory', 'wicl_verbose')
+        'slm_model_path', 'max_attempts', 'dry_run', 'dry_run_exempt', 'auto_run', 'groot2', 'mode_gate', 'max_runtime_sec', 'wicl_memory', 'wicl_verbose')
 
 
 def _nodes(context):
@@ -46,7 +46,7 @@ def _nodes(context):
         make_node(context, 'bt_orchestrator', 'scene_summarizer_node', 'scene_summarizer_node', P),
         make_node(context, 'bt_orchestrator', 'robot_mode_node', 'robot_mode_node', P),
         make_node(context, 'bt_executor', 'bt_executor_node', 'bt_executor_node', P,
-                  {'dry_run': 'dry_run', 'auto_run': 'auto_run', 'groot2': 'groot2', 'mode_gate': 'mode_gate'},
+                  {'dry_run': 'dry_run', 'auto_run': 'auto_run', 'groot2': 'groot2', 'mode_gate': 'mode_gate', 'max_runtime_sec': 'max_runtime_sec'},
                   extra={'dry_run_exempt': exempt.split(',')} if exempt else None),
     ]
     return out

@@ -28,3 +28,7 @@ def test_empty_and_overlong_rejected():
 def test_extract_handler_logic():
     from social_extension.answers import extract_drink, extract_name
     assert (extract_name('my name is Alice'), extract_drink('I like orange juice')) == ('alice', 'orange juice')
+
+
+def test_render_text_fills_person_and_detail():
+    assert render_text('{person} is {detail}', 'alice', 'wearing glasses') == 'alice is wearing glasses'

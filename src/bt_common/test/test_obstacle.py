@@ -53,3 +53,17 @@ def test_scan_guard_turning_clearance_looks_in_every_direction():
     assert g.too_close(0.22) == 0.15 and g.too_close(0.1) is None and g.too_close(0.0) is None
     g.update(Scan(r(i6=float('inf'), i0=0.0)))       # no echo / zero returns are not obstacles
     assert g.too_close(0.22) is None
+
+
+def test_freer_side_turns_toward_the_side_with_more_room():
+    now = [0.0]
+    g = ScanGuard(stale_sec=0.5, clock=lambda: now[0])
+    assert g.freer_side() == 0                          # no scan: the caller just stops
+    g.update(Scan(r(i4=0.3, i5=0.5)))                   # wall ahead, something close on the left (index 5 = +45 deg)
+    assert g.freer_side() == -1
+    g.update(Scan(r(i4=0.3, i3=0.5)))                   # the same on the right (index 3 = -45 deg)
+    assert g.freer_side() == 1
+    g.update(Scan(r(i4=0.3)))                           # open on both sides: left, like the bump recovery
+    assert g.freer_side() == 1
+    now[0] = 1.0                                        # stale
+    assert g.freer_side() == 0

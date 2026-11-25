@@ -2,7 +2,8 @@
 
 Frames: raw optical (x right, y down, z forward in the SENSOR image, which is upside down on the arm), gripper = end_effector_link
 (x forward, y left, z up), arm base = omx_fk's `world`. The detection nodes see the image rotated upright by `image_rotate_deg`;
-a pixel in that image must be turned back to the raw image before the raw depth is read. IDEAL CASE: +-5 mm hand measurement, unverified signs.
+a pixel in that image must be turned back to the raw image before the raw depth is read.
+IDEAL CASE: +-5 mm hand measurement, unverified signs.
 """
 import os
 
@@ -22,7 +23,8 @@ def load(path=None):
     with open(path) as f:
         c = yaml.safe_load(f)['arm_hand_eye']
     k = c['rgb_intrinsics_1280x720']
-    return np.array(c['position_m'], float), np.array([[k['fx'], 0, k['cx']], [0, k['fy'], k['cy']], [0, 0, 1]], float), int(c['image_rotate_deg'])
+    K = np.array([[k['fx'], 0, k['cx']], [0, k['fy'], k['cy']], [0, 0, 1]], float)
+    return np.array(c['position_m'], float), K, int(c['image_rotate_deg'])
 
 
 def raw_pixel(u, v, width, height, rotate):

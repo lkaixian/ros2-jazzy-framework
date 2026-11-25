@@ -29,7 +29,8 @@ def _task(arm, q):
 
 
 def solve(arm, xyz, pitch=None, seeds=None, limits=None, iters=120):
-    """Pass `limits=map_limits(fmap)` on the real arm so a solution can never leave the taught range. Joint dict reaching `xyz` (m, arm base frame) at finger pitch `pitch` (rad; None = any, the closest to the seed), or None."""
+    """Joint dict reaching `xyz` (m, arm base frame) at finger pitch `pitch` (rad; None = any, the closest to the seed), or None.
+    Pass `limits=map_limits(fmap)` on the real arm so a solution can never leave the taught range."""
     lim = np.array([(limits or LIMITS)[j] for j in JOINTS])
     want = np.array(list(xyz) + [0.0])
     rows = 4 if pitch is not None else 3

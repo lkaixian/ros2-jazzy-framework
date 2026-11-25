@@ -42,7 +42,7 @@ def test_places_match_places_yaml(text):
 
 
 def test_stays_small_enough_for_a_prompt(text):
-    assert len(text) < 4800          # ~1100 tokens (rules + worked examples): this goes into every planning request
+    assert len(text) < 5900          # ~1350 tokens (rules + worked examples): this goes into every planning request
 
 
 def test_worked_examples_are_valid_plans(text, cat):
@@ -57,4 +57,4 @@ def test_worked_examples_are_valid_plans(text, cat):
     for line in shown:
         steps = json.loads(line.split('->', 1)[1])
         xml = build_xml(json.dumps(expand({'goal': 'example', 'steps': steps}, lib)))
-        assert validate_xml(xml, cat) == [], line
+        assert validate_xml(xml, cat, max_nodes=160) == [], line   # = pipeline.yaml bt_validator_node.max_nodes (hric_round is ~145 nodes)

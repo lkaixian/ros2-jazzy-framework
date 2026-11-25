@@ -1,0 +1,35 @@
+# Where each detected object goes, per arm task (read by pose_extension: the NextObject node). Detector labels = the YOLO26s COCO classes of
+# the arm eye (/arm_eye/objects, tools/arm/arm_eye.sh). Entry: label: {group, nav, put}
+#   group = what it is, said aloud ("next to the other drinks"); nav = a named place in places.yaml the robot drives to first;
+#   put   = a taught arm place for PlaceObject (extensions.yaml arm_extension_node.places "name:x,y,z").
+# EVERYTHING BELOW IS A PLACEHOLDER: the real objects, shelves, dustbin and dishwasher come from the 3 Dec preparation day. Names that are not in
+# places.yaml / the arm places make the plan fail at that step with a spoken apology; nothing moves to a place nobody taught.
+clean_table:             # minutes 5.1: waste -> dustbin, kitchenware -> dishwasher; beverage bottles: ask the OC (empty = waste?)
+  cup: {group: kitchenware, nav: dishwasher, put: dishwasher}
+  wine glass: {group: kitchenware, nav: dishwasher, put: dishwasher}
+  fork: {group: kitchenware, nav: dishwasher, put: dishwasher}
+  knife: {group: kitchenware, nav: dishwasher, put: dishwasher}
+  spoon: {group: kitchenware, nav: dishwasher, put: dishwasher}
+  bowl: {group: kitchenware, nav: dishwasher, put: dishwasher}
+  bottle: {group: drinks, nav: dustbin, put: bin}
+  banana: {group: waste, nav: dustbin, put: bin}
+  apple: {group: waste, nav: dustbin, put: bin}
+  orange: {group: waste, nav: dustbin, put: bin}
+  sandwich: {group: waste, nav: dustbin, put: bin}
+groceries:               # minutes 4.5: each item on the shelf with its category
+  apple: {group: fruit and vegetables, nav: shelf, put: shelf}
+  banana: {group: fruit and vegetables, nav: shelf, put: shelf}
+  orange: {group: fruit and vegetables, nav: shelf, put: shelf}
+  broccoli: {group: fruit and vegetables, nav: shelf, put: shelf}
+  carrot: {group: fruit and vegetables, nav: shelf, put: shelf}
+  bottle: {group: drinks, nav: shelf, put: shelf}
+  cup: {group: drinks, nav: shelf, put: shelf}
+  sandwich: {group: snacks, nav: shelf, put: shelf}
+  donut: {group: snacks, nav: shelf, put: shelf}
+  cake: {group: snacks, nav: shelf, put: shelf}
+  hot dog: {group: snacks, nav: shelf, put: shelf}
+rubbish:                 # EGPSR (minutes 5.2): rubbish -> the dustbin; COCO has no "rubbish" class, these are guesses
+  bottle: {group: rubbish, nav: dustbin, put: bin}
+  cup: {group: rubbish, nav: dustbin, put: bin}
+  banana: {group: rubbish, nav: dustbin, put: bin}
+  sandwich: {group: rubbish, nav: dustbin, put: bin}

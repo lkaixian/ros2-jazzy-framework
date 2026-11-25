@@ -72,7 +72,8 @@ def test_handwritten_commands_are_well_formed():
     rows = [json.loads(line) for line in open(os.path.join(ROOT, 'tools', 'gpsr', 'handwritten.jsonl')) if line.strip()]
     keys = {'visit', 'says', 'macro', 'node', 'detects', 'any_node', 'laps', 'refuse'}
     assert len(rows) >= 30 and len({r['id'] for r in rows}) == len(rows) == len({r['command'] for r in rows})
-    assert all(r['category'] in {'navigation', 'people', 'vision', 'manipulate', 'refuse'} and r['expect'] and set(r['expect']) <= keys for r in rows)
+    cats = {'navigation', 'people', 'vision', 'manipulate', 'refuse'}
+    assert all(r['category'] in cats and r['expect'] and set(r['expect']) <= keys for r in rows)
     assert all(m in LIB for r in rows for m in [r['expect'].get('macro')] if m)
 
 

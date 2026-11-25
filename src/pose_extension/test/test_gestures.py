@@ -69,3 +69,10 @@ def test_free_seats_skips_taken_and_unconfident_ones():
     got = free_seats([chair_taken, chair_free_small, couch_free, dim_chair, table], [person])
     assert got == [couch_free, chair_free_small]                    # biggest first; taken/dim/non-seat dropped
     assert free_seats([chair_taken], []) == [chair_taken]          # nobody in view: free
+
+
+def test_seat_place_says_which_side():
+    from pose_extension.pose_extension_node import seat_place
+    assert seat_place('chair', -0.6) == 'chair on my left'
+    assert seat_place('couch', 0.6) == 'couch on my right'
+    assert seat_place('bench', 0.1) == 'bench straight ahead'

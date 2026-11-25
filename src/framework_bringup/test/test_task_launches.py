@@ -50,7 +50,8 @@ def test_arm_tasks_start_the_arm_and_the_arm_eye_and_the_inspection_nothing_else
 
 @pytest.mark.parametrize('name', TASKS)
 def test_every_switch_is_declared_by_the_framework_launch_files(name):
-    files = ('framework.launch.py', 'perception.launch.py', 'extensions.launch.py', 'audio.launch.py', 'sensors.launch.py')
+    files = ('framework.launch.py', 'perception.launch.py', 'extensions.launch.py', 'audio.launch.py', 'sensors.launch.py',
+             'pipeline.launch.py')
     src = ''.join(open(os.path.join(LAUNCH, f)).read() for f in files)
     for k in preset(name):
         assert k in src or (k.startswith('enable_') and f"'{k[7:]}'" in src), (name, k)

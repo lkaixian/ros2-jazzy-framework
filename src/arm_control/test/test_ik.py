@@ -1,12 +1,15 @@
-import math
+import os
 
 import numpy as np
 import pytest
 
-from arm_control.ik import EE, JOINTS, LIMITS, _task, solve
-from arm_control.omx_fk import Arm
+from arm_control.ik import JOINTS, LIMITS, _task, solve
+from arm_control.omx_fk import XACRO, Arm
 
-arm = Arm()
+# CI does not install open_manipulator_description; a present-but-broken xacro still fails
+HAVE_URDF = os.path.exists(XACRO)
+pytestmark = pytest.mark.skipif(not HAVE_URDF, reason='open_manipulator_description is not installed')
+arm = Arm() if HAVE_URDF else None
 
 
 @pytest.mark.parametrize('q', [(0.3, -0.5, 0.4, 0.2), (-0.8, 0.2, -0.3, -0.4), (0.0, -1.0, 1.0, 0.0)])

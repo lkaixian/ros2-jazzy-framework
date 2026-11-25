@@ -1,6 +1,8 @@
+import os
 import time
 from collections import defaultdict, deque
 
+from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from bt_common.executor_node import ExtensionExecutor, port_float, port_str, run_executor
 from face_recognition_msgr.msg import FaceArray
 from object_detection_msgr.msg import ObjectArray
@@ -9,6 +11,7 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 
 from pose_extension import attributes, gestures
+from pose_extension.categories import load_table, pick_next
 
 
 def count_confident(items, min_conf, label=None):
@@ -36,6 +39,11 @@ def free_seats(objects, persons, labels=SEAT_LABELS, min_conf=0.4, max_covered=0
     return sorted(seats, key=lambda o: -(o.x_max - o.x_min) * (o.y_max - o.y_min))
 
 
+def seat_place(label, bearing):
+    """'chair on my left' from the image bearing (-1 left edge .. +1 right edge of the camera view); 'straight ahead' within +-0.25."""
+    return f"{label} {'straight ahead' if abs(bearing) < 0.25 else 'on my left' if bearing < 0 else 'on my right'}"
+
+
 def describe(persons, min_conf=0.5, track_id=None):
     """'a person wearing a red top' for the biggest (nearest) confident person that has a colour; '' if none."""
     cands = [p for p in persons if p.confidence >= min_conf and p.clothes_colour and (track_id is None or p.track_id == track_id)]
@@ -50,7 +58,7 @@ class PoseExtension(ExtensionExecutor):
         super().__init__('pose_extension')
         for k, v in dict(persons_topic='persons', objects_topic='objects', window_sec=1.5, max_age_sec=0.7,
                          faces_topic='faces', image_topic='/camera/image_raw', face_parsing_model='',
-                         min_face_px=attributes.MIN_FACE_PX).items():
+                         min_face_px=attributes.MIN_FACE_PX, candidates_topic='/arm_eye/objects', categories_file='').items():
             self.declare_parameter(k, v)
         self.hist = defaultdict(lambda: deque(maxlen=120))   # track_id -> [(t, kps)]
         self.create_subscription(PersonArray, self.get_parameter('persons_topic').value,
@@ -58,6 +66,9 @@ class PoseExtension(ExtensionExecutor):
         self.last = {}     # 'persons'/'objects' -> (monotonic time, message)
         self.create_subscription(ObjectArray, self.get_parameter('objects_topic').value,
                                  lambda m: self.last.__setitem__('objects', (time.monotonic(), m)), 10)
+        self._cat, self._last_obj = None, ''
+        self.create_subscription(ObjectArray, self.get_parameter('candidates_topic').value,
+                                 lambda m: self.last.__setitem__('arm_objects', (time.monotonic(), m)), 10)
         self.parser = attributes.FaceParser(self.get_parameter('face_parsing_model').value)
         self.create_subscription(FaceArray, self.get_parameter('faces_topic').value,
                                  lambda m: self.last.__setitem__('faces', (time.monotonic(), m)), 10)
@@ -66,7 +77,7 @@ class PoseExtension(ExtensionExecutor):
         self.handlers = {'GetPersonPose': self._get_pose, 'IsPersonWaving': self._waving,
                          'IsPersonPointing': self._pointing, 'CountPeople': self._count_people,
                          'CountObjects': self._count_objects, 'FindFreeSeat': self._find_seat,
-                         'DescribePerson': self._describe, 'DescribeAttributes': self._attributes}
+                         'DescribePerson': self._describe, 'DescribeAttributes': self._attributes, 'NextObject': self._next_object}
 
     def _on_persons(self, m):
         now = time.monotonic()
@@ -138,6 +149,29 @@ class PoseExtension(ExtensionExecutor):
             return False, 'nothing certain about this face'
         return True, text, {'out_text': text, 'out_glasses': a['glasses'], 'out_hair': a['hair']}
 
+    def _next_object(self, ports, ctl):
+        """The next object the arm eye sees that this task handles, and where it goes (param/object_categories.yaml)."""
+        task = port_str(ports, 'task')
+        try:
+            if self._cat is None:
+                path = self.get_parameter('categories_file').value or os.path.join(
+                    get_package_share_directory('framework_bringup'), 'param', 'object_categories.yaml')
+                self._cat = load_table(path)
+        except (ValueError, PackageNotFoundError) as e:
+            return False, str(e)
+        rows = self._cat.get(task)
+        if not rows:
+            return False, f'no objects configured for task {task!r} (known: {", ".join(sorted(self._cat))})'
+        m = self._fresh('arm_objects')
+        if m is None:
+            return False, 'no recent arm-eye object detections (tools/arm/arm_eye.sh)'
+        o, e = pick_next(m.objects, rows, self._last_obj, port_float(ports, 'min_conf', 0.5, lo=0.0, hi=1.0))
+        if o is None:
+            return False, f'no {task} object in view'
+        self._last_obj = o.label
+        return True, f"{o.label} ({e['group']}) -> {e['nav']} / {e['put']}", {
+            'out_label': o.label, 'out_nav': e['nav'], 'out_put': e['put'], 'out_group': e['group']}
+
     def _find_seat(self, ports, ctl):
         mc = port_float(ports, 'min_conf', 0.4, lo=0.0, hi=1.0)
         objs, pers = self._fresh('objects'), self._fresh('persons')
@@ -149,7 +183,8 @@ class PoseExtension(ExtensionExecutor):
         best = seats[0]
         w = max(1, objs.image_width)
         bearing = ((best.x_min + best.x_max) / 2 - w / 2) / (w / 2)     # -1 left edge .. +1 right edge of the image
-        return True, f'free {best.label} at bearing {bearing:+.2f}', {'out_label': best.label, 'out_bearing': f'{bearing:.2f}'}
+        place = seat_place(best.label, bearing)
+        return True, f'free {place}', {'out_label': best.label, 'out_bearing': f'{bearing:.2f}', 'out_place': place}
 
     def _get_pose(self, ports, ctl):
         mc = port_float(ports, 'min_conf', 0.5, lo=0.0, hi=1.0)

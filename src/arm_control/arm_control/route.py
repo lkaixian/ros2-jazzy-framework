@@ -110,7 +110,8 @@ def main():
     print(f'roadmap: {len(nodes)} taught poses, {len(edges)} links')
     if wps is None:
         sys.exit('NO ROUTE: ' + why)
-    print(f'route: {why}; {len(wps)} waypoints after simplifying; about {sum(np.abs(q - p).max() / RATE for p, q in zip(wps, wps[1:])):.0f} s at {RATE} rad/s')
+    secs = sum(np.abs(q - p).max() / RATE for p, q in zip(wps, wps[1:]))
+    print(f'route: {why}; {len(wps)} waypoints after simplifying; about {secs:.0f} s at {RATE} rad/s')
     for w in wps:
         print('  ' + ' '.join(f'{v:+.2f}' for v in w))
 
