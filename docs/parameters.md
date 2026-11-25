@@ -135,7 +135,7 @@ person_detection_node:
 
 face_recognition_node:
   ros__parameters:
-    model: yolo26n-face.pt  # user-supplied face weights (YOLO26n, 5 landmarks); in the repo root
+    model: yolo26s-face.pt  # face detector, 5 landmarks (akanametov/yolo-face release 1.0.0, GPL-3.0); in the repo root. yolo26n-face.pt = lighter
     openvino: false
     conf: 0.4
     device: ""
@@ -253,6 +253,10 @@ pose_extension_node:
     window_sec: 1.5
     max_age_sec: 0.7
     republish_sec: 3.0
+    faces_topic: faces
+    image_topic: /camera/image_raw     # raw frames for DescribeAttributes (the main camera, not the arm eye)
+    face_parsing_model: ""            # "" = models/face_parsing/yolo26l-sem*.pt, else yolo26n-sem*.pt (docs/perception.md)
+    min_face_px: 60                    # DescribeAttributes: a narrower face is too far to judge
 
 arm_extension_node:         # guarded arm (src/arm_control): moves nothing while live is false
   ros__parameters:

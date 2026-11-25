@@ -2,10 +2,13 @@ import time
 from collections import defaultdict, deque
 
 from bt_common.executor_node import ExtensionExecutor, port_float, port_str, run_executor
+from face_recognition_msgr.msg import FaceArray
 from object_detection_msgr.msg import ObjectArray
 from person_detection_msgr.msg import PersonArray
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import Image
 
-from pose_extension import gestures
+from pose_extension import attributes, gestures
 
 
 def count_confident(items, min_conf, label=None):
@@ -45,7 +48,9 @@ def describe(persons, min_conf=0.5, track_id=None):
 class PoseExtension(ExtensionExecutor):
     def __init__(self):
         super().__init__('pose_extension')
-        for k, v in dict(persons_topic='persons', objects_topic='objects', window_sec=1.5, max_age_sec=0.7).items():
+        for k, v in dict(persons_topic='persons', objects_topic='objects', window_sec=1.5, max_age_sec=0.7,
+                         faces_topic='faces', image_topic='/camera/image_raw', face_parsing_model='',
+                         min_face_px=attributes.MIN_FACE_PX).items():
             self.declare_parameter(k, v)
         self.hist = defaultdict(lambda: deque(maxlen=120))   # track_id -> [(t, kps)]
         self.create_subscription(PersonArray, self.get_parameter('persons_topic').value,
@@ -53,10 +58,15 @@ class PoseExtension(ExtensionExecutor):
         self.last = {}     # 'persons'/'objects' -> (monotonic time, message)
         self.create_subscription(ObjectArray, self.get_parameter('objects_topic').value,
                                  lambda m: self.last.__setitem__('objects', (time.monotonic(), m)), 10)
+        self.parser = attributes.FaceParser(self.get_parameter('face_parsing_model').value)
+        self.create_subscription(FaceArray, self.get_parameter('faces_topic').value,
+                                 lambda m: self.last.__setitem__('faces', (time.monotonic(), m)), 10)
+        self.create_subscription(Image, self.get_parameter('image_topic').value,
+                                 lambda m: self.last.__setitem__('image', (time.monotonic(), m)), qos_profile_sensor_data)
         self.handlers = {'GetPersonPose': self._get_pose, 'IsPersonWaving': self._waving,
                          'IsPersonPointing': self._pointing, 'CountPeople': self._count_people,
                          'CountObjects': self._count_objects, 'FindFreeSeat': self._find_seat,
-                         'DescribePerson': self._describe}
+                         'DescribePerson': self._describe, 'DescribeAttributes': self._attributes}
 
     def _on_persons(self, m):
         now = time.monotonic()
@@ -102,6 +112,31 @@ class PoseExtension(ExtensionExecutor):
         want = int(port_float(ports, 'track_id')) if ports.get('track_id') else None
         text = describe(m.persons, port_float(ports, 'min_conf', 0.5, lo=0.0, hi=1.0), want)
         return (True, text, {'out_text': text}) if text else (False, 'no person with a visible clothes colour')
+
+    def _attributes(self, ports, ctl):
+        """Glasses / hair colour / hat / earrings of the biggest confident face, from the latest camera frame (see attributes.py)."""
+        from yolo11_common.base_node import image_to_bgr
+        mc = port_float(ports, 'min_conf', 0.6, lo=0.0, hi=1.0)
+        faces, img = self._fresh('faces'), self._fresh('image')
+        if faces is None or img is None:
+            return False, 'no recent face detections or camera frame'
+        big = [f for f in faces.faces if f.confidence >= mc and f.x_max - f.x_min >= self.get_parameter('min_face_px').value]
+        if not big:
+            return False, 'no face close enough to judge'
+        f = max(big, key=lambda f: (f.x_max - f.x_min) * (f.y_max - f.y_min))
+        frame = image_to_bgr(img)
+        sx, sy = frame.shape[1] / max(1, faces.image_width), frame.shape[0] / max(1, faces.image_height)
+        box = (f.x_min * sx, f.y_min * sy, f.x_max * sx, f.y_max * sy)
+        x1, y1, x2, y2 = attributes.head_crop(box, frame.shape[1], frame.shape[0])
+        crop = frame[y1:y2, x1:x2]
+        try:
+            a = attributes.attributes(self.parser.parse(crop), crop, (box[2] - box[0]) * (box[3] - box[1]))
+        except RuntimeError as e:
+            return False, str(e)
+        text = attributes.sentence(a)
+        if not text:
+            return False, 'nothing certain about this face'
+        return True, text, {'out_text': text, 'out_glasses': a['glasses'], 'out_hair': a['hair']}
 
     def _find_seat(self, ports, ctl):
         mc = port_float(ports, 'min_conf', 0.4, lo=0.0, hi=1.0)
