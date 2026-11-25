@@ -2,11 +2,18 @@
 # (read by sensors.launch.py enable_oak:=true; NOT a ROS parameter file). Values are passed as strings.
 # Topics: /arm_cam/rgb/image_raw, /arm_cam/stereo/image_raw (depth), /arm_cam/rgb/camera_info.
 # A leftover component_container from an unclean shutdown holds the camera and the next launch then hangs silently: stop it first.
-# Measured 2026-11-25: connects over USB 2 (480 Mbit) at ~9 Hz with the stock profile; a USB 3 port/cable is the first thing to try for more.
+# Measured 2026-11-25: USB 2 gave ~9 Hz with the stock profile; on USB 3 (SUPER) RGB 1280x720 ~19 Hz, depth aligned ~21 Hz, fx=fy=990.7 cx=630.7 cy=363.3.
 name: arm_cam
 namespace: ""
 camera_model: OAK-D-LITE
 pointcloud.enable: false            # big CPU/USB cost; enable only when you need the cloud
-# NO hand-eye calibration yet: parent_frame is not part of the robot's TF tree, so these frames are unconnected on purpose.
-# When the camera pose on the arm is measured, set parent_frame to the arm link and cam_pos_x/y/z + cam_roll/pitch/yaw.
-parent_frame: oak-d-base-frame
+# Hand-eye, MEASURED BY HAND 2026-11-25 (+-5 mm; see param/arm_hand_eye.yaml): the OAK colour lens is 65 mm BEHIND and 50 mm ABOVE the gripper
+# pad-centre point (end_effector_link), centred between the pads, looking along the fingers and mounted UPSIDE DOWN (roll pi). The sign of x and z is an
+# assumption from the wording: verify with a touch test before trusting a grasp. The TF only connects when the arm bringup publishes end_effector_link.
+parent_frame: end_effector_link
+cam_pos_x: -0.065
+cam_pos_y: 0.0
+cam_pos_z: 0.05
+cam_roll: 3.14159265
+cam_pitch: 0.0
+cam_yaw: 0.0

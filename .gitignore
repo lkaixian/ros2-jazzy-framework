@@ -21,3 +21,7 @@ bt_dataset_v2_small/
 bt_dataset_v3/
 bt_dataset_v3_small/
 bt_dataset_v4_*/
+
+# local-only media and library caches (not part of the project)
+.cache/
+*.webp
