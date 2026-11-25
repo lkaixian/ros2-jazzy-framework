@@ -47,3 +47,21 @@ gripper ("arm eye") and a RealSense next to the arm base. Everything below was d
 - Still TODO for grasping: hand-eye calibration, object 3D pose, IK for a pre-grasp inside the free-space map, the pick sequence.
 - `rotate` parameter on all YOLO nodes (shared base class); `tools/arm/arm_eye.sh` starts the OAK driver (hand-eye TF) + `object_detection_node` with `rotate:=180` -> `/arm_eye/objects`, `/arm_eye/image` (upright).
   The driver's TF with the measured pose was checked against my own derivation on the mock arm (optical z = gripper +x, optical y = gripper +z, optical x = gripper +y).
+
+## Resume here (end of the 2026-11-25 session)
+State: branch `feat/llm-e4b`, pushed through `d33bd6c` (perception YOLO26 + rotate; arm tooling; the other agent's dashboard). Nothing runs on a robot except what is listed under "Works".
+Order I would continue in (each needs you at the arm unless marked software-only):
+1. `tools/arm/touch_test.py` (print `~/arm_marker_4x4_id0.png`, ~50 mm): verifies the hand-eye numbers; then set `verified: true` in `param/arm_hand_eye.yaml`.
+2. Gripper on a real object (`gripper_tool.py close --go`, a 30-50 mm soft object): stall + width + peak current. Then the force calibration with a scale (item 1 above).
+3. `tools/arm/load_test.py --go --k 2 --hold 4` first (support under the gripper, OAK and cable mounted). Dry run first: `load_test.py`.
+4. Software-only: detection pixel + depth -> arm-frame point (`hand_eye.py: upright_pixel_to_arm` exists), IK for a pre-grasp pose that stays inside the free-space map (`path_check.py`), the pick sequence
+   (approach on a taught route, guarded gripper, retreat), ROS health monitor + servo reboot/retry, MoveIt limits/keep-outs.
+
+Commands (source `env.sh` first; export `CYCLONEDDS_URI=file://$PWD/tools/net/cyclonedds_local.xml` in shells opened before the ~/.bashrc fix):
+- Arm driver + graceful stop: `tools/arm/arm_up.sh` (parks on SIGTERM; refuses outside the map). Stop it before any tool that reads the servos directly.
+- Mapping by hand (torque off, driver stopped): `teach.py --map` (continuous) or `--range`; map `~/arm_free_space.npz`, the checker uses the frozen `~/arm_free_space_baseline.npz` first.
+- `path_check.py --from rest --to home`, `route.py --from a,b,c,d --to rest`, `load_map.py`, `gripper_tool.py status|range|open|close|goto --gap MM [--go]`.
+- Camera: `tools/arm/arm_eye.sh` (OAK driver + YOLO26s with `rotate:=180`); monitor: `arm_gui.py [--yolo yolo26s.pt]` -> http://127.0.0.1:8088.
+Data (in your home, not in git): `~/arm_points.yaml` (named contact points), `~/arm_range.csv`, `~/arm_stream*.csv`, `~/arm_free_space*.npz`, `~/arm_load_map.npz`, `~/arm_gripper.yaml`, `~/arm_maps/*.png`.
+Gotchas: the open_manipulator launch defaults to `/dev/ttyUSB0`, which is the LIDAR here: always pass `port_name:=` (arm_up.sh does). A joint hand-turned past one full turn must be turned back before the driver starts.
+The other agent's uncommitted work lives in the same tree (dashboard, `tools/camera`, `99-realsense-libusb.rules` untracked): do not revert it.
