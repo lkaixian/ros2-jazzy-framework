@@ -1,0 +1,11 @@
+# Hand-eye (where the arm-eye OAK sits on the gripper), hand-measured 2026-11-25 (signs behind/above CONFIRMED by the user; the numbers not yet verified), +-5 mm / +-3 deg. Read by tools/arm/hand_eye.py (and mirrored in oak.yaml for the driver TF).
+# Gripper frame = end_effector_link, the pad-centre point: x forward along the fingers, y left, z up (REP-103).
+arm_hand_eye:
+  position_m: [-0.065, 0.0, 0.050]     # camera lens in the gripper frame. ASSUMPTION: 65 mm BEHIND the pads, 50 mm ABOVE them, centred (y = 0). Confirm the signs.
+  mounting: upside_down                # roll pi about the forward axis: the raw image is turned 180 deg, so every node rotates its image by 180
+  looks_along: forward                 # optical axis parallel to the fingers (no tilt measured)
+  image_rotate_deg: 180                # turns the RAW image upright: the same value the detection nodes use (`rotate`)
+  # Raw optical frame in the gripper frame (checked against the depthai driver's TF with the mock arm):
+  #   optical x (raw image right) = gripper +y,  optical y (raw image down) = gripper +z,  optical z (forward) = gripper +x
+  rgb_intrinsics_1280x720: {fx: 990.7, fy: 990.7, cx: 630.7, cy: 363.3}
+  verified: false                      # set true after a touch test: gripper tip on a known point vs the camera + depth estimate

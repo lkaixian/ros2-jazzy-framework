@@ -16,8 +16,8 @@ class FaceRecognitionNode(Yolo11Node):
     """
 
     def __init__(self):
-        super().__init__('face_recognition_node', 'yolov11n-face.pt')
-        self.declare_parameter('embed_model', 'yolo11n-cls.pt')
+        super().__init__('face_recognition_node', 'yolo26s-face.pt')
+        self.declare_parameter('embed_model', 'yolo26n-cls.pt')
         self.declare_parameter('gallery_dir', '')
         self.declare_parameter('threshold', 0.6)
         self.declare_parameter('publish_embedding', True)    # BT ExtractFaceFeature needs it

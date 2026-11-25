@@ -49,8 +49,9 @@ Sim-verified only: `tools/integration/stop_latch_test.py`.
 | Rotation clearance | `RotateBy` refuses to turn with anything within 0.22 m | same; set `scan_required: true` on the real robot so a missing scan refuses instead of allowing |
 | Battery | `battery_guard_node` halts the plan when the Kobuki battery is below 13.2 V for 3 s (not charging), repeating while it stays low; publishes `{"level": "critical"}` on `safety/battery` | thresholds 14.0 V low / 13.2 V critical are the Kobuki driver's documented defaults, **not measured** on this robot |
 | LLM outage | if every LLM endpoint is down the bridge calls `bt_executor/halt` repeatedly and `llm/status` goes `down` | `llm_bridge` (60 s grace at boot) |
-| No arm | tasks that need an arm (carry, fetch, open, pour ...) are refused when no arm is configured, with a spoken refusal | `bt_orchestrator/policy.py` (a regex heuristic) |
-| Arm | `arm_extension` refuses to move until `arm_group`, `arm_ee_link`, `arm_base_frame` and `gripper_action` are set; velocity scale is capped at 0.1 | `arm_extension` |
+| No arm | with `has_arm:=false` on `bt_orchestrator`, tasks that need an arm (carry, fetch, open, pour ...) are refused with a spoken refusal; `has_arm` defaults to true now that `arm_extension` exists | `bt_orchestrator/policy.py` (a regex heuristic) |
+| Arm | `arm_extension` moves nothing unless `live:=true`; every leg is checked against the taught free-space map and joint range first (no map = refusal), runs at 0.03 rad/s, and a cancel or a 0.3 rad tracking error for 1.5 s holds the arm; the gripper is refused while its Goal Current register is above `goal_current_cap`. Validated in simulation only | `arm_extension`, `arm_control` |
+| Servo health | `arm_health_node` publishes `arm/health` (servo error bits, temperature, voltage); `arm_extension` refuses live motion unless it is fresh and ok. A servo reboot drops torque on ALL servos, so it only runs with the arm parked at rest and still, for overload/electrical faults, at most 2 per 10 min, and only with `auto_reboot:=true` or the `arm_health/reboot` service. Validated in simulation only | `arm_health_node`, `arm_control/health.py` |
 
 ## 5. Defaults at a glance
 

@@ -1,0 +1,15 @@
+# OpenMANIPULATOR-X gripper (Dynamixel ID 15, current-based position mode) calibration, hand-measured 2026-11-25 (not read by any node yet).
+# Raw ticks = the servo's Present Position. In THIS unit the OPEN end is the LOWER number, the opposite of the stock MoveIt states
+# (stock open +0.019 m / close -0.010 m would drive this gripper toward its closed end). Do not use the stock open/close states unchanged.
+# Gap = distance between the finger pads, padding excluded, ruler-measured: closed 20 +-2 mm, fully open ~72 mm (+- a few mm).
+arm_gripper:
+  servo_id: 15
+  open_ticks: -930              # hard stop, identical in two hand sweeps
+  closed_ticks: 590             # soft end (578..606 between sweeps: depends on how hard the fingers were squeezed)
+  gap_closed_mm: 20.0
+  gap_open_mm: 72.0
+  mm_per_tick: 0.0342           # (72-20)/1520, within 3 % of the servo-geometry estimate (0.0353)
+  # In the driver's joint units (m = ticks*1.7627e-5 - 0.0361), what arm_extension's gripper_open / gripper_closed would need to be:
+  joint_open_m: -0.0525
+  joint_closed_m: -0.0257
+  goal_current_warning: "after a power cycle Goal Current is 1193 (3.2 A, the max). Set it (<= ~200) BEFORE enabling torque."

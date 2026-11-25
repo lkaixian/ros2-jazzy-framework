@@ -11,6 +11,11 @@
   <exec_depend>bt_pipeline_msgs</exec_depend>
   <exec_depend>person_detection_msgr</exec_depend>
   <exec_depend>object_detection_msgr</exec_depend>
+  <exec_depend>face_recognition_msgr</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>yolo11_common</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
   <test_depend>python3-pytest</test_depend>
   <export>
     <build_type>ament_python</build_type>

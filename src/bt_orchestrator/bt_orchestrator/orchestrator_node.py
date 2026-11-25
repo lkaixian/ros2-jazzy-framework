@@ -32,6 +32,7 @@ class OrchestratorNode(Node):
 
     def __init__(self):
         super().__init__('orchestrator_node')
+        self.declare_parameter('has_arm', True)       # False: goals that need the arm are refused with a spoken apology (policy.py)
         self.declare_parameter('max_attempts', 3)
         self.declare_parameter('call_timeout_sec', 60.0)
         self.declare_parameter('macros_file', '')     # '' = framework_bringup/param/macros.yaml
@@ -193,7 +194,7 @@ class OrchestratorNode(Node):
         return fut.result()
 
     def _on_spec(self, msg):
-        spec = refuse_no_arm(msg.data) or msg.data       # no arm: say so instead of driving somewhere
+        spec = (None if self.get_parameter('has_arm').value else refuse_no_arm(msg.data)) or msg.data   # no arm: say so instead of driving somewhere
         if spec != msg.data:
             self.get_logger().warn('goal needs the arm: replaced by a refusal')
         with self.fsm_lock:

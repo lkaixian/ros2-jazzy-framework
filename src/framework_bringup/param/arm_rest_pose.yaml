@@ -1,0 +1,11 @@
+# OpenMANIPULATOR-X folded rest pose = the arm's "idle" end state (not read by any node yet).
+# Measured 2026-11-25 on the real arm: reached by a 45 s FollowJointTrajectory move, read back from
+# /joint_states. Joint order/units = ros2_control joints (rad, 0 rad = Dynamixel raw 2048).
+# Intended use: orderly end-steps only (task end, shutdown, power-off). NOT a reaction to e-stop:
+# a software e-stop must not command motion. Move there slowly (>= 45 s from home).
+arm_rest_pose:
+  joint_names: [joint1, joint2, joint3, joint4]
+  positions: [0.0, -1.85, 1.52, 0.45]
+  raw_ticks: {11: 2048, 12: 840, 13: 3035, 14: 2340}   # XM430, IDs 11-14, derived from the above
+  gripper: -0.026                                       # as read, never commanded: confirm before using
+  slow_move_sec: 45.0

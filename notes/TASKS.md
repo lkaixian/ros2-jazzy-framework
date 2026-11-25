@@ -2,7 +2,7 @@
 
 Source: https://robocupathome.github.io/RuleBook/scoresheets/master.pdf. Each test: 7:00 min limit, up to 3 tries,
 "Not attending" -500, "Using alternative start signal" -100 (GPSR/PnPC/Laundry). Scores are max per try
-(the sheet's "Score per try", without the outstanding-performance bonus). These are the acceptance targets.
+(the sheet's "Score per try", without the outstanding-performance bonus). These are the acceptance targets. Launch files per task and their gaps: `docs/robocup-tasks.md` (Malaysia Open 2026 minutes, 2026-11-25).
 
 ## GPSR (max 1490)
 3 spoken commands. Per command: understand 80, show the plan 100, solve 250 (partial solve = percentage penalty).

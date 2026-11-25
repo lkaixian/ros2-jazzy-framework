@@ -9,7 +9,7 @@ from yolo11_common.base_node import run, Yolo11Node
 
 class ObjectDetectionNode(Yolo11Node):
     def __init__(self):
-        super().__init__('object_detection_node', 'yolo11n.pt')
+        super().__init__('object_detection_node', 'yolo26s.pt')
         self.pub = self.create_publisher(ObjectArray, 'objects', 10)
         # A fine-tuned model has its own classes: announce them (latched) so the validator and
         # the LLM only use labels this detector can actually produce.

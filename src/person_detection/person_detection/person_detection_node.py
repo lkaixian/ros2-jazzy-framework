@@ -8,7 +8,7 @@ class PersonDetectionNode(Yolo11Node):
     """Detects (and optionally tracks) COCO class 0. A *-pose model adds keypoints."""
 
     def __init__(self):
-        super().__init__('person_detection_node', 'yolo11n-pose.pt', task='pose')
+        super().__init__('person_detection_node', 'yolo26s-pose.pt', task='pose')
         self.declare_parameter('track', True)
         self.track = self.get_parameter('track').value
         self.pub = self.create_publisher(PersonArray, 'persons', 10)

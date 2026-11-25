@@ -81,7 +81,7 @@ robot_mode_node:
 
 bt_executor_node:
   ros__parameters:
-    dry_run: true           # true: extension nodes only log; false: commands hardware
+    dry_run: true           # default ON: extension nodes only log. Off for one run: ros2 launch ... dry_run:=false (hardware moves!)
     dry_run_exempt: [social_extension]   # these run for real even in a dry run: speech and face enrolment, no motion
     auto_run: true          # true: run every valid plan immediately (dry_run: true still keeps the hardware still)
     tick_hz: 20.0
@@ -104,11 +104,12 @@ bt_executor_node:
 
 object_detection_node:
   ros__parameters:
-    model: yolo11n.pt
+    model: yolo26s.pt
     openvino: false
     conf: 0.4
     device: ""              # "" = auto, "cpu", "0" (GPU)
     image_topic: ""         # "" = open the webcam
+    rotate: 0               # degrees (0/90/180/270) to turn this node's input upright; the arm eye (OAK) is mounted upside down: 180
     raw_topic: /camera/image_raw   # also publish the raw webcam frames (person_detection reads them)
     camera_index: 0
     rate_hz: 30.0
@@ -118,11 +119,12 @@ object_detection_node:
 
 person_detection_node:
   ros__parameters:
-    model: yolo11n-pose.pt  # yolo11n.pt for boxes only
+    model: yolo26s-pose.pt  # yolo26s.pt for boxes only
     openvino: false
     conf: 0.4
     device: ""
     image_topic: /camera/image_raw   # raw webcam frames from object_detection_node (raw_topic); "" = open the webcam here
+    rotate: 0               # degrees (0/90/180/270) to turn this node's input upright; the arm eye (OAK) is mounted upside down: 180
     image_out: detections/person_image
     camera_index: 0
     rate_hz: 30.0
@@ -133,18 +135,19 @@ person_detection_node:
 
 face_recognition_node:
   ros__parameters:
-    model: yolo26n-face.pt  # user-supplied face weights (YOLO26n, 5 landmarks); in the repo root
+    model: yolo26s-face.pt  # face detector, 5 landmarks (akanametov/yolo-face release 1.0.0, GPL-3.0); in the repo root. yolo26n-face.pt = lighter
     openvino: false
     conf: 0.4
     device: ""
     image_topic: /camera/image_raw   # raw webcam frames (object_detection_node raw_topic); "" = open the webcam here
+    rotate: 0               # degrees (0/90/180/270) to turn this node's input upright; the arm eye (OAK) is mounted upside down: 180
     image_out: detections/face_image
     camera_index: 0
     rate_hz: 30.0
     show: false
     publish_image: true
     frame_id: camera
-    embed_model: yolo11n-cls.pt
+    embed_model: yolo26n-cls.pt
     gallery_dir: faces      # one <name>.npy per identity
     threshold: 0.6          # cosine similarity needed to name a face
     publish_embedding: true # required by the BT node ExtractFaceFeature
@@ -218,8 +221,8 @@ odom_extension_node:
     stop_distance: 0.30         # m
     guard_half_width_deg: 35.0
     scan_stale_sec: 0.5
-    scan_required: false        # true: no fresh scan = refuse to drive (use on the real robot; false keeps lidar-less sims working)
-    scan_yaw_offset: 0.0        # rad, lidar yaw relative to the base forward axis
+    scan_required: true         # no fresh scan = refuse to drive (real robot). Lidar-less sims (nav_sim has its own scan): set false
+    scan_yaw_offset: 3.1416     # rad, lidar yaw relative to the base forward axis: must match base_to_laser yaw in navigation.yaml
     turn_clearance: 0.22        # m: RotateBy refuses to turn with anything closer than this in any direction (Kobuki radius 0.18 + margin; 0 = off)
     rate_hz: 20.0
     republish_sec: 3.0
@@ -239,8 +242,8 @@ pid_extension_node:
     stop_distance: 0.40          # m (people: keep at least this far)
     guard_half_width_deg: 35.0
     scan_stale_sec: 0.5
-    scan_required: false
-    scan_yaw_offset: 0.0
+    scan_required: true         # no fresh scan = refuse to drive (real robot)
+    scan_yaw_offset: 3.1416     # rad: lidar faces backwards on this robot (= base_to_laser yaw in navigation.yaml)
     blocked_give_up_sec: 3.0     # blocked this long -> the node fails instead of waiting forever
 
 pose_extension_node:
@@ -250,26 +253,41 @@ pose_extension_node:
     window_sec: 1.5
     max_age_sec: 0.7
     republish_sec: 3.0
+    faces_topic: faces
+    image_topic: /camera/image_raw     # raw frames for DescribeAttributes (the main camera, not the arm eye)
+    face_parsing_model: ""            # "" = models/face_parsing/yolo26l-sem*.pt, else yolo26n-sem*.pt (docs/perception.md)
+    min_face_px: 60                    # DescribeAttributes: a narrower face is too far to judge
 
-arm_extension_node:         # arm model not fixed yet: group/ee_link/base_frame must be set first
+arm_extension_node:         # guarded arm (src/arm_control): moves nothing while live is false
   ros__parameters:
-    move_group_action: move_action
-    group: ""
-    ee_link: ""
-    base_frame: ""
-    max_velocity_scale: 0.1
-    acceleration_scale: 0.1
-    planning_time: 5.0
-    execute_timeout_sec: 60.0
-    pos_tol: 0.005
-    ori_tol: 0.05
-    workspace_min: [-1.0, -1.0, 0.0]
-    workspace_max: [1.0, 1.0, 1.2]
-    gripper_action: ""      # control_msgs/GripperCommand action name
-    gripper_open: 0.08
-    gripper_closed: 0.0
+    map_file: ''            # '' = the newest ~/arm_free_space*.npz (the baseline first)
+    require_health: true    # live motion needs a recent, clean arm/health (fail closed)
+    health_max_age_sec: 5.0
+    live: false             # true = really drive the arm (bt_executor dry_run:=false must also be set). Validate on hardware first.
+    rate: 0.03              # rad/s of the furthest joint: the speed the park was validated at
+    objects_topic: /arm_eye/objects
+    depth_topic: /arm_cam/stereo/image_raw
+    approach_m: 0.06
+    grasp_pitch_deg: 0.0    # finger angle above horizontal
+    grasp_depth_offset_m: 0.03   # ESTIMATE: front surface -> object middle
+    workspace_min: [0.05, -0.4, -0.3]   # arm base frame, metres. ESTIMATE: the free-space map is the real limit
+    workspace_max: [0.45, 0.4, 0.4]
+    gripper_open_gap_mm: 60.0
+    gripper_max_gap_mm: 72.0
     gripper_max_effort: 20.0
+    goal_current_cap: 250   # gripper Goal Current register units (0.67 A): refuse to move it above this
+    places: ['']            # "name:x,y,z" in the arm base frame, metres: where PlaceObject may put things down. ESTIMATES until measured on the arm.
+    object_width_mm: ['']   # "label:mm" entries; a label wider than gripper_max_gap_mm is refused
     republish_sec: 3.0
+
+arm_health_node:            # servo health -> arm/health; arm_extension refuses live motion unless it is ok
+  ros__parameters:
+    auto_reboot: false      # true: reboot the servos by itself, but only with the arm parked at rest and still. A reboot drops torque on ALL servos.
+    poll_sec: 2.0
+    stale_sec: 3.0
+    dxl_ids: [11, 12, 13, 14, 15]
+    rest_pose: [0.0, -1.85, 1.52, 0.45]   # keep equal to param/arm_rest_pose.yaml
+    ns: /dynamixel_hardware_interface
 
 social_extension_node:
   ros__parameters:
@@ -341,9 +359,9 @@ sound_event_node:           # steady-tone (doorbell) detector; tuned on syntheti
 stt_node:
   ros__parameters:
     engine: faster_whisper  # faster_whisper | vosk | mock
-    model: /home/larm/ros2-jazzy-robocup-fw/models/stt/models--Systran--faster-whisper-base.en/snapshots/3d3d5dee26484f91867d81cb899cfcf72b96be6c   # local folder: a bare name makes faster-whisper contact huggingface.co first, which hung start-up
+    model: base.en          # portable default (downloads on first use); setup.sh writes the model chosen for this computer to models/local.yaml, which overrides this
     language: ""
-    device: cpu
+    device: cpu             # cuda needs CUDA 12 cuBLAS + cuDNN 9; the node falls back to cpu/int8 if they are missing
     compute_type: int8
     min_confidence: 0.0
 
@@ -354,10 +372,10 @@ transcript_to_task_node:
 
 tts_node:
   ros__parameters:
-    engine: piper           # espeak (robotic, no model) | piper | kokoro | mock
+    engine: espeak          # espeak (robotic, no model) | piper | kokoro | mock
     voice: ""               # kokoro needs a voice name here
     rate: 160
-    piper_model: /home/larm/ros2-jazzy-robocup-fw/models/tts/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+    piper_model: ""
     piper_rate: 22050
     audio_device: ""
     max_queue: 16
@@ -381,8 +399,8 @@ plan_announcer_node:
 # Read by pipeline.launch.py only (not a ROS parameter file); keys: (check with: ros2 run framework_bringup check_params).
 
 start: true               # true: launch llama-server together with the pipeline
-model: /home/larm/ros2-jazzy-robocup-fw/models/llm/gemma-4-E2B-it-Q4_0.gguf   # local GGUF; "" = hf_repo below
-hf_repo: ggml-org/gemma-4-E2B-it-GGUF   # E2B: the 4 GB GTX 1650 cannot hold E4B Q4_0 (4.28 GiB) well
+model: ""                 # local GGUF path; "" = download hf_repo below into llama.cpp's cache
+hf_repo: ggml-org/gemma-4-E4B-it-GGUF:Q4_0   # E4B (RTX 3080 laptop). On a 4 GB GPU use ggml-org/gemma-4-E2B-it-GGUF (E4B Q4_0 is 4.28 GiB)
 port: 8080                # keep in step with llm_bridge_node.server_url (pipeline.yaml)
 # --reasoning off: Gemma 4 otherwise spends the 512-token reply budget on hidden "thinking" and the JSON is cut off
 extra_args: ["-ngl", "99", "-c", "8192", "-np", "1", "--reasoning", "off"]   # the planner prompt is ~4.3k tokens + 768 reply: 4096 rejected every request; -np 1: one request at a time gets the whole window
@@ -399,18 +417,27 @@ extra_args: ["-ngl", "99", "-c", "8192", "-np", "1", "--reasoning", "off"]   # t
 # AMCL drift, and obstacles appear in the wrong place. Measure from the `base` frame origin
 # (Kobuki: centre of the wheel axis, on the floor plane unless your URDF says otherwise):
 #   x forward (m), y left (m), z up (m); yaw/pitch/roll in radians.
-# Check with:  ros2 run tf2_ros tf2_echo base laser
+# Check with:  ros2 run tf2_ros tf2_echo base laser     (and  tf2_echo odom laser  to see the whole chain connect)
 
 static_tf:
-  base_to_laser:                  # RPLIDAR A1 (driver frame_id: laser)
-    parent: base
-    child: laser
-    x: 0.00                       # PLACEHOLDER
-    y: 0.00                       # PLACEHOLDER
-    z: 0.25                       # PLACEHOLDER
+  footprint_to_base:              # the Kobuki driver publishes odom -> base_footprint (verified on /tf), everything here uses `base`
+    parent: base_footprint        # both sit at the centre of the wheel axis on the floor: identity. Delete this entry if a
+    child: base                   # driver build already publishes `base` itself (two parents for one frame break TF)
+    x: 0.0
+    y: 0.0
+    z: 0.0
     roll: 0.0
     pitch: 0.0
-    yaw: 0.0                      # PLACEHOLDER (0 = lidar 0 deg points forward)
+    yaw: 0.0
+  base_to_laser:                  # RPLIDAR A2M8 (driver frame_id: laser)
+    parent: base
+    child: laser
+    x: 0.15                       # WALL TEST: lidar 41.2 cm from a wall, robot front edge ~40 cm (+-2): x = 17.6 + D - 41.2 (D=37..40 -> 14..16 cm)
+    y: 0.00                       # on the centreline (by eye)
+    z: 0.14                       # measured: Kobuki 10.5 cm + lidar head ~3.5 cm (scan plane ~ the head); 2D mapping barely depends on it
+    roll: 0.0
+    pitch: 0.0
+    yaw: 3.1416                   # MEASURED: lidar 0 deg points to the robot's rear (hand over the front -> blind rear arc, centre bumper hit)
   base_to_camera:                 # RealSense camera_link (published by realsense2_camera)
     parent: base
     child: camera_link
@@ -427,7 +454,7 @@ navigation:
 lidar:
   launch_package: sllidar_ros2    # from ~/ros2_ws; used by sensors.launch.py when installed
   launch_file: sllidar_a2m8_launch.py
-  serial_port: /dev/ttyUSB0
+  serial_port: /dev/rplidar       # udev symlink; ttyUSB0/1 swap between boots and the Kobuki driver defaults to ttyUSB0
   serial_baudrate: "115200"
   frame_id: laser
   angle_compensate: "true"
@@ -454,10 +481,10 @@ nav_sim_node:                 # 2D simulator for testing Nav2/SLAM without a rob
     start_y: 0.5
     start_yaw: 0.0
     robot_radius: 0.17
-    lidar_x: 0.0              # must match static_tf base_to_laser in navigation.yaml
+    lidar_x: 0.15             # must match static_tf base_to_laser in navigation.yaml (measured mount, lidar 0 deg faces the rear)
     lidar_y: 0.0
-    lidar_z: 0.25
-    lidar_yaw: 0.0
+    lidar_z: 0.14
+    lidar_yaw: 3.1416
     lidar_range_min: 0.15
     lidar_range_max: 12.0
     lidar_beams: 360

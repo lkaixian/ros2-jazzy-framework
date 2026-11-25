@@ -42,3 +42,6 @@
 {"id": 1041, "category": "refuse", "command": "Put the apple in the bowl", "expect": {"refuse": true}}
 {"id": 1042, "category": "refuse", "command": "Make me a sandwich", "expect": {"refuse": true}}
 {"id": 1043, "category": "refuse", "command": "Throw this away", "expect": {"refuse": true}}
+{"id": 1044, "category": "manipulate", "command": "Pick up the cup", "expect": {"macro": "pick_object"}}
+{"id": 1045, "category": "manipulate", "command": "Grab the bottle in front of you", "expect": {"macro": "pick_object"}}
+{"id": 1046, "category": "manipulate", "command": "Take the apple from the far corner to the door and put it on the shelf", "expect": {"visit": ["far_corner", "door"], "macro": "move_object"}}

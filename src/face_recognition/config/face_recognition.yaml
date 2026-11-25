@@ -1,8 +1,9 @@
 face_recognition_node:
   ros__parameters:
-    model: yolov11n-face.pt   # user-supplied YOLO11 face weights
-    embed_model: yolo11n-cls.pt
+    model: yolo26s-face.pt   # YOLO26s face weights (akanametov/yolo-face 1.0.0), repo root
+    embed_model: yolo26n-cls.pt
     gallery_dir: faces
     threshold: 0.6
     publish_embedding: true   # needed by the BT node ExtractFaceFeature
     image_topic: ""
+    rotate: 0

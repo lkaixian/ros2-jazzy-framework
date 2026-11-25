@@ -1,5 +1,8 @@
 extension: arm_extension
 nodes:
-  MoveArmToPose: {category: Action, required: [x, y, z], optional: [frame, speed, roll, pitch, yaw], description: "Move end effector to a Cartesian pose via MoveIt (orientation only if roll/pitch/yaw given)"}
-  OpenGripper: {category: Action, required: [], optional: [width], description: "Open gripper"}
-  CloseGripper: {category: Action, required: [], optional: [force], description: "Close gripper"}
+  ArmPark: {category: Action, required: [], optional: [], description: "Fold the arm to its rest pose slowly along a checked route; refuses outside the taught free-space map"}
+  MoveArmToPose: {category: Action, required: [x, y, z], optional: [frame, speed, roll, pitch, yaw], description: "Move the gripper to a point in the arm base frame (metres); only pitch can be set, refuses outside the taught range"}
+  OpenGripper: {category: Action, required: [], optional: [width], description: "Open the gripper to a finger gap in mm (default 60, max 72)"}
+  CloseGripper: {category: Action, required: [], optional: [force], description: "Close the gripper; succeeds only if it stalled on an object"}
+  PickObject: {category: Action, required: [label], optional: [], description: "Grasp the object with this detector label seen by the arm camera, then hold it at the approach pose; fails if not seen, unreachable or nothing was grasped"}
+  PlaceObject: {category: Action, required: [place], optional: [], description: "Put the held object down at a named place (shelf, table, bin) and release it; refuses an unknown place or one outside the taught range"}

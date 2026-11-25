@@ -6,8 +6,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 
 ARGS = ('odom_topic', 'cmd_vel_topic', 'cmd_vel_stamped', 'max_linear', 'max_angular',
-        'persons_topic', 'arm_group', 'arm_ee_link', 'arm_base_frame', 'move_group_action',
-        'gripper_action', 'scan_yaw_offset', 'scan_required')
+        'persons_topic', 'scan_yaw_offset', 'scan_required')
 F = 'extensions.yaml'
 
 
@@ -35,10 +34,8 @@ def _nodes(context):
     if flag(context, 'enable_nav'):
         out.append(n('nav_extension', 'nav_extension_node', 'nav_extension_node', F))
     if flag(context, 'enable_arm'):
-        out.append(n('arm_extension', 'arm_extension_node', 'arm_extension_node', F,
-                     {'arm_group': 'group', 'arm_ee_link': 'ee_link',
-                      'arm_base_frame': 'base_frame', 'move_group_action': 'move_group_action',
-                      'gripper_action': 'gripper_action'}))
+        out.append(n('arm_extension', 'arm_extension_node', 'arm_extension_node', F))
+        out.append(n('arm_extension', 'arm_health_node', 'arm_health_node', F))
     return out
 
 

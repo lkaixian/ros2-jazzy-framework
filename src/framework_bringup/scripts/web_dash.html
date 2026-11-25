@@ -83,6 +83,12 @@ button.small { padding: 2px 10px; font-size: 12px; box-shadow: none; }
 .g-R { color: var(--busy); font-weight: 700; } .g-S { color: var(--ok); } .g-F { color: var(--err); font-weight: 700; }
 .g-K, .g-N { color: var(--off); }
 .empty { color: var(--mute); padding: 8px 0; }
+input { font: inherit; flex: 1; min-width: 220px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+pre.code { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--plot); color: #cdd5e3; border-radius: 10px; padding: 10px 12px;
+  max-height: 46vh; overflow: auto; margin: 0; white-space: pre-wrap; word-break: break-word; }
+.jbar { position: relative; flex: 1; height: 8px; background: var(--off-bg); border-radius: 4px; min-width: 80px; }
+.jbar i { position: absolute; top: -3px; width: 3px; height: 14px; background: var(--accent); border-radius: 2px; }
+.jbar b { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--mute); }
 .meter { position: relative; height: 22px; background: var(--off-bg); border-radius: 11px; overflow: hidden; margin: 6px 0 8px; }
 #mic-bar { height: 100%; width: 0; background: var(--ok); transition: width .12s linear; }
 .meter .mark { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--err); }
@@ -123,6 +129,8 @@ select { font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid 
   <nav>
     <div class="brand"><i>R</i>Robot</div>
     <a href="#overview" data-p="overview">Overview</a>
+    <a href="#prompt" data-p="prompt">Prompt</a>
+    <a href="#arm" data-p="arm">Arm</a>
     <a href="#live" data-p="live">Live</a>
     <a href="#voice" data-p="voice">Voice</a>
     <a href="#logs" data-p="logs">Logs</a>
@@ -143,6 +151,34 @@ select { font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid 
       <div class="tiles" id="tiles"></div>
       <div class="grid"><div class="card" id="c-llm"></div><div class="card" id="c-robot"></div>
         <div class="card" id="c-devices"></div><div class="card" id="c-cluster" hidden></div></div>
+    </section>
+
+    <section class="page" id="p-prompt">
+      <div class="card">
+        <h2>Task <span id="mode-info" style="text-transform:none;letter-spacing:0"></span></h2>
+        <div class="bar"><input id="task" placeholder="e.g. go to the door and say hello" maxlength="500" autocomplete="off">
+          <button class="primary" id="send">Send task</button><button id="run" class="danger">Run plan</button><button id="halt2">Halt</button></div>
+        <div class="empty">Send = the LLM plans and the validator checks it (nothing moves). Run = hands the validated plan to bt_executor, which
+          only logs it unless it was started with dry_run:=false.</div>
+      </div>
+      <div class="grid">
+        <div class="card" id="c-plan"></div>
+        <div class="card"><h2>LLM task spec</h2><pre class="code" id="spec">-</pre></div>
+        <div class="card"><h2>Behaviour tree XML</h2><pre class="code" id="xml">-</pre></div>
+        <div class="card"><h2>Tasks sent</h2><div id="tasks" class="tree"></div><h2 style="margin-top:12px">LLM errors</h2><div id="llmerr" class="tree"></div></div>
+      </div>
+    </section>
+
+    <section class="page" id="p-arm">
+      <div class="tiles" id="arm-tiles"></div>
+      <div class="grid">
+        <div class="card" id="c-joints"></div>
+        <div class="card"><h2>Arm eye</h2><div class="view"><img id="armvideo" alt=""><div class="none" id="no-arm">no image on /arm_cam/rgb/image_raw
+          (start sensors.launch.py enable_oak:=true)</div></div></div>
+        <div class="card"><h2>More arm detail</h2><div class="empty">Servo temperature, voltage, gripper current and the free-space map are in the
+          arm monitor: <code>python3 tools/arm/arm_gui.py</code> then open port 8088. It reads the servos directly and is read-only.
+          Arm moves are not started from here: use <code>tools/arm/arm_tool.py</code> (slow, checked against the taught free space).</div></div>
+      </div>
     </section>
 
     <section class="page" id="p-live">
@@ -188,8 +224,8 @@ select { font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid 
 const token = new URLSearchParams(location.search).get('t') || '';
 const H = {'X-Token': token};
 const GLYPH = {R: '>', S: '+', F: 'x', K: '-'};
-const TITLES = {overview: 'Overview', live: 'Live', voice: 'Voice', logs: 'Logs', plan: 'Plan', nodes: 'Nodes'};
-let vsrc = 'objects', page = 'overview', lastMsg = '', mapV = 0, scanBusy = false;
+const TITLES = {overview: 'Overview', prompt: 'Prompt', arm: 'Arm', live: 'Live', voice: 'Voice', logs: 'Logs', plan: 'Plan', nodes: 'Nodes'};
+let vsrc = 'objects', lastPlan = '', page = 'overview', lastMsg = '', mapV = 0, scanBusy = false;
 
 function el(tag, cls, text, kids) {
   const e = document.createElement(tag);
@@ -230,6 +266,8 @@ function show(p) {
   // the camera stream is only open while the Live page is
   setVideo();
   if (page === 'live') pollScan();
+  if (page === 'prompt') pollPrompt();
+  if (page === 'arm') pollArm();
   if (page === 'logs') pollLogs();
   if (page === 'voice') pollVoice();
 }
@@ -238,6 +276,8 @@ window.addEventListener('hashchange', () => show(location.hash.slice(1)));
 function setVideo() {
   if (page === 'live') $('video').src = '/video.mjpg?src=' + vsrc + '&t=' + encodeURIComponent(token);
   else $('video').removeAttribute('src');
+  if (page === 'arm') $('armvideo').src = '/video.mjpg?src=arm&t=' + encodeURIComponent(token);
+  else $('armvideo').removeAttribute('src');
 }
 $('vsrc').replaceChildren(...['objects', 'persons', 'faces', 'raw'].map(v => {
   const b = el('button', 'chip' + (v === vsrc ? ' on' : ''), v);
@@ -257,6 +297,8 @@ function render(s) {
   const nOn = nodes.filter(n => n.state === 'ONLINE' || n.state === 'BUSY').length;
   const dBad = devs.filter(d => d.state === 'ERROR' || d.state === 'WARN').length;
   const t = s.task || {}, b = s.battery;
+  let mode = {}; try { mode = JSON.parse(s.mode || '{}'); } catch (e) { /* not JSON yet */ }
+  $('mode-info').textContent = mode.mode ? ' mode ' + mode.mode + (mode.run_ok ? '' : ' (run blocked)') : '';
   $('tiles').replaceChildren(
     tile('LLM', ls, llm.reason || '', lcls),
     tile('Battery', b ? b.text.replace('base battery ', '') : '-', b ? '' : 'no reading',
@@ -264,7 +306,11 @@ function render(s) {
     tile('Task', t.state || 'idle', t.detail || t.task || '', t.state === 'failed' ? 'err' : 'ok'),
     tile('Devices', devs.filter(d => d.state === 'ONLINE').length + ' / ' + devs.filter(d => d.state !== 'OFFLINE').length,
          dBad ? dBad + ' need attention' : 'all present', dBad ? 'warn' : 'ok'),
-    tile('Nodes', nOn + ' / ' + nodes.length, nErr ? nErr + ' in error' : 'no errors', nErr ? 'err' : 'ok'));
+    tile('Nodes', nOn + ' / ' + nodes.length, nErr ? nErr + ' in error' : 'no errors', nErr ? 'err' : 'ok'),
+    tile('Safety stop', /^latched/.test(s.stop || '') ? 'LATCHED' : s.stop ? 'armed' : '?', s.stop || 'no safety/stop_state',
+         /^latched/.test(s.stop || '') ? 'err' : s.stop ? 'ok' : 'off'),
+    tile('Robot mode', mode.mode || '?', mode.run_ok ? 'plans may run' : (mode.reasons || []).concat(mode.missing || []).join(', ') || 'plans blocked',
+         mode.run_ok ? 'ok' : mode.mode ? 'warn' : 'off'));
 
   fill($('c-llm'), 'LLM', [row('server', ls === 'down' ? 'ERROR' : ls === 'degraded' ? 'WARN' : 'ONLINE', ls + (llm.reason ? ' - ' + llm.reason : ''))]
     .concat((llm.endpoints || []).map(e => {
@@ -306,6 +352,7 @@ function render(s) {
     $('map-info').textContent = ' ' + m.w + 'x' + m.h + ' @ ' + m.res + ' m';
     if (m.v !== mapV) { mapV = m.v; $('map').src = '/map.png?t=' + encodeURIComponent(token) + '&v=' + m.v; }
   }
+  $('no-arm').hidden = (s.video || []).includes('arm');
   $('domain').textContent = 'domain ' + s.domain + (s.secure ? ' - SROS2' : ' - unsecured');
   if (s.msg && s.msg !== lastMsg) { lastMsg = s.msg; toast(s.msg); }
 }
@@ -393,6 +440,48 @@ async function pollVoice() {
   voiceBusy = false;
   setTimeout(pollVoice, 250);
 }
+
+const RAD = 180 / Math.PI;
+async function pollArm() {
+  if (page !== 'arm') return;
+  try {
+    const d = await (await fetch('/api/arm', {headers: H})).json(), names = Object.keys(d.joints || {});
+    const stale = d.age === null || d.age > 2;
+    $('arm-tiles').replaceChildren(
+      tile('Joint states', stale ? 'none' : names.length + ' joints', d.age === null ? 'no /joint_states: start the arm driver' : 'last ' + d.age + ' s ago', stale ? 'off' : 'ok'),
+      tile('Arm eye', (document.querySelector('#no-arm').hidden) ? 'live' : 'no image', '/arm_cam/rgb/image_raw', document.querySelector('#no-arm').hidden ? 'ok' : 'off'));
+    fill($('c-joints'), 'Joints (bar: -180 to +180 deg)', names.length ? names.map(n => {
+      const [p, v, e] = d.joints[n], bar = el('span', 'jbar', null, [el('b'), el('i')]);
+      bar.lastChild.style.left = 'calc(' + Math.max(0, Math.min(100, 50 + 50 * p * RAD / 180)) + '% - 1px)';
+      const r = el('div', 'row', null, [el('span', 'name', n), bar,
+        el('span', 'detail', (p * RAD).toFixed(1) + ' deg  ' + p.toFixed(3) + ' rad' + (v === null ? '' : '  v ' + v) + (e === null ? '' : '  effort ' + e))]);
+      r.querySelector('.detail').style.flex = 'none'; r.querySelector('.detail').style.width = '260px';
+      return r;
+    }) : [el('div', 'empty', 'No joint data.')]);
+  } catch (e) { /* retried */ }
+  setTimeout(pollArm, 500);
+}
+
+async function pollPrompt() {
+  if (page !== 'prompt') return;
+  try {
+    const d = await (await fetch('/api/prompt', {headers: H})).json(), p = d.plan;
+    fill($('c-plan'), 'Latest plan', p ? [
+      row('task', 'ONLINE', p.task), row('validator', p.valid ? 'ONLINE' : 'ERROR', (p.valid ? 'valid' : 'rejected') + '  attempts ' + p.attempts + '  at ' + p.time),
+      row('executor', 'ONLINE', d.status || 'no bt/status yet')].concat((p.errors || []).map(x => row('error', 'ERROR', x)))
+      : [el('div', 'empty', 'No plan yet. Send a task above.')]);
+    const key = p ? p.time + p.task + p.attempts : '';
+    if (key !== lastPlan) { lastPlan = key; $('spec').textContent = p && p.spec ? p.spec : '-'; $('xml').textContent = p && p.xml ? p.xml : '-'; }
+    const list = (box, rows) => box.replaceChildren(...(rows.length ? rows.slice().reverse().map(x => el('div', '', null, [el('span', 't', x[0] + '  '), document.createTextNode(x[1])])) : [el('div', 'empty', 'none')]));
+    list($('tasks'), d.tasks || []); list($('llmerr'), d.errors || []);
+  } catch (e) { /* retried */ }
+  setTimeout(pollPrompt, 1000);
+}
+const sendTask = () => { const v = $('task').value.trim(); if (v) { post('/api/task', {text: v}); $('task').value = ''; } };
+$('send').onclick = sendTask;
+$('task').onkeydown = e => { if (e.key === 'Enter') sendTask(); };
+$('run').onclick = () => confirm('Run the validated plan? bt_executor only logs it unless started with dry_run:=false.') && post('/api/run');
+$('halt2').onclick = () => confirm('Halt the running task?') && post('/api/halt');
 
 async function poll() {
   try {

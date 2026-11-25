@@ -28,7 +28,7 @@ Read this before trusting any claim. The honest summary: **everything works in s
 |---|---|
 | Any **real robot** (Kobuki base) | bumper/cliff latch, lidar and battery thresholds, `scan_required`, real stopping distances |
 | Real RPLIDAR with SLAM and real RealSense depth | only a simulated lidar was used |
-| Arm and MoveIt execution | only goal construction is tested; the arm model is undecided |
+| Arm: guarded motion, IK, pick/place BT nodes | simulation and unit tests only (`arm_control`, `arm_extension` with `live:=false`); nothing driven on the real arm: hand-eye unverified, gripper through the ROS driver unverified, `places` empty |
 | YOLO nodes on a real camera; face and pose models | the scene summary was fed synthetic skeletons; gesture accuracy on real video unknown |
 | Real speech recognition, Piper and Kokoro playback, live microphone | the word error rate is unmeasured |
 | Any second machine or WiFi | cluster, workspaces, LLM failover across hosts |

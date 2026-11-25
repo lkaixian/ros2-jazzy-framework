@@ -2,17 +2,21 @@
 <package format="3">
   <name>arm_extension</name>
   <version>0.1.0</version>
-  <description>MoveIt-based arm BT nodes (model-agnostic: configure group/link)</description>
+  <description>Guarded arm BT nodes (no MoveIt): free-space map, taught routes, IK, pick</description>
   <maintainer email="lkaixian91@gmail.com">larm</maintainer>
   <license>Apache-2.0</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>bt_common</exec_depend>
   <exec_depend>bt_pipeline_msgs</exec_depend>
-  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>arm_control</exec_depend>
+  <exec_depend>object_detection_msgr</exec_depend>
+  <exec_depend>dynamixel_interfaces</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
   <exec_depend>control_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>shape_msgs</exec_depend>
   <test_depend>python3-pytest</test_depend>
   <export>
     <build_type>ament_python</build_type>

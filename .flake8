@@ -11,4 +11,5 @@ extend-ignore =
 per-file-ignores =
     tools/integration/*.py: E3,E4,E501
     tools/slm/*.py: E501
+    tools/arm/*.py: E501
     src/*/launch/*.py: E501

@@ -1,0 +1,62 @@
+<!doctype html><meta charset="utf-8"><title>Arm monitor</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#0f1317;--card:#171d24;--ink:#e6ebf1;--mute:#8a96a3;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--line:#2a323c;--acc:#58a6ff;--map:#2a4a6b}
+@media (prefers-color-scheme:light){:root{--bg:#f3f5f8;--card:#fff;--ink:#14181d;--mute:#5d6875;--line:#d5dbe3;--acc:#0969da;--map:#a9c8ea}}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
+header b{font-size:15px}#src{color:var(--mute)}#age{margin-left:auto}
+main{display:grid;grid-template-columns:minmax(300px,1.1fr) minmax(300px,1.1fr) minmax(280px,.9fr);gap:12px;padding:12px}
+@media (max-width:1000px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px}
+h2{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+canvas,img{width:100%;border-radius:6px;background:#0a0d10;display:block}
+.row{display:flex;justify-content:space-between;gap:8px;padding:2px 0}.bar{height:8px;background:var(--line);border-radius:4px;position:relative;margin:2px 0 6px}
+.bar i{position:absolute;top:-3px;width:3px;height:14px;background:var(--acc);border-radius:2px}.bar u{position:absolute;top:0;height:8px;background:var(--map);border-radius:4px}
+table{width:100%;border-collapse:collapse}td,th{padding:2px 4px;text-align:right;border-bottom:1px solid var(--line)}th:first-child,td:first-child{text-align:left}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad);font-weight:600}.mute{color:var(--mute)}
+</style>
+<header><b>Arm monitor</b><span class="mute">read-only</span><span id="src"></span><span id="age" class="mute"></span></header>
+<main>
+ <section><div class="card"><h2>Arm eye</h2><img id="eye" src="/video" alt="arm camera (waiting for frames)"><div class="row"><span>distance ahead</span><b id="depth">-</b></div><div class="row"><span>detections</span><span id="dets" class="mute">-</span></div><div id="ferr" class="bad"></div></div>
+  <div class="card" style="margin-top:12px"><h2>Gripper</h2><div class="row"><b id="gap" style="font-size:20px">-</b><span id="gcur">-</span></div><div class="bar" id="gbar"><u style="left:0;width:100%"></u><i id="gmark"></i></div><canvas id="hist" height="120"></canvas><div class="mute">last 45 s: gap (blue, mm) and current (orange, mA)</div></div></section>
+ <section><div class="card"><h2>Pose: top view (front is up, left is left)</h2><canvas id="top" height="300"></canvas></div><div class="card" style="margin-top:12px"><h2>Pose: side view (front is right)</h2><canvas id="side" height="340"></canvas><div class="mute">light area = space the arm has been hand-guided through without touching anything (ideal case, not a load limit)</div></div></section>
+ <section><div class="card"><h2>Joints (marker = now, band = range seen)</h2><div id="joints"></div></div>
+  <div class="card" style="margin-top:12px"><h2>Servo health</h2><table id="health"></table><div class="row"><span>gravity load estimate</span><b id="load">-</b></div><div class="mute">model estimate from the URDF, gravity only</div></div>
+  <div class="card" style="margin-top:12px"><h2>Messages</h2><div id="msg" class="mute">-</div></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);let MAP={top:[],side:[]};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+fetch('/map').then(r=>r.json()).then(m=>MAP=m);
+function setup(c){const dpr=window.devicePixelRatio||1,w=c.clientWidth,h=+c.getAttribute('height');c.width=w*dpr;c.height=h*dpr;c.style.height=h+'px';const x=c.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);return [x,w,h]}
+function view(id,pts,sk,xr,yr,fx,fy,gripColor){const [x,w,h]=setup($(id));x.clearRect(0,0,w,h);
+ const sx=w/(xr[1]-xr[0]),sy=h/(yr[1]-yr[0]),s=Math.min(sx,sy),ox=(w-s*(xr[1]-xr[0]))/2,oy=(h-s*(yr[1]-yr[0]))/2;
+ const P=(a,b)=>[ox+(a-xr[0])*s,h-oy-(b-yr[0])*s];
+ x.fillStyle=css('--map');for(const p of pts){const q=P(fx(p),fy(p));x.fillRect(q[0]-1.5,q[1]-1.5,3,3)}
+ x.strokeStyle=css('--line');x.beginPath();const o=P(0,0);x.moveTo(o[0]-8,o[1]);x.lineTo(o[0]+8,o[1]);x.moveTo(o[0],o[1]-8);x.lineTo(o[0],o[1]+8);x.stroke();
+ if(!sk)return;x.lineWidth=4;x.lineCap='round';x.strokeStyle=css('--acc');x.beginPath();sk.forEach((p,i)=>{const q=P(fx(p),fy(p));i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1])});x.stroke();
+ sk.forEach((p,i)=>{const q=P(fx(p),fy(p));x.fillStyle=i==sk.length-1?gripColor:css('--ink');x.beginPath();x.arc(q[0],q[1],i==sk.length-1?7:4,0,7);x.fill()})}
+function hist(h){const [x,w,ht]=setup($('hist'));x.clearRect(0,0,w,ht);if(!h.length)return;
+ const line=(k,lo,hi,col)=>{x.strokeStyle=col;x.lineWidth=1.6;x.beginPath();h.forEach((r,i)=>{const X=w*(1+r[0]/45),Y=ht-(r[k]-lo)/(hi-lo)*(ht-6)-3;i?x.lineTo(X,Y):x.moveTo(X,Y)});x.stroke()};
+ line(1,10,80,css('--acc'));line(2,0,900,'#e8833a')}
+function cls(v,warn,bad){return v>=bad?'bad':v>=warn?'warn':'ok'}
+async function tick(){try{const s=await (await fetch('/state')).json();
+ $('src').textContent='source: '+s.src;$('age').textContent=new Date().toLocaleTimeString();
+ const g=s.grip,gc=g&&g.cur_ma>250?'#f85149':g&&g.cur_ma>40?'#d29922':'#3fb950';
+ view('top',MAP.top,s.sk,[-0.45,0.45],[-0.16,0.42],p=>p[1]*-1,p=>p[0],gc);view('side',MAP.side,s.sk,[-0.16,0.42],[-0.32,0.46],p=>p[0],p=>p[2],gc);
+ $('depth').textContent=s.frame.depth_m?s.frame.depth_m.toFixed(2)+' m':'-';$('ferr').textContent=s.frame.err||'';
+ $('dets').textContent=s.frame.dets.map(d=>d.label+' '+d.conf).join(', ')||'none';
+ if(g){$('gap').textContent=g.gap==null?'-':g.gap.toFixed(0)+' mm';$('gcur').innerHTML='<span class="'+cls(g.cur_ma,40,250)+'">'+g.cur_ma.toFixed(0)+' mA</span>'+(g.torque?' &middot; torque on':' &middot; torque off');
+  $('gmark').style.left=Math.max(0,Math.min(100,(g.gap-20)/52*100))+'%'}
+ hist(s.hist);
+ if(s.joints){$('joints').innerHTML=s.joints.map((v,i)=>{const r=s.range['joint'+(i+1)]||[-3.14,3.14],lo=Math.min(r[0],v),hi=Math.max(r[1],v),pc=a=>((a-lo)/(hi-lo)*100).toFixed(1);
+   return '<div class="row"><span>joint '+(i+1)+'</span><b>'+v.toFixed(2)+' rad ('+(v*57.296).toFixed(0)+'&deg;)</b></div><div class="bar"><u style="left:'+pc(r[0])+'%;width:'+(pc(r[1])-pc(r[0]))+'%"></u><i style="left:'+pc(v)+'%"></i></div>'}).join('');
+  $('load').innerHTML='<span class="'+cls(s.load,.4,.8)+'">'+(s.load*100).toFixed(0)+' % of stall</span>';
+  const sv=s.servo,rows=['<tr><th></th><th>mA</th><th>&deg;C</th><th>V</th><th>err</th></tr>'];
+  for(let i=0;i<4;i++)rows.push('<tr><td>joint '+(i+1)+'</td><td>'+(sv.cur_ma?sv.cur_ma[i].toFixed(0):'-')+'</td><td>'+(sv.temp?sv.temp[i]:'-')+'</td><td>'+(sv.volt?sv.volt[i].toFixed(1):'-')+'</td><td class="'+(sv.err&&sv.err[i]?'bad':'ok')+'">'+(sv.err?sv.err[i]:'-')+'</td></tr>');
+  if(g)rows.push('<tr><td>gripper</td><td>'+g.cur_ma.toFixed(0)+'</td><td>'+(g.temp??'-')+'</td><td>'+(g.volt?g.volt.toFixed(1):'-')+'</td><td class="'+(g.err?'bad':'ok')+'">'+(g.err??'-')+'</td></tr>');
+  $('health').innerHTML=rows.join('')}
+ $('msg').textContent=s.msg||(s.joints?'ok':'waiting for data from the servos or the driver')}catch(e){$('msg').textContent='viewer lost: '+e}
+ setTimeout(tick,150)}
+tick();
+</script>

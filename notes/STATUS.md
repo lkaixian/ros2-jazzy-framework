@@ -11,7 +11,7 @@ Verification levels used below:
 
 | Area | Packages | unit | sim | hw | Notes |
 |---|---|---|---|---|---|
-| Object detection (YOLO11 boxes) | `object_detection`, `yolo11_common`, `object_detection_msgr` | yes | real photo + real model: yes | no camera | boxes identical to Ultralytics; announces its classes; `train_detector` wrapper smoke-trained on GTX 1650 (peak 1.6 GB) |
+| Object detection (YOLO26 boxes) | `object_detection`, `yolo11_common`, `object_detection_msgr` | yes | real photo + real model: yes | no camera | boxes identical to Ultralytics; announces its classes; `train_detector` wrapper smoke-trained on GTX 1650 (peak 1.6 GB) |
 | Person detect/track/pose | `person_detection`(+`_msgr`) | partly | no (needs weights/video) | no | `Person.distance_m` added by depth ranging node |
 | Face detect + features + enroll | `face_recognition`(+`_msgr`) | gallery yes | stub only | no | needs user-supplied YOLO11 *face* weights; features are YOLO cls embeddings (weak, see debt) |
 | LLM bridge (C++) | `llm_bridge` | yes | **real llama-server + Gemma 4 E2B (CUDA, GTX 1650)**: 15/15 valid, sensible plans, 1-2 s each (`llm_eval.py`); fake servers for failover | no robot | prompt = macros + nodes + descriptions + labels via `bt_validator/catalog`; replies constrained by a JSON schema (macro whitelist, real ports); `--reasoning off` required; see RUNBOOK |
