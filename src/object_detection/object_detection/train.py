@@ -46,7 +46,7 @@ def main(argv=None):
     """Run the fine-tune; see the module docstring."""
     ap = argparse.ArgumentParser(description='Fine-tune a YOLO11 detector (boxes only).')
     ap.add_argument('--data', required=True, help='Ultralytics dataset yaml')
-    ap.add_argument('--base', default='yolo11n.pt',
+    ap.add_argument('--base', default='yolo26s.pt',
                     help='weights to start from (n/s fit 4 GB)')
     ap.add_argument('--epochs', type=int, default=100)
     ap.add_argument('--imgsz', type=int, default=640)
@@ -68,7 +68,7 @@ def main(argv=None):
     task = getattr(model, 'task', 'detect')
     if 'seg' in os.path.basename(a.base) or task != 'detect':
         raise SystemExit(f'{a.base} is a {task} model; use a plain detect model (e.g. '
-                         'yolo11n.pt): segmentation costs too much VRAM here')
+                         'yolo26s.pt): segmentation costs too much VRAM here')
     model.train(**kwargs)
     best = os.path.join(a.project, a.name, 'weights', 'best.pt')
     print(f'\nbest weights: {best}\nuse: model: {os.path.abspath(best)}  in param/perception.yaml')

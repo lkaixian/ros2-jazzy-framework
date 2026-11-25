@@ -81,7 +81,7 @@ robot_mode_node:
 
 bt_executor_node:
   ros__parameters:
-    dry_run: true           # true: extension nodes only log; false: commands hardware
+    dry_run: true           # default ON: extension nodes only log. Off for one run: ros2 launch ... dry_run:=false (hardware moves!)
     dry_run_exempt: [social_extension]   # these run for real even in a dry run: speech and face enrolment, no motion
     auto_run: true          # true: run every valid plan immediately (dry_run: true still keeps the hardware still)
     tick_hz: 20.0
@@ -104,11 +104,12 @@ bt_executor_node:
 
 object_detection_node:
   ros__parameters:
-    model: yolo11n.pt
+    model: yolo26s.pt
     openvino: false
     conf: 0.4
     device: ""              # "" = auto, "cpu", "0" (GPU)
     image_topic: ""         # "" = open the webcam
+    rotate: 0               # degrees (0/90/180/270) to turn this node's input upright; the arm eye (OAK) is mounted upside down: 180
     raw_topic: /camera/image_raw   # also publish the raw webcam frames (person_detection reads them)
     camera_index: 0
     rate_hz: 30.0
@@ -118,11 +119,12 @@ object_detection_node:
 
 person_detection_node:
   ros__parameters:
-    model: yolo11n-pose.pt  # yolo11n.pt for boxes only
+    model: yolo26s-pose.pt  # yolo26s.pt for boxes only
     openvino: false
     conf: 0.4
     device: ""
     image_topic: /camera/image_raw   # raw webcam frames from object_detection_node (raw_topic); "" = open the webcam here
+    rotate: 0               # degrees (0/90/180/270) to turn this node's input upright; the arm eye (OAK) is mounted upside down: 180
     image_out: detections/person_image
     camera_index: 0
     rate_hz: 30.0
@@ -138,13 +140,14 @@ face_recognition_node:
     conf: 0.4
     device: ""
     image_topic: /camera/image_raw   # raw webcam frames (object_detection_node raw_topic); "" = open the webcam here
+    rotate: 0               # degrees (0/90/180/270) to turn this node's input upright; the arm eye (OAK) is mounted upside down: 180
     image_out: detections/face_image
     camera_index: 0
     rate_hz: 30.0
     show: false
     publish_image: true
     frame_id: camera
-    embed_model: yolo11n-cls.pt
+    embed_model: yolo26n-cls.pt
     gallery_dir: faces      # one <name>.npy per identity
     threshold: 0.6          # cosine similarity needed to name a face
     publish_embedding: true # required by the BT node ExtractFaceFeature
@@ -218,8 +221,8 @@ odom_extension_node:
     stop_distance: 0.30         # m
     guard_half_width_deg: 35.0
     scan_stale_sec: 0.5
-    scan_required: false        # true: no fresh scan = refuse to drive (use on the real robot; false keeps lidar-less sims working)
-    scan_yaw_offset: 0.0        # rad, lidar yaw relative to the base forward axis
+    scan_required: true         # no fresh scan = refuse to drive (real robot). Lidar-less sims (nav_sim has its own scan): set false
+    scan_yaw_offset: 3.1416     # rad, lidar yaw relative to the base forward axis: must match base_to_laser yaw in navigation.yaml
     turn_clearance: 0.22        # m: RotateBy refuses to turn with anything closer than this in any direction (Kobuki radius 0.18 + margin; 0 = off)
     rate_hz: 20.0
     republish_sec: 3.0
@@ -239,8 +242,8 @@ pid_extension_node:
     stop_distance: 0.40          # m (people: keep at least this far)
     guard_half_width_deg: 35.0
     scan_stale_sec: 0.5
-    scan_required: false
-    scan_yaw_offset: 0.0
+    scan_required: true         # no fresh scan = refuse to drive (real robot)
+    scan_yaw_offset: 3.1416     # rad: lidar faces backwards on this robot (= base_to_laser yaw in navigation.yaml)
     blocked_give_up_sec: 3.0     # blocked this long -> the node fails instead of waiting forever
 
 pose_extension_node:
@@ -341,9 +344,9 @@ sound_event_node:           # steady-tone (doorbell) detector; tuned on syntheti
 stt_node:
   ros__parameters:
     engine: faster_whisper  # faster_whisper | vosk | mock
-    model: base.en   # portable default; setup.sh writes this computer's model to models/local.yaml, which overrides it
+    model: base.en          # portable default (downloads on first use); setup.sh writes the model chosen for this computer to models/local.yaml, which overrides this
     language: ""
-    device: cpu
+    device: cpu             # cuda needs CUDA 12 cuBLAS + cuDNN 9; the node falls back to cpu/int8 if they are missing
     compute_type: int8
     min_confidence: 0.0
 
@@ -354,7 +357,7 @@ transcript_to_task_node:
 
 tts_node:
   ros__parameters:
-    engine: espeak         # espeak (robotic, no model) | piper | kokoro | mock
+    engine: espeak          # espeak (robotic, no model) | piper | kokoro | mock
     voice: ""               # kokoro needs a voice name here
     rate: 160
     piper_model: ""
@@ -382,7 +385,7 @@ plan_announcer_node:
 
 start: true               # true: launch llama-server together with the pipeline
 model: ""                 # local GGUF path; "" = download hf_repo below into llama.cpp's cache
-hf_repo: ggml-org/gemma-4-E4B-it-GGUF   # E4B (RTX 3080 laptop). On a 4 GB GPU use ggml-org/gemma-4-E2B-it-GGUF (E4B Q4_0 is 4.28 GiB)
+hf_repo: ggml-org/gemma-4-E4B-it-GGUF:Q4_0   # E4B (RTX 3080 laptop). On a 4 GB GPU use ggml-org/gemma-4-E2B-it-GGUF (E4B Q4_0 is 4.28 GiB)
 port: 8080                # keep in step with llm_bridge_node.server_url (pipeline.yaml)
 # --reasoning off: Gemma 4 otherwise spends the 512-token reply budget on hidden "thinking" and the JSON is cut off
 extra_args: ["-ngl", "99", "-c", "8192", "-np", "1", "--reasoning", "off"]   # the planner prompt is ~4.3k tokens + 768 reply: 4096 rejected every request; -np 1: one request at a time gets the whole window
@@ -399,18 +402,27 @@ extra_args: ["-ngl", "99", "-c", "8192", "-np", "1", "--reasoning", "off"]   # t
 # AMCL drift, and obstacles appear in the wrong place. Measure from the `base` frame origin
 # (Kobuki: centre of the wheel axis, on the floor plane unless your URDF says otherwise):
 #   x forward (m), y left (m), z up (m); yaw/pitch/roll in radians.
-# Check with:  ros2 run tf2_ros tf2_echo base laser
+# Check with:  ros2 run tf2_ros tf2_echo base laser     (and  tf2_echo odom laser  to see the whole chain connect)
 
 static_tf:
-  base_to_laser:                  # RPLIDAR A1 (driver frame_id: laser)
-    parent: base
-    child: laser
-    x: 0.00                       # PLACEHOLDER
-    y: 0.00                       # PLACEHOLDER
-    z: 0.25                       # PLACEHOLDER
+  footprint_to_base:              # the Kobuki driver publishes odom -> base_footprint (verified on /tf), everything here uses `base`
+    parent: base_footprint        # both sit at the centre of the wheel axis on the floor: identity. Delete this entry if a
+    child: base                   # driver build already publishes `base` itself (two parents for one frame break TF)
+    x: 0.0
+    y: 0.0
+    z: 0.0
     roll: 0.0
     pitch: 0.0
-    yaw: 0.0                      # PLACEHOLDER (0 = lidar 0 deg points forward)
+    yaw: 0.0
+  base_to_laser:                  # RPLIDAR A2M8 (driver frame_id: laser)
+    parent: base
+    child: laser
+    x: 0.15                       # WALL TEST: lidar 41.2 cm from a wall, robot front edge ~40 cm (+-2): x = 17.6 + D - 41.2 (D=37..40 -> 14..16 cm)
+    y: 0.00                       # on the centreline (by eye)
+    z: 0.14                       # measured: Kobuki 10.5 cm + lidar head ~3.5 cm (scan plane ~ the head); 2D mapping barely depends on it
+    roll: 0.0
+    pitch: 0.0
+    yaw: 3.1416                   # MEASURED: lidar 0 deg points to the robot's rear (hand over the front -> blind rear arc, centre bumper hit)
   base_to_camera:                 # RealSense camera_link (published by realsense2_camera)
     parent: base
     child: camera_link
@@ -427,7 +439,7 @@ navigation:
 lidar:
   launch_package: sllidar_ros2    # from ~/ros2_ws; used by sensors.launch.py when installed
   launch_file: sllidar_a2m8_launch.py
-  serial_port: /dev/ttyUSB0
+  serial_port: /dev/rplidar       # udev symlink; ttyUSB0/1 swap between boots and the Kobuki driver defaults to ttyUSB0
   serial_baudrate: "115200"
   frame_id: laser
   angle_compensate: "true"
@@ -454,10 +466,10 @@ nav_sim_node:                 # 2D simulator for testing Nav2/SLAM without a rob
     start_y: 0.5
     start_yaw: 0.0
     robot_radius: 0.17
-    lidar_x: 0.0              # must match static_tf base_to_laser in navigation.yaml
+    lidar_x: 0.15             # must match static_tf base_to_laser in navigation.yaml (measured mount, lidar 0 deg faces the rear)
     lidar_y: 0.0
-    lidar_z: 0.25
-    lidar_yaw: 0.0
+    lidar_z: 0.14
+    lidar_yaw: 3.1416
     lidar_range_min: 0.15
     lidar_range_max: 12.0
     lidar_beams: 360

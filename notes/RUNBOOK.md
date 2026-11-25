@@ -107,7 +107,7 @@ They use an isolated DDS domain (default 45), log to `/tmp/robocup_it`, and clea
 
 ## Detector training (boxes only, sized for 4 GB)
 ```
-ros2 run object_detection train_detector --data my_items.yaml --base yolo11n.pt --epochs 100
+ros2 run object_detection train_detector --data my_items.yaml --base yolo26s.pt --epochs 100
 # set object_detection_node.model in param/perception.yaml to the printed best.pt
 ros2 run bt_slm make_bt_dataset --labels @labels.txt --out-dir bt_dataset
 ```

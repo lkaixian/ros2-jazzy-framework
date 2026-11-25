@@ -5,11 +5,12 @@
 
 object_detection_node:
   ros__parameters:
-    model: yolo11n.pt
+    model: yolo26s.pt
     openvino: false
     conf: 0.4
     device: ""              # "" = auto, "cpu", "0" (GPU)
     image_topic: ""         # "" = open the webcam
+    rotate: 0               # degrees (0/90/180/270) to turn this node's input upright; the arm eye (OAK) is mounted upside down: 180
     raw_topic: /camera/image_raw   # also publish the raw webcam frames (person_detection reads them)
     camera_index: 0
     rate_hz: 30.0
@@ -19,11 +20,12 @@ object_detection_node:
 
 person_detection_node:
   ros__parameters:
-    model: yolo11n-pose.pt  # yolo11n.pt for boxes only
+    model: yolo26s-pose.pt  # yolo26s.pt for boxes only
     openvino: false
     conf: 0.4
     device: ""
     image_topic: /camera/image_raw   # raw webcam frames from object_detection_node (raw_topic); "" = open the webcam here
+    rotate: 0               # degrees (0/90/180/270) to turn this node's input upright; the arm eye (OAK) is mounted upside down: 180
     image_out: detections/person_image
     camera_index: 0
     rate_hz: 30.0
@@ -39,13 +41,14 @@ face_recognition_node:
     conf: 0.4
     device: ""
     image_topic: /camera/image_raw   # raw webcam frames (object_detection_node raw_topic); "" = open the webcam here
+    rotate: 0               # degrees (0/90/180/270) to turn this node's input upright; the arm eye (OAK) is mounted upside down: 180
     image_out: detections/face_image
     camera_index: 0
     rate_hz: 30.0
     show: false
     publish_image: true
     frame_id: camera
-    embed_model: yolo11n-cls.pt
+    embed_model: yolo26n-cls.pt
     gallery_dir: faces      # one <name>.npy per identity
     threshold: 0.6          # cosine similarity needed to name a face
     publish_embedding: true # required by the BT node ExtractFaceFeature

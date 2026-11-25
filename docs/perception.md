@@ -22,19 +22,25 @@ flowchart LR
 | `face_recognition_node` | `faces` (`FaceArray`), service `face/enroll` | YOLO11 face detector + YOLO11 embeddings; gallery in `faces/` |
 | `scene_summarizer_node` | `scene/summary` | people with distance and gestures, known faces; window 2 s, period 1 s |
 
-`yolo11_common` handles the image source (topic or webcam), model loading and OpenVINO export. Weights `yolo11n.pt` and `yolo11n-pose.pt` download on first use; the face weights (`yolov11n-face.pt`) must be supplied.
+`yolo11_common` handles the image source (topic or webcam), model loading and OpenVINO export. Weights `yolo26s.pt` and `yolo26s-pose.pt` download on first use; the face weights (`yolov11n-face.pt`) must be supplied.
 
 ## Your own detector (bounding boxes only)
 
 Plain boxes, no segmentation (a 4 GB GPU cannot afford SAM-class models). Measured on a GTX 1650: the nano detector runs about 10 ms per frame (about 95 FPS) in about 100 MiB of VRAM, and a smoke fine-tune at batch 8 / 640 px peaked at 1.6 GB.
 
 ```bash
-ros2 run object_detection train_detector --data my_items.yaml --base yolo11n.pt --epochs 100   # defaults sized for 4 GB
+ros2 run object_detection train_detector --data my_items.yaml --base yolo26s.pt --epochs 100   # defaults sized for 4 GB
 # param/perception.yaml:  object_detection_node.model: <path to best.pt>
 ros2 run bt_slm make_bt_dataset --labels @my_labels.txt --out-dir bt_dataset                   # SLM data with YOUR labels
 ```
 
 The detector publishes its class names on `object_detection/classes` (latched). The validator then **rejects any `DetectObject label` the model cannot produce**, and the LLM prompt lists those labels plus every usable node. Without a running detector set `bt_validator_node.labels` or use `validate_bt --labels a,b,c`. Never hard-code COCO labels in trees, datasets or prompts. Training needs matplotlib importable; if pip's NumPy 2 and apt's matplotlib clash, `train_detector` says so and `./setup.sh --only python` installs a compatible one.
+
+## Camera rotation (`rotate`)
+
+Every YOLO node has a `rotate` parameter: degrees clockwise (0, 90, 180, 270) that turn **that node's input image** upright. The arm-eye OAK is mounted upside down, so its nodes use `rotate: 180`
+(`tools/arm/arm_eye.sh` does this). The boxes and the annotated image are in the **turned** image. Anything that reads the raw depth must turn a detection pixel back first
+(`tools/arm/hand_eye.py: raw_pixel`). With a webcam, `raw_topic` republishes the unrotated frames and each reader rotates its own input.
 
 ## Depth and distance
 

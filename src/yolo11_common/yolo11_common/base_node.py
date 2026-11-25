@@ -22,6 +22,15 @@ def image_to_bgr(msg: Image):
     return arr
 
 
+ROTATIONS = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+
+
+def rotate_frame(frame, degrees):
+    """Turn a BGR frame by 0/90/180/270 degrees clockwise (a camera mounted sideways or upside down). 0 returns the same array."""
+    code = ROTATIONS[degrees]
+    return frame if code is None else cv2.rotate(frame, code)
+
+
 def bgr_to_image(frame, header) -> Image:
     img = Image()
     img.header = header
@@ -62,12 +71,17 @@ class Yolo11Node(Node):
         self.declare_parameter('frame_id', 'camera')
         self.declare_parameter('image_out', 'detections/image')   # annotated frames; one topic per node
         self.declare_parameter('raw_topic', '')   # webcam only: also publish the raw frames here for other nodes
+        # degrees clockwise (0/90/180/270) that turn THIS node's input upright; the published boxes are in the turned image
+        self.declare_parameter('rotate', 0)
 
         p = self.get_parameter
         self.conf = p('conf').value
         self.device = p('device').value or None
         self.show = p('show').value
         self.frame_id = p('frame_id').value
+        self.rotate = p('rotate').value
+        if self.rotate not in ROTATIONS:
+            raise ValueError(f'rotate must be one of {sorted(ROTATIONS)}, got {self.rotate}')
         self.model = load_yolo(p('model').value, task, p('openvino').value,
                                self.get_logger())
         self.image_pub = self.create_publisher(Image, p('image_out').value, 10)
@@ -86,7 +100,7 @@ class Yolo11Node(Node):
 
     def _on_image(self, msg):
         try:
-            self._handle(image_to_bgr(msg), msg.header)
+            self._handle(rotate_frame(image_to_bgr(msg), self.rotate), msg.header)
         except ValueError as e:
             self.get_logger().warn(str(e), throttle_duration_sec=5.0)
 
@@ -100,7 +114,7 @@ class Yolo11Node(Node):
         header.frame_id = self.frame_id
         if self.raw_pub is not None and self.raw_pub.get_subscription_count() > 0:
             self.raw_pub.publish(bgr_to_image(frame, header))
-        self._handle(frame, header)
+        self._handle(rotate_frame(frame, self.rotate), header)     # raw_topic above stays unrotated: each reader turns its own input
 
     def _handle(self, frame, header):
         annotated = self.process(frame, header)
