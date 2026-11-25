@@ -15,11 +15,12 @@ setup(
     zip_safe=True,
     maintainer='larm',
     maintainer_email='lkaixian91@gmail.com',
-    description='MoveIt-based arm BT nodes (model-agnostic: configure group/link)',
+    description='Guarded arm BT nodes (no MoveIt)',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
             'arm_extension_node = arm_extension.arm_extension_node:main',
+            'arm_health_node = arm_extension.arm_health_node:main',
         ],
     },
 )

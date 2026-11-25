@@ -75,25 +75,36 @@ pose_extension_node:
     max_age_sec: 0.7
     republish_sec: 3.0
 
-arm_extension_node:         # arm model not fixed yet: group/ee_link/base_frame must be set first
+arm_extension_node:         # guarded arm (src/arm_control): moves nothing while live is false
   ros__parameters:
-    move_group_action: move_action
-    group: ""
-    ee_link: ""
-    base_frame: ""
-    max_velocity_scale: 0.1
-    acceleration_scale: 0.1
-    planning_time: 5.0
-    execute_timeout_sec: 60.0
-    pos_tol: 0.005
-    ori_tol: 0.05
-    workspace_min: [-1.0, -1.0, 0.0]
-    workspace_max: [1.0, 1.0, 1.2]
-    gripper_action: ""      # control_msgs/GripperCommand action name
-    gripper_open: 0.08
-    gripper_closed: 0.0
+    map_file: ''            # '' = the newest ~/arm_free_space*.npz (the baseline first)
+    require_health: true    # live motion needs a recent, clean arm/health (fail closed)
+    health_max_age_sec: 5.0
+    live: false             # true = really drive the arm (bt_executor dry_run:=false must also be set). Validate on hardware first.
+    rate: 0.03              # rad/s of the furthest joint: the speed the park was validated at
+    objects_topic: /arm_eye/objects
+    depth_topic: /arm_cam/stereo/image_raw
+    approach_m: 0.06
+    grasp_pitch_deg: 0.0    # finger angle above horizontal
+    grasp_depth_offset_m: 0.03   # ESTIMATE: front surface -> object middle
+    workspace_min: [0.05, -0.4, -0.3]   # arm base frame, metres. ESTIMATE: the free-space map is the real limit
+    workspace_max: [0.45, 0.4, 0.4]
+    gripper_open_gap_mm: 60.0
+    gripper_max_gap_mm: 72.0
     gripper_max_effort: 20.0
+    goal_current_cap: 250   # gripper Goal Current register units (0.67 A): refuse to move it above this
+    places: ['']            # "name:x,y,z" in the arm base frame, metres: where PlaceObject may put things down. ESTIMATES until measured on the arm.
+    object_width_mm: ['']   # "label:mm" entries; a label wider than gripper_max_gap_mm is refused
     republish_sec: 3.0
+
+arm_health_node:            # servo health -> arm/health; arm_extension refuses live motion unless it is ok
+  ros__parameters:
+    auto_reboot: false      # true: reboot the servos by itself, but only with the arm parked at rest and still. A reboot drops torque on ALL servos.
+    poll_sec: 2.0
+    stale_sec: 3.0
+    dxl_ids: [11, 12, 13, 14, 15]
+    rest_pose: [0.0, -1.85, 1.52, 0.45]   # keep equal to param/arm_rest_pose.yaml
+    ns: /dynamixel_hardware_interface
 
 social_extension_node:
   ros__parameters:

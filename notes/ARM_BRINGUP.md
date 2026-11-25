@@ -65,3 +65,14 @@ Commands (source `env.sh` first; export `CYCLONEDDS_URI=file://$PWD/tools/net/cy
 Data (in your home, not in git): `~/arm_points.yaml` (named contact points), `~/arm_range.csv`, `~/arm_stream*.csv`, `~/arm_free_space*.npz`, `~/arm_load_map.npz`, `~/arm_gripper.yaml`, `~/arm_maps/*.png`.
 Gotchas: the open_manipulator launch defaults to `/dev/ttyUSB0`, which is the LIDAR here: always pass `port_name:=` (arm_up.sh does). A joint hand-turned past one full turn must be turned back before the driver starts.
 The other agent's uncommitted work lives in the same tree (dashboard, `tools/camera`, `99-realsense-libusb.rules` untracked): do not revert it.
+
+## Arm integration into the BT / LLM pipeline (2026-11-25, software and simulation only)
+What exists now: `src/arm_control` (FK, free-space map, taught routes, hand-eye, IK limited to the taught range, `motion.plan_route`, `pick`, `health`), `arm_extension` (nodes ArmPark, MoveArmToPose, OpenGripper, CloseGripper, PickObject, PlaceObject; no MoveIt) and `arm_health_node` (`arm/health`, optional servo reboot). Macros `pick_object`, `put_down`, `move_object`; `llm_knowledge.md` and the GPSR set know the arm; orchestrator `has_arm` (default true). Tests: `src/arm_control/test`, `tools/integration/arm_sim_test.py` (own ROS domain 91: the real nodes against a fake arm).
+Safety shape: `live:=false` by default (plans and checks only); every leg is checked against the free-space map and taught range before the first one runs; 0.03 rad/s; cancel / tracking error holds the arm; gripper refused while its Goal Current register > 250; live motion needs a clean `arm/health`.
+
+Validate on the arm, in this order (each needs you at the arm, hand ready):
+1. Touch test, then `verified: true` in `arm_hand_eye.yaml`.
+2. Names on the real driver: `/gripper_controller/gripper_cmd`, `/dynamixel_hardware_interface/{get_dxl_data,dxl_state,reboot_dxl}`, `/arm_controller/controller_state`; does the gripper controller honour `max_effort`? Set the gripper Goal Current (<= 250) first.
+3. `PickObject` with `live:=false` on a real detection (plans, checks, moves nothing): are the target point and the two poses sensible?
+4. Gripper on a real object, then `live:=true` with one slow pick.
+Known gaps: the OAK-D-Lite cannot measure depth much closer than ~20 cm, so the detection pose must stand far enough from the object (the pre-grasp stand-off is measured from the detection, not the camera); the arm stays at the pre-grasp pose while the base drives (no carry pose measured); `places` is empty (PlaceObject refuses until you add `name:x,y,z`); `object_width_mm` empty; workspace limits and `grasp_depth_offset_m` are estimates; servo reboot (`auto_reboot`) never tried on hardware and drops torque on ALL servos, so it is off by default and gated on the rest pose; the SLM needs retraining (catalog gained 6 nodes).
