@@ -46,6 +46,11 @@ whitelist:
   - take_order
   - tell_order
   - restaurant_round
+  - dispose_rubbish
+  - clean_the_table_round
+  - store_groceries_round
+  - give_me_a_hand_round
+  - egpsr_round
   - note_look
   - tell_look
   - wander
@@ -605,6 +610,115 @@ macros:
       - {macro: take_order, args: {slot: customer2}}
       - {macro: return_home}
       - {macro: tell_order, args: {slot: customer2}}
+
+  # ---- arm tasks (the arm extension does nothing live until `live: true`; objects come from the arm eye, tools/arm/arm_eye.sh) ----
+  dispose_rubbish:
+    description: "Pick up rubbish the ARM EYE sees in front of the robot and put it in the dustbin (one item per round, rounds = how many, default 1); quietly does nothing when no rubbish is in view"
+    params: {rounds: {default: "1"}}
+    example_args: {rounds: "1"}
+    steps:
+      - group: Sequence
+        repeat: "${rounds}"
+        steps:
+          - group: Fallback
+            steps:
+              - group: Sequence
+                steps:
+                  - {node: NextObject, ports: {task: rubbish, out_label: "{obj}", out_nav: "{nav}", out_put: "{put}"}}
+                  - {macro: pick_object, args: {label: "{obj}"}}
+                  - {macro: go_to_place, args: {place: "{nav}"}}
+                  - {macro: put_down, args: {place: "{put}"}}
+              - {node: AlwaysSuccess}
+
+  clean_the_table_round:
+    description: "Clean the Table: drive to the table (table_place), then for each object the arm eye sees pick it, take it to its place (waste -> dustbin, kitchenware -> dishwasher) and come back, up to rounds objects (default 6)"
+    params: {table_place: {required: true}, rounds: {default: "6"}}
+    example_args: {table_place: left_room, rounds: "6"}
+    steps:
+      - {macro: go_to_place, args: {place: "${table_place}"}}
+      - group: Sequence
+        repeat: "${rounds}"
+        steps:
+          - group: Fallback
+            steps:
+              - group: Sequence
+                steps:
+                  - {node: NextObject, ports: {task: clean_table, out_label: "{obj}", out_nav: "{nav}", out_put: "{put}"}}
+                  - {macro: pick_object, args: {label: "{obj}"}}
+                  - {macro: go_to_place, args: {place: "{nav}"}}
+                  - {macro: put_down, args: {place: "{put}"}}
+                  - {node: Speak, ports: {text: "I put the {person} away.", person: "{obj}", skip_if_unknown: "true"}}
+                  - {macro: go_to_place, args: {place: "${table_place}"}}
+              - {node: AlwaysSuccess}
+      - {macro: say, args: {text: "I have finished cleaning the table"}}
+
+  store_groceries_round:
+    description: "Storing Groceries: drive to the table with the groceries (table_place), then for each item the arm eye sees pick it and put it on the shelf (saying which group it belongs to) and come back, up to rounds items (default 6)"
+    params: {table_place: {required: true}, rounds: {default: "6"}}
+    example_args: {table_place: left_room, rounds: "6"}
+    steps:
+      - {macro: go_to_place, args: {place: "${table_place}"}}
+      - group: Sequence
+        repeat: "${rounds}"
+        steps:
+          - group: Fallback
+            steps:
+              - group: Sequence
+                steps:
+                  - {node: NextObject, ports: {task: groceries, out_label: "{obj}", out_nav: "{nav}", out_put: "{put}", out_group: "{grp}"}}
+                  - {macro: pick_object, args: {label: "{obj}"}}
+                  - {macro: go_to_place, args: {place: "{nav}"}}
+                  - {macro: put_down, args: {place: "{put}"}}
+                  - {node: Speak, ports: {text: "I stored the {person} with the other {detail}.", person: "{obj}", detail: "{grp}", skip_if_unknown: "true"}}
+                  - {macro: go_to_place, args: {place: "${table_place}"}}
+              - {node: AlwaysSuccess}
+      - {macro: say, args: {text: "I have stored the groceries"}}
+
+  give_me_a_hand_round:
+    description: "Give Me a Hand: hold the gripper open at the handover point, wait until the person says ready, close on the object, ask where it goes (table, shelf or bin) and put it there. The person decides when the gripper closes"
+    params: {x: {default: "0.22"}, y: {default: "0.0"}, z: {default: "0.12"}}
+    example_args: {x: "0.22", y: "0.0", z: "0.12"}
+    steps:
+      - {macro: say, args: {text: "Please hold the object in front of my gripper, then say ready"}}
+      - group: Fallback
+        steps:
+          - group: Sequence
+            steps:
+              - {node: OpenGripper}
+              - {node: MoveArmToPose, ports: {x: "${x}", y: "${y}", z: "${z}"}}
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "I cannot reach the handover point"}}
+              - {node: AlwaysFailure}
+      - {node: WaitForPhrase, ports: {words: "ready,okay,now,go ahead,got it", timeout_ms: "30000"}}
+      - group: Fallback
+        steps:
+          - {node: CloseGripper}
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "I did not get it"}}
+              - {node: OpenGripper}
+              - {node: AlwaysFailure}
+      - {macro: say, args: {text: "Thank you. Where shall I put it: table, shelf or bin?"}}
+      - group: Fallback
+        retry: 2
+        steps:
+          - group: Sequence
+            steps:
+              - {node: WaitForTranscript, ports: {out_text: "{hand_heard}"}}
+              - {node: ExtractAnswer, ports: {kind: place, text: "{hand_heard}", out_value: "{hand_where}"}}
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "Please say table, shelf or bin"}}
+              - {node: AlwaysFailure}
+      - {macro: go_to_place, args: {place: "{hand_where}"}}
+      - {macro: put_down, args: {place: "{hand_where}"}}
+
+  egpsr_round:
+    description: "Enhanced GPSR: bin any rubbish the arm eye sees, then look for somebody who waves for help, walk up and ask what they need (the answer becomes the next task)"
+    steps:
+      - {macro: dispose_rubbish}
+      - {macro: assist_waving_person}
 
   # ---- walking around ----
   wander:

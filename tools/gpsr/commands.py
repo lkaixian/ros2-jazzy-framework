@@ -88,6 +88,16 @@ def templates(rng, P):
         lambda: ({}, [call('help_me_carry')], {'macro': 'help_me_carry'}))
     add('people', ['help whoever waves', 'find somebody who needs help and ask what they need', 'go and help the person who is waving'],
         lambda: ({}, [call('assist_waving_person')], {'macro': 'assist_waving_person'}))
+    add('manipulate', ['clean the table in the {p}', 'clear the table in the {p}'],
+        lambda: (lambda p: ({'p': say(p)}, [call('clean_the_table_round', table_place=p)], {'macro': 'clean_the_table_round'}))(pl()))
+    add('manipulate', ['store the groceries from the {p}', 'please store the groceries from the {p}'],
+        lambda: (lambda p: ({'p': say(p)}, [call('store_groceries_round', table_place=p)], {'macro': 'store_groceries_round'}))(pl()))
+    add('manipulate', ['put the rubbish in the dustbin', 'throw the rubbish away', 'pick up the rubbish and bin it'],
+        lambda: ({}, [call('dispose_rubbish')], {'macro': 'dispose_rubbish'}))
+    add('manipulate', ['take this from my hand and put it away', 'take the object I hold out and put it away'],
+        lambda: ({}, [call('give_me_a_hand_round')], {'macro': 'give_me_a_hand_round'}))
+    add('people', ['bin rubbish and help whoever needs it', 'do the enhanced GPSR round'],
+        lambda: ({}, [call('egpsr_round')], {'macro': 'egpsr_round'}))
     add('people', ['take the orders of the customers', 'run the restaurant task', 'serve the two customers'],
         lambda: ({}, [call('restaurant_round')], {'macro': 'restaurant_round'}))
     add('people', ['find a free seat for the guest', 'show the guest a free chair'],

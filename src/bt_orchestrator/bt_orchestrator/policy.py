@@ -4,7 +4,7 @@ import re
 
 # Verbs that need the arm. 'take/bring me to ...' and 'take the guest ...' are escorting, which the base can do.
 _ARM = re.compile(r"\b(?:take|bring|carry|fetch|deliver|put|place (?:the|a|an|it|this|that|my)|grab|pick up|hand|pour|throw|open|"
-                  r"make (?:me|us)|get (?:me|us))\b", re.I)
+                  r"make (?:me|us)|get (?:me|us)|(?:clean|clear) the table|store the groceries)\b", re.I)
 _ESCORT = re.compile(r"\b(?:take|bring|lead|show|guide|escort|walk)\s+(?:me|us|them|him|her|"
                      r"(?:the |our |my )?(?:guests?|visitors?|person|people))\b(?!\s+(?:a|an|the|some)\b)", re.I)
 # 'carry' / 'take' that are NOT arm work: Help Me Carry (follow the operator, who carries) and taking a customer's order (speech)

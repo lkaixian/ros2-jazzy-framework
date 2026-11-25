@@ -258,6 +258,8 @@ pose_extension_node:
     image_topic: /camera/image_raw     # raw frames for DescribeAttributes (the main camera, not the arm eye)
     face_parsing_model: ""            # "" = models/face_parsing/yolo26l-sem*.pt, else yolo26n-sem*.pt (docs/perception.md)
     min_face_px: 60                    # DescribeAttributes: a narrower face is too far to judge
+    candidates_topic: /arm_eye/objects   # NextObject: what the arm eye sees (tools/arm/arm_eye.sh)
+    categories_file: ""                  # "" = framework_bringup param/object_categories.yaml
 
 arm_extension_node:         # guarded arm (src/arm_control): moves nothing while live is false
   ros__parameters:

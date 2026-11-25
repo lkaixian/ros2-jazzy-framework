@@ -60,3 +60,14 @@ def heard_any(text, words):
         words = words.split(',')
     heard = f' {_words(text)} '
     return any(_words(w) and f' {_words(w)} ' in heard for w in words)
+
+
+_PLACES = {'table': ('table', 'desk', 'counter'), 'shelf': ('shelf', 'shelves', 'cabinet', 'cupboard'),
+           'bin': ('bin', 'dustbin', 'trash', 'rubbish', 'garbage', 'waste')}
+
+
+def extract_place(text):
+    """'put it in the dustbin' -> 'bin'; 'on the table' -> 'table'; '' when no arm place is named or two different ones are."""
+    heard = set(_words(text).split())
+    hits = [place for place, words in _PLACES.items() if heard & set(words)]
+    return hits[0] if len(hits) == 1 else ''
