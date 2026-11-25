@@ -136,7 +136,7 @@ step_python() {
   [[ $DISTRO == humble ]] || pip+=(--break-system-packages)
   # matplotlib: ROS's apt matplotlib is built for NumPy 1 but pip brings NumPy 2, and Ultralytics
   # training imports matplotlib, so install a NumPy-2-compatible build into ~/.local
-  local core=(ultralytics transformers huggingface_hub 'matplotlib>=3.9')
+  local core=(ultralytics lap transformers huggingface_hub 'matplotlib>=3.9')
   local extras=(faster-whisper vosk piper-tts kokoro-onnx soundfile)
   run "${pip[@]}" "${core[@]}"
   if [[ $MINIMAL -eq 1 ]]; then

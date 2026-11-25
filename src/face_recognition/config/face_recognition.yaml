@@ -1,6 +1,6 @@
 face_recognition_node:
   ros__parameters:
-    model: yolo26n-face.pt   # user-supplied YOLO26n face weights
+    model: yolo26s-face.pt   # YOLO26s face weights (akanametov/yolo-face 1.0.0), repo root
     embed_model: yolo26n-cls.pt
     gallery_dir: faces
     threshold: 0.6

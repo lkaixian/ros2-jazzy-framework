@@ -10,7 +10,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('name')
     ap.add_argument('image')
-    ap.add_argument('--model', default='yolo26n-face.pt')
+    ap.add_argument('--model', default='yolo26s-face.pt')
     ap.add_argument('--embed-model', default='yolo26n-cls.pt')
     ap.add_argument('--gallery', default='faces')
     a = ap.parse_args()

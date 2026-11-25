@@ -36,7 +36,7 @@ person_detection_node:
 
 face_recognition_node:
   ros__parameters:
-    model: yolo26n-face.pt  # user-supplied face weights (YOLO26n, 5 landmarks); in the repo root
+    model: yolo26s-face.pt  # face detector, 5 landmarks (akanametov/yolo-face release 1.0.0, GPL-3.0); in the repo root. yolo26n-face.pt = lighter
     openvino: false
     conf: 0.4
     device: ""
