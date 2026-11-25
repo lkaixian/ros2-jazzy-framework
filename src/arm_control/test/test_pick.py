@@ -1,14 +1,18 @@
 import math
+import os
 
 import numpy as np
 import pytest
 
 import arm_control.pick as pick
-from arm_control.ik import EE, JOINTS, _task, map_limits
+from arm_control.ik import JOINTS, _task, map_limits  # noqa: F401
 from arm_control.motion import Refused
-from arm_control.omx_fk import Arm
+from arm_control.omx_fk import XACRO, Arm
 
-arm = Arm()
+# CI does not install open_manipulator_description; a present-but-broken xacro still fails
+HAVE_URDF = os.path.exists(XACRO)
+pytestmark = pytest.mark.skipif(not HAVE_URDF, reason='open_manipulator_description is not installed')
+arm = Arm() if HAVE_URDF else None
 CUR = dict(zip(JOINTS, (0.2, -0.6, 0.5, 0.1)))
 WIDE = {j: (-3.0, 3.0) for j in JOINTS}
 

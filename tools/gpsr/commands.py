@@ -6,8 +6,8 @@ that uses the whitelisted macros). Uses: (1) an evaluation set for the LLM (`too
 a fine-tune (command -> gold), checked against the real validator by a test.
 
   python3 tools/gpsr/commands.py --n 200 --seed 1 --out /tmp/gpsr_eval.jsonl
-Templates are ours (inspired by the GPSR style: navigation, people, vision, picking and moving small objects with the arm, and requests it must refuse
-(hand-overs, doors, pouring)); they are not the official generator's sentences.
+Templates are ours (inspired by the GPSR style: navigation, people, vision, picking and moving small objects with the arm,
+and requests it must refuse (hand-overs, doors, pouring)); they are not the official generator's sentences.
 
 expect keys (all given keys must hold): visit [places in order] | says | macro name | node id | detects label |
 any_node [ids] | laps N | refuse (says something and drives nowhere)

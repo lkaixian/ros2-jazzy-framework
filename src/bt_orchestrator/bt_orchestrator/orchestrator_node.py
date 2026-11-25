@@ -194,7 +194,8 @@ class OrchestratorNode(Node):
         return fut.result()
 
     def _on_spec(self, msg):
-        spec = (None if self.get_parameter('has_arm').value else refuse_no_arm(msg.data)) or msg.data   # no arm: say so instead of driving somewhere
+        # no arm: say so instead of driving somewhere
+        spec = (None if self.get_parameter('has_arm').value else refuse_no_arm(msg.data)) or msg.data
         if spec != msg.data:
             self.get_logger().warn('goal needs the arm: replaced by a refusal')
         with self.fsm_lock:

@@ -1,4 +1,8 @@
+import pytest
+
+
 def test_node_module_imports_and_declares_every_catalog_node():
+    pytest.importorskip('dynamixel_interfaces')        # the driver's messages are not in CI
     import yaml
     from pathlib import Path
 

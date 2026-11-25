@@ -14,7 +14,8 @@ class Refused(Exception):
 
 
 def plan_route(cur, goal, verdict=None, taught=None, map_path=None):
-    """List of joint dicts from `cur` to `goal`. Raises Refused. `verdict(q0, q1)` -> (ok, text); `taught(cur, goal)` -> (points|None, text)."""
+    """List of joint dicts from `cur` to `goal`. Raises Refused.
+    `verdict(q0, q1)` -> (ok, text); `taught(cur, goal)` -> (points|None, text)."""
     if verdict is None:
         from arm_control.path_check import verdict
     cur, goal = {j: cur[j] for j in JOINTS}, {j: goal[j] for j in JOINTS}

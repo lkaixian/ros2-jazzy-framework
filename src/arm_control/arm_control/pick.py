@@ -37,5 +37,6 @@ def approach_poses(arm, cur, grasp, limits, ws_min, ws_max, approach=0.06, pitch
     q_pre = solve(arm, pre, pitch, seeds=seeds, limits=limits)
     q_grasp = q_pre and solve(arm, grasp, pitch, seeds=[tuple(q_pre.values())] + seeds, limits=limits)
     if not q_pre or not q_grasp:
-        raise Refused(f'no arm pose inside the taught joint range reaches {np.round(grasp, 3).tolist()} at finger pitch {math.degrees(pitch):.0f} deg')
+        raise Refused(f'no arm pose inside the taught joint range reaches {np.round(grasp, 3).tolist()} '
+                      f'at finger pitch {math.degrees(pitch):.0f} deg')
     return {'point': grasp.tolist(), 'pre': q_pre, 'grasp': q_grasp}

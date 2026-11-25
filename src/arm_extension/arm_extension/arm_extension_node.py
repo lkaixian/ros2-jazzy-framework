@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 from arm_control.free_map import JOINTS, FreeMap
-from arm_control.gripper import gap_mm, joint_m_for_gap
+from arm_control.gripper import joint_m_for_gap
 from arm_control.ik import map_limits, solve
 from arm_control.motion import RATE, Refused, plan_route, schedule
 from arm_control.omx_fk import Arm
@@ -38,7 +38,8 @@ class NoCancel:
 class ArmExtension(ExtensionExecutor):
     def __init__(self):
         super().__init__('arm_extension')
-        for k, v in dict(live=False, map_file='', require_health=True, health_max_age_sec=5.0, rate=RATE, joint_action='/arm_controller/follow_joint_trajectory',
+        for k, v in dict(live=False, map_file='', require_health=True, health_max_age_sec=5.0, rate=RATE,
+                         joint_action='/arm_controller/follow_joint_trajectory',
                          gripper_action='/gripper_controller/gripper_cmd', dxl_get='/dynamixel_hardware_interface/get_dxl_data',
                          joint_topic='/joint_states', state_topic='/arm_controller/controller_state',
                          objects_topic='/arm_eye/objects', depth_topic='/arm_cam/stereo/image_raw', max_age_sec=1.0,
@@ -147,7 +148,8 @@ class ArmExtension(ExtensionExecutor):
         t0, self.err_since = time.monotonic(), None
         while not fin.wait(0.05):
             why = ('cancelled' if ctl.cancelled else f'overran its {total:.0f} s schedule' if time.monotonic() - t0 > total + 15.0
-                   else 'joint tracking error (blocked or lagging)' if self.err_since and time.monotonic() - self.err_since > self.p('track_sec') else '')
+                   else 'joint tracking error (blocked or lagging)'
+                   if self.err_since and time.monotonic() - self.err_since > self.p('track_sec') else '')
             if why:
                 self._hold(box['gh'])
                 raise ArmError(f'{why}: arm held where it is' if why != 'cancelled' else 'cancelled: arm held')
@@ -166,7 +168,8 @@ class ArmExtension(ExtensionExecutor):
         cur = self._joints()
         hold = FollowJointTrajectory.Goal()
         hold.trajectory.joint_names = list(JOINTS)
-        hold.trajectory.points = [JointTrajectoryPoint(positions=[cur[j] for j in JOINTS], velocities=[0.0] * 4, time_from_start=Duration(sec=1))]
+        hold.trajectory.points = [JointTrajectoryPoint(positions=[cur[j] for j in JOINTS], velocities=[0.0] * 4,
+                                                       time_from_start=Duration(sec=1))]
         res, err = call_action(self.traj, hold, NoCancel(), 5.0)
         if res is None:
             raise ArmError(f'STOP NOT CONFIRMED ({err}): support the arm')
@@ -187,7 +190,8 @@ class ArmExtension(ExtensionExecutor):
         if r is None or not r.result:
             raise ArmError(f'cannot read the gripper Goal Current ({err or "driver refused"}): not moving it')
         if r.item_data > cap:
-            raise ArmError(f'gripper Goal Current is {r.item_data} (cap {cap}): set it lower first (a power cycle resets it to the 3.2 A maximum)')
+            raise ArmError(f'gripper Goal Current is {r.item_data} (cap {cap}): set it lower first '
+                           '(a power cycle resets it to the 3.2 A maximum)')
 
     def _gripper(self, gap, effort, ctl):
         pos = joint_m_for_gap(gap)
@@ -203,7 +207,8 @@ class ArmExtension(ExtensionExecutor):
         return (res.reached_goal or res.stalled), ('stalled' if res.stalled else 'reached' if res.reached_goal else 'not reached')
 
     def _open(self, ports, ctl):
-        return self._gripper(min(port_float(ports, 'width', self.p('gripper_open_gap_mm'), lo=20.0), self.p('gripper_max_gap_mm')), self.p('gripper_max_effort'), ctl)
+        gap = min(port_float(ports, 'width', self.p('gripper_open_gap_mm'), lo=20.0), self.p('gripper_max_gap_mm'))
+        return self._gripper(gap, self.p('gripper_max_effort'), ctl)
 
     def _close(self, ports, ctl):
         mx = self.p('gripper_max_effort')

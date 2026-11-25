@@ -76,7 +76,8 @@ class ArmHealth(Node):
         if ok_gate and self.p('auto_reboot'):
             self._reboot()
         self.pub.publish(__import__('std_msgs.msg', fromlist=['String']).String(data=json.dumps(
-            {'ok': not problems, 'problems': problems, 'rebootable': rebootable, 'reboot_gate': why, 'auto_reboot': self.p('auto_reboot')})))
+            {'ok': not problems, 'problems': problems, 'rebootable': rebootable, 'reboot_gate': why,
+             'auto_reboot': self.p('auto_reboot')})))
 
     def _reboot(self):
         if not self.reboot_cli.service_is_ready():
