@@ -70,6 +70,14 @@ jobs:
           ls src/*/test/test_*.py | grep -vE "test_(flake8|pep257|copyright)" \
             | xargs python3 -m pytest -q -p no:cacheprovider
 
+      # tools/ holds tests too (arm park/route/hand-eye logic, floor-plane fit); they need no robot or data in ~
+      - name: Python tests (tools)
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          python3 -m pytest -q -p no:cacheprovider tools/arm/test_arm_tool.py tools/camera/test_floor_plane.py
+
       - name: C++ tests
         run: |
           source /opt/ros/jazzy/setup.bash
@@ -250,6 +258,14 @@ jobs:
           assert abs(dry) < 1e-6, dry
           PY
 
+      - name: Sim - arm nodes against a fake arm (live pick, hold on cancel, health gate, servo reboot rule)
+        timeout-minutes: 5
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source kobuki_ws/install/setup.bash
+          source install/setup.bash
+          python3 -m pytest -q -p no:cacheprovider tools/integration/arm_sim_test.py
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -286,7 +302,7 @@ jobs:
           rosdep init || true
           rosdep update --rosdistro humble
           rosdep install --from-paths src --ignore-src --rosdistro humble -y -r \
-            --skip-keys "sllidar_ros2"
+            --skip-keys "sllidar_ros2 open_manipulator_description"
 
       - name: Build workspace
         run: |
