@@ -24,3 +24,11 @@ def test_extract_drink(said, drink):
     ('my name is Larm', False), ('', False)])
 def test_is_yes(said, yes):
     assert is_yes(said) is yes
+
+
+def test_heard_any_matches_whole_words_only():
+    from social_extension.answers import heard_any
+    assert heard_any('Please STOP now', 'stop,we are here')
+    assert heard_any("okay we are here, thanks", 'stop, we are here')
+    assert not heard_any('nonstop music', 'stop')
+    assert not heard_any('', 'stop') and not heard_any('hello', '')

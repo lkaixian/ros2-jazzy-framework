@@ -47,3 +47,16 @@ def is_yes(text):
     """True for an affirmative answer ('Yes, that is right'); False for a no, an unclear answer, or both ('yes... no')."""
     words = set(_clean(text).split())
     return bool(words & _YES) and not words & _NO
+
+
+def _words(s):
+    return ' '.join(re.findall(r"[a-z0-9']+", (s or '').lower()))
+
+
+def heard_any(text, words):
+    """True when one of the phrases (a comma separated string or a list) is in the heard text as whole words, case-insensitive:
+    'please stop now' hears 'stop', 'nonstop' does not."""
+    if isinstance(words, str):
+        words = words.split(',')
+    heard = f' {_words(text)} '
+    return any(_words(w) and f' {_words(w)} ' in heard for w in words)

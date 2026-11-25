@@ -11,17 +11,17 @@ from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
 from face_recognition.gallery import valid_name
-from social_extension.answers import extract_drink, extract_name, is_yes
+from social_extension.answers import extract_drink, extract_name, heard_any, is_yes
 
 MAX_TEXT = 300
 
 
-def render_text(text, person=''):
-    """Substitute {person}; an unknown/empty name becomes "there". Bounded length."""
+def render_text(text, person='', detail=''):
+    """Substitute {person} (an unknown/empty name becomes "there") and {detail}. Bounded length."""
     person = (person or '').strip()
     if person.lower() in ('', 'unknown'):
         person = 'there'
-    out = text.replace('{person}', person).strip()
+    out = text.replace('{person}', person).replace('{detail}', (detail or '').strip()).strip()
     if not out:
         raise PortError('text is empty')
     if len(out) > MAX_TEXT:
@@ -42,7 +42,7 @@ class SocialExtension(ExtensionExecutor):
         self.enroll = self.create_client(Enroll, p('enroll_service'))
         self.handlers = {'Speak': self._speak, 'EnrollFace': self._enroll,
                          'WaitForTranscript': self._listen, 'ExtractAnswer': self._extract,
-                         'DetectSound': self._detect_sound}
+                         'DetectSound': self._detect_sound, 'WaitForPhrase': self._wait_phrase}
         # latched flag: tells transcript_to_task to keep this answer out of bt/task
         self.capture = self.create_publisher(Bool, 'stt/capture', QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -54,7 +54,12 @@ class SocialExtension(ExtensionExecutor):
         self.create_subscription(Transcript, p('transcript_topic'), self._on_transcript, 10)
 
     def _speak(self, ports, ctl):
-        text = render_text(port_str(ports, 'text'), ports.get('person', ''))
+        if port_bool(ports, 'skip_if_unknown', False):      # a value that was never remembered must not be spoken as "there"
+            raw = port_str(ports, 'text')
+            if ('{person}' in raw and ports.get('person', '').strip().lower() in ('', 'unknown')) or \
+                    ('{detail}' in raw and not ports.get('detail', '').strip()):
+                return True, 'nothing to say'
+        text = render_text(port_str(ports, 'text'), ports.get('person', ''), ports.get('detail', ''))
         req = Speak.Request(text=text, voice=ports.get('voice', ''),
                             blocking=port_bool(ports, 'wait', True))
         res, err = call_service(self.speak, req, ctl, self.get_parameter('speak_timeout_sec').value)
@@ -99,6 +104,29 @@ class SocialExtension(ExtensionExecutor):
                     return True, f'heard: {self._heard}', {'out_text': self._heard}
                 time.sleep(0.05)
             return False, 'nobody answered'
+        finally:
+            self._listening = False
+            self.capture.publish(Bool(data=False))
+
+    def _wait_phrase(self, ports, ctl):
+        """Listen (default 15 min) until a final transcript contains one of the words; other speech is ignored. The capture flag keeps
+        these utterances from becoming tasks."""
+        words = port_str(ports, 'words')
+        if not words.strip():
+            return False, 'words is empty'
+        timeout = port_float(ports, 'timeout_ms', default=900000.0, lo=500.0, hi=3600000.0) / 1000
+        self._heard, self._listening = None, True
+        self.capture.publish(Bool(data=True))
+        try:
+            end = time.monotonic() + timeout
+            while time.monotonic() < end:
+                if ctl.cancelled:
+                    return False, 'cancelled'
+                heard, self._heard = self._heard, None
+                if heard and heard_any(heard, words):
+                    return True, f'heard: {heard}', {'out_text': heard}
+                time.sleep(0.05)
+            return False, f'did not hear {words!r}'
         finally:
             self._listening = False
             self.capture.publish(Bool(data=False))

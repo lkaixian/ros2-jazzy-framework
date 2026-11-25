@@ -24,7 +24,7 @@ class PidExtension(ExtensionExecutor):
                          cmd_vel_topic='pid_extension/cmd_vel', max_linear=0.15,
                          max_angular=0.6, stale_sec=0.5, lost_sec=1.0, rate_hz=20.0,
                          scan_topic='scan', stop_distance=0.40, guard_half_width_deg=35.0, scan_stale_sec=0.5,
-                         scan_required=False, scan_yaw_offset=0.0, blocked_give_up_sec=3.0).items():
+                         scan_required=False, scan_yaw_offset=0.0, blocked_give_up_sec=3.0, avoid_turn=0.4).items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         ma, ml = p('max_angular'), p('max_linear')
@@ -111,7 +111,9 @@ class PidExtension(ExtensionExecutor):
         # is never below MIN_STANDOFF_M. Without depth the bbox-height proxy is used instead.
         target_d = (port_float(ports, 'distance', lo=MIN_STANDOFF_M, hi=8.0)
                     if ports.get('distance') else 0.0)
-        timeout = port_float(ports, 'timeout_ms', 10000.0, lo=100.0, hi=120000.0) / 1000.0
+        keep = port_bool(ports, 'until_cancelled', False)    # follow on after arriving: only a cancel, a lost target or the timeout ends it
+        lock = port_bool(ports, 'lock', False)               # stay with the first person seen (their track id), not whoever is biggest
+        timeout = port_float(ports, 'timeout_ms', 10000.0, lo=100.0, hi=900000.0) / 1000.0
         turn, rng = self.pids['follow_turn'], self.pids['follow_range']
         turn.reset()
         rng.reset()
@@ -124,6 +126,8 @@ class PidExtension(ExtensionExecutor):
                     return False, 'cancelled'
                 person, m = self._pick(tid)
                 now = time.monotonic()
+                if person is not None and lock and tid is None and person.track_id >= 0:
+                    tid = person.track_id
                 if person is None:
                     if now - last_seen > lost_sec:
                         return False, 'target lost'
@@ -145,6 +149,8 @@ class PidExtension(ExtensionExecutor):
                     near = self.guard.blocked(v)          # never drive up to a person (or a wall) closer than stop_distance
                     if near is not None:
                         v = 0.0
+                        if not arrived:                   # an obstacle, not the person we came for: turn toward the freer side
+                            w = self.guard.freer_side() * self.get_parameter('avoid_turn').value or w
                         blocked_since = blocked_since or now
                         if now - blocked_since > self.get_parameter('blocked_give_up_sec').value:
                             return False, f'obstacle {near:.2f} m ahead: stopped'
@@ -152,7 +158,7 @@ class PidExtension(ExtensionExecutor):
                         blocked_since = None
                     aligned = abs(ex) < 0.08 and (not approach or arrived)
                     ok_since = (ok_since or now) if aligned else None
-                    if ok_since and now - ok_since >= 0.5:
+                    if ok_since and now - ok_since >= 0.5 and not keep:
                         return True, 'aligned'
                     self._cmd(v, w)
                 if now > end:

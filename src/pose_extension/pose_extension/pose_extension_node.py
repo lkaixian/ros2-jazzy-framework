@@ -36,6 +36,11 @@ def free_seats(objects, persons, labels=SEAT_LABELS, min_conf=0.4, max_covered=0
     return sorted(seats, key=lambda o: -(o.x_max - o.x_min) * (o.y_max - o.y_min))
 
 
+def seat_place(label, bearing):
+    """'chair on my left' from the image bearing (-1 left edge .. +1 right edge of the camera view); 'straight ahead' within +-0.25."""
+    return f"{label} {'straight ahead' if abs(bearing) < 0.25 else 'on my left' if bearing < 0 else 'on my right'}"
+
+
 def describe(persons, min_conf=0.5, track_id=None):
     """'a person wearing a red top' for the biggest (nearest) confident person that has a colour; '' if none."""
     cands = [p for p in persons if p.confidence >= min_conf and p.clothes_colour and (track_id is None or p.track_id == track_id)]
@@ -149,7 +154,8 @@ class PoseExtension(ExtensionExecutor):
         best = seats[0]
         w = max(1, objs.image_width)
         bearing = ((best.x_min + best.x_max) / 2 - w / 2) / (w / 2)     # -1 left edge .. +1 right edge of the image
-        return True, f'free {best.label} at bearing {bearing:+.2f}', {'out_label': best.label, 'out_bearing': f'{bearing:.2f}'}
+        place = seat_place(best.label, bearing)
+        return True, f'free {place}', {'out_label': best.label, 'out_bearing': f'{bearing:.2f}', 'out_place': place}
 
     def _get_pose(self, ports, ctl):
         mc = port_float(ports, 'min_conf', 0.5, lo=0.0, hi=1.0)
