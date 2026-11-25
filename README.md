@@ -109,7 +109,7 @@ ros2 topic pub --once /bt/task std_msgs/msg/String "{data: 'go to the door and s
 <details>
 <summary><b>Setup details</b></summary>
 
-`setup.sh` steps: `apt rosdep python llamacpp models build` (+ optional `slm` = dataset and fine-tune). Use `--only`, `--skip`, `--minimal`, `--backend cuda|vulkan|cpu`. The LLM is fetched by `llama-server -hf` (Gemma 4 E4B), the SLM base `LiquidAI/LFM2.5-230M-Base` goes to `models/slm-base` for fine-tuning only. `nav2_params.yaml` is generated from the Jazzy Nav2 defaults, so Nav2 on Humble is untested.
+`setup.sh` steps: `apt rosdep python llamacpp models build` (+ optional `slm` = dataset and fine-tune). Use `--only`, `--skip`, `--minimal`, `--backend auto|cuda|cpu|vulkan` (the prebuilt llama.cpp release, with its web UI) or `source` (compile it, no web UI). The LLM is fetched by `llama-server -hf` (Gemma 4 E4B), the SLM base `LiquidAI/LFM2.5-230M-Base` goes to `models/slm-base` for fine-tuning only. `nav2_params.yaml` is generated from the Jazzy Nav2 defaults, so Nav2 on Humble is untested.
 
 </details>
 

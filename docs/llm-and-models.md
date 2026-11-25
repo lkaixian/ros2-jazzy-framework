@@ -59,7 +59,7 @@ Verified with fake servers and the real cluster agent and scheduler on one machi
 | TTS | espeak, Piper, Kokoro-82M | CPU | |
 
 ```bash
-./setup.sh --only llamacpp,voice --backend prebuilt     # reproduces the verified local setup
+./setup.sh --only llamacpp,voice                       # prebuilt llama.cpp release (CUDA 12.8 with an NVIDIA GPU, else CPU) + voice models
 llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 6144 -np 1 -ngl 99 --reasoning off
 ```
 
@@ -76,3 +76,6 @@ Rules first (`rules_first`), model on retries. How it is trained and measured: [
 ## Improving plan quality without training
 
 Edit, in this order: macro and node descriptions, worked examples in `llm_knowledge.md`, rules in the same file, the system prompt, deterministic guards. See [Evaluation](evaluation.md).
+
+**Web UI.** The prebuilt llama.cpp release serves llama.cpp's chat page at `http://localhost:8080/` (the port in `param/llama_server.yaml`) while the server runs. The page is gzip-only: a browser opens it, plain `curl` gets `415 gzip is not supported` (use `curl --compressed`). A source build (`./setup.sh --backend source`, this repo's old default) has the UI switched off, which was the "missing web UI": `--backend auto|cuda|cpu|vulkan` now downloads the official prebuilt release instead (x86_64; other CPUs fall back to compiling). Tested: CUDA 12.8 and CPU prebuilt, build b12375, `GET /` is 200 with gzip on both; Vulkan prebuilt not run here.
+

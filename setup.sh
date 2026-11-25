@@ -11,7 +11,8 @@
 # Steps (in order): apt rosdep python llamacpp choose models voice build robot   (optional, never default: slm, slmweights)
 # slmweights: download a published fine-tuned SLM instead of training one:  SLM_WEIGHTS_REPO=<user>/<repo> ./setup.sh --only slmweights
 # robot: Kobuki base (turtlebot2_ros2_jazzy + kobuki_*), RPLIDAR (sllidar_ros2), audio_common into ROBOT_WS (~/ros2_ws), plus udev rules. Jazzy only.
-# --backend prebuilt: download the official llama.cpp CUDA 12.8 release (no CUDA toolkit, no compiling).
+# llama.cpp is the official PREBUILT release (with the web UI at http://localhost:8080/): CUDA 12.8 when an NVIDIA GPU is found, else CPU; --backend vulkan
+# picks the Vulkan build, --backend source compiles it yourself (no web UI, needs cmake + nvcc for CUDA).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,7 +39,7 @@ Options:
   --only a,b         run just these steps
   --skip a,b         skip these steps
   --minimal          skip the optional heavy Python extras (STT/TTS engines)
-  --backend B        llama.cpp backend: auto|cpu|cuda|vulkan|prebuilt   (default auto: cuda if nvcc exists)
+  --backend B        llama.cpp: auto|cuda|cpu|vulkan (prebuilt release, with the web UI; auto = cuda if nvidia-smi works, else cpu) | source (compile it)
   --llama-dir DIR    llama.cpp checkout/build dir (default $LLAMA_DIR); LLAMA_TAG=<bNNNN|latest> pins the llama.cpp release (default $LLAMA_TAG)
   --llm-repo REPO    GGUF repo[:quant] for llama-server -hf (skips the LLM menu)
   --stt-model M      faster-whisper size name or CTranslate2 HF repo (skips the STT menu)
@@ -149,40 +150,50 @@ step_python() {
 llama_build_number() { "$1" --version 2>&1 | sed -n 's/^version: \([0-9]\+\).*/\1/p' | head -1; }
 
 step_llamacpp_prebuilt() {
-  log "llama.cpp: prebuilt CUDA 12.8 release into $LLAMA_DIR (NVIDIA driver only, no toolkit)"
-  local tag="$LLAMA_TAG"
+  local flavour="$1" tag="$LLAMA_TAG" asset extra=""
+  case "$flavour" in
+    cuda) asset=ubuntu-cuda-12.8-x64; extra=cudart ;;   # NVIDIA driver only, no CUDA toolkit
+    vulkan) asset=ubuntu-vulkan-x64 ;;
+    cpu) asset=ubuntu-x64 ;;
+    *) die "unknown backend '$flavour'" ;;
+  esac
+  log "llama.cpp: prebuilt $asset release into $LLAMA_DIR (includes the web UI)"
   if [[ $tag == latest ]]; then
     tag="$(curl -fsS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=1' | sed -n 's/.*"tag_name": *"\(b[0-9]*\)".*/\1/p' | head -1)"
     [[ $DRY -eq 1 ]] && tag="${tag:-bNNNN}"
   fi
   [[ -n "$tag" ]] || die "could not read the latest llama.cpp release tag"
-  local base="https://github.com/ggml-org/llama.cpp/releases/download/$tag" f
+  local base="https://github.com/ggml-org/llama.cpp/releases/download/$tag" f libs="\$D/llama-$tag"
   run mkdir -p "$LLAMA_DIR" "$HOME/.local/bin"
-  for f in "llama-$tag-bin-ubuntu-cuda-12.8-x64" "cudart-llama-$tag-bin-ubuntu-cuda-12.8-x64"; do
+  for f in "llama-$tag-bin-$asset" ${extra:+"cudart-llama-$tag-bin-$asset"}; do
     run curl -fL -o "$LLAMA_DIR/$f.tar.gz" "$base/$f.tar.gz"
     run tar -xzf "$LLAMA_DIR/$f.tar.gz" -C "$LLAMA_DIR"
     run rm -f "$LLAMA_DIR/$f.tar.gz"
   done
+  [[ -n $extra ]] && libs="$libs:\$D/cudart-llama-$tag-bin-$asset"
   if [[ $DRY -eq 0 ]]; then
-    printf '#!/bin/sh\nD="%s"\nexport LD_LIBRARY_PATH="$D/llama-%s:$D/cudart-llama-%s-bin-ubuntu-cuda-12.8-x64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\nexec "$D/llama-%s/llama-server" "$@"\n' \
-      "$LLAMA_DIR" "$tag" "$tag" "$tag" > "$HOME/.local/bin/llama-server"
+    printf '#!/bin/sh\nD="%s"\nexport LD_LIBRARY_PATH="%s${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\nexec "$D/llama-%s/llama-server" "$@"\n' \
+      "$LLAMA_DIR" "$libs" "$tag" > "$HOME/.local/bin/llama-server"
     chmod +x "$HOME/.local/bin/llama-server"
     echo "  llama-server: $("$HOME/.local/bin/llama-server" --version 2>&1 | head -1)"
   else echo "  (would write the llama-server wrapper in ~/.local/bin)"; fi
 }
 
 step_llamacpp() {
-  [[ $BACKEND == prebuilt ]] && { step_llamacpp_prebuilt; return; }
-  log "llama.cpp: llama-server (needs build >= $MIN_LLAMA_BUILD for Gemma 4)"
-  local be="$BACKEND" flags=(-DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -DLLAMA_USE_PREBUILT_UI=OFF)   # we use the API only; the HF-downloaded web UI can leave ui.cpp pointing at missing bundle*.js
-  if [[ $be == auto ]]; then command -v nvcc >/dev/null && be=cuda || be=cpu; fi
-  case "$be" in
-    cpu) ;;
-    cuda) command -v nvcc >/dev/null || die "--backend cuda needs the CUDA toolkit (nvcc)"; flags+=(-DGGML_CUDA=ON) ;;
-    vulkan) flags+=(-DGGML_VULKAN=ON) ;;
-    *) die "unknown backend '$be'" ;;
-  esac
-  [[ $be == cpu ]] && warn "building CPU-only; for a GPU install the CUDA toolkit and use --backend cuda (or vulkan)"
+  local arch; arch="$(uname -m)"
+  if [[ $BACKEND != source ]]; then
+    [[ $arch == x86_64 ]] || { warn "no prebuilt llama.cpp for $arch here: compiling it (no web UI)"; BACKEND=source; }
+  fi
+  if [[ $BACKEND != source ]]; then
+    local fl="$BACKEND"
+    [[ $fl == auto || $fl == prebuilt ]] && { command -v nvidia-smi >/dev/null && nvidia-smi >/dev/null 2>&1 && fl=cuda || fl=cpu; }
+    step_llamacpp_prebuilt "$fl"; return
+  fi
+  log "llama.cpp: compiling llama-server (needs build >= $MIN_LLAMA_BUILD for Gemma 4; a source build has NO web UI)"
+  local be flags=(-DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=ON -DLLAMA_USE_PREBUILT_UI=OFF)   # we use the API only; the HF-downloaded web UI can leave ui.cpp pointing at missing bundle*.js
+  command -v nvcc >/dev/null && be=cuda || be=cpu
+  [[ $be == cuda ]] && flags+=(-DGGML_CUDA=ON)
+  [[ $be == cpu ]] && warn "building CPU-only (no nvcc): the prebuilt release (--backend cuda) runs on an NVIDIA GPU without the toolkit"
   local ref=(--branch "$LLAMA_TAG"); [[ $LLAMA_TAG == latest ]] && ref=()
   if [[ -d "$LLAMA_DIR/.git" ]]; then run git -C "$LLAMA_DIR" fetch --depth 1 origin "${ref[@]:+tag}" "${LLAMA_TAG/latest/HEAD}" && run git -C "$LLAMA_DIR" checkout -q FETCH_HEAD
   else run git clone --depth 1 "${ref[@]}" https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"; fi
