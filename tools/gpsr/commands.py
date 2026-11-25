@@ -82,6 +82,14 @@ def templates(rng, P):
         lambda: ({}, [call('wait_for_doorbell')], {'node': 'DetectSound'}))
     add('people', ['welcome the guest at the door', 'receive the next guest'],
         lambda: ({}, [call('receive_guest')], {'macro': 'receive_guest'}))
+    add('people', ['do the receptionist task', 'run the receptionist round', 'be the receptionist for two guests'],
+        lambda: ({}, [call('hric_round')], {'macro': 'hric_round'}))
+    add('people', ['help me carry my bags', 'carry my bags and follow me until I say stop', 'help me carry'],
+        lambda: ({}, [call('help_me_carry')], {'macro': 'help_me_carry'}))
+    add('people', ['help whoever waves', 'find somebody who needs help and ask what they need', 'go and help the person who is waving'],
+        lambda: ({}, [call('assist_waving_person')], {'macro': 'assist_waving_person'}))
+    add('people', ['take the orders of the customers', 'run the restaurant task', 'serve the two customers'],
+        lambda: ({}, [call('restaurant_round')], {'macro': 'restaurant_round'}))
     add('people', ['find a free seat for the guest', 'show the guest a free chair'],
         lambda: ({}, [call('offer_seat')], {'node': 'FindFreeSeat'}))
     add('people', ['look around the room and tell me how many people are there', 'count the people around you'],

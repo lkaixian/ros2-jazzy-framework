@@ -1,13 +1,17 @@
 """RoboCup@Home Malaysia 2026 Stage I, Help Me Carry (minutes 4.2; no 2027 score sheet): follow the operator inside the arena with obstacle avoidance, follow
 on to a randomly chosen destination outside, two bags; bonus for navigating back to the starting point.
 
-Starts: person detection + depth ranging (FollowTarget keeps a real distance), lidar + RealSense, Nav2 (obstacle avoidance, return home), audio (spoken
-commands). No arm, no objects, no faces.
-GAPS: a spoken "stop"/"we arrived" is not wired to stop following and go home (say it to the planner: "follow me", then "return home");
-`start` in places.yaml must be a real pose of the arena start; the outside destination is off the map (no map outside the arena: mapping slot on 3 Dec);
-following through a doorway / lost-person recovery is untested; depth obstacles are off until the camera TF is measured (lidar only sees one plane);
-carrying a bag: nothing on the robot holds one (the operator carries, or it is not required: ask on 3 Dec).
-
+Starts: person detection + depth ranging, lidar + RealSense, Nav2, audio. No arm, no objects, no faces. max_runtime_sec 900 (a follow outlasts
+the default 300 s run limit).
+Plan: task "help me carry" / "follow me until I say stop" -> macro help_me_carry: say, follow_until_told (FollowTarget until_cancelled + lock,
+in a Parallel with WaitForPhrase "stop / we are here / we have arrived"; a lost person is searched for 3 times), say, return_home.
+Built: keeps following after arriving; locked to the first person (track id); an obstacle ahead makes it turn toward the freer side (reactive, no
+path planning); the spoken stop ends the follow; then it drives to place `start`. Tested in simulators only (tools/integration/follow_test.py,
+phrase_test.py); the macros are only validated, never run on a robot.
+GAPS: `start` in places.yaml must be a real pose of the arena start; the way back is Nav2 on the arena map: outside it the robot is probably not
+localised and nothing retraces the path (no breadcrumbs); the turn-away avoidance can dither at doors and does not plan a detour; a lost track id
+(occlusion, tracker reset) loses the lock and re-locks onto the biggest person; stop words are not heard over robot noise / in a crowd; nothing carries
+the bags (the operator does, or ask on 3 Dec); depth obstacles off until the camera TF is measured (the lidar sees one plane).
 Any enable_* below can be overridden on the command line; dry_run stays true until you pass dry_run:=false. Notes: docs/robocup-tasks.md.
 """
 from bt_common.launch_utils import task_launch
@@ -29,4 +33,5 @@ def generate_launch_description():
         'enable_social': 'true',
         'enable_arm': 'false',
         'enable_oak': 'false',
-        'persons_topic': 'persons_ranged'})
+        'persons_topic': 'persons_ranged',
+        'max_runtime_sec': '900'})

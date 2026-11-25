@@ -38,6 +38,16 @@ whitelist:
   - offer_seat
   - receive_guest
   - hric_round
+  - follow_until_told
+  - help_me_carry
+  - introduce_to
+  - find_waving_person
+  - assist_waving_person
+  - take_order
+  - tell_order
+  - restaurant_round
+  - note_look
+  - tell_look
   - wander
   - wander_until_person
   - scout_room
@@ -428,42 +438,173 @@ macros:
       - {macro: say, args: {text: "Someone is at the door"}}
 
   offer_seat:
-    description: "Look for a free seat (chair, couch, bench), turning up to three quarter turns, and tell the guest to sit there; fails if none is found"
+    description: "Look for a free seat (chair, couch, bench), turning up to three quarter turns, and tell the guest to sit there and on which side it is; fails if none is found"
     steps:
       - group: Fallback
         steps:
-          - {node: FindFreeSeat, ports: {out_label: "{seat}"}}
+          - {node: FindFreeSeat, ports: {out_place: "{seat_where}"}}
           - group: Sequence
             steps:
               - {node: RotateBy, ports: {radians: "1.57"}}
-              - {node: FindFreeSeat, ports: {out_label: "{seat}"}}
+              - {node: FindFreeSeat, ports: {out_place: "{seat_where}"}}
           - group: Sequence
             steps:
               - {node: RotateBy, ports: {radians: "1.57"}}
-              - {node: FindFreeSeat, ports: {out_label: "{seat}"}}
+              - {node: FindFreeSeat, ports: {out_place: "{seat_where}"}}
           - group: Sequence
             steps:
               - {node: Speak, ports: {text: "I cannot see a free seat"}}
               - {node: AlwaysFailure}
-      - {node: Speak, ports: {text: "Please sit on the {person}", person: "{seat}"}}
+      - {node: Speak, ports: {text: "Please sit on the {person}", person: "{seat_where}"}}
+
+  note_look:
+    description: "Remember what is visible about the guest in front of the camera (glasses, hair colour, hat, earrings; else the colour of the top) under a slot, to tell it later; silent, and succeeds when nothing is certain"
+    params: {slot: {default: guest1}}
+    example_args: {slot: guest1}
+    steps:
+      - group: Fallback
+        steps:
+          - {node: DescribeAttributes, ports: {out_text: "{${slot}_look}"}}
+          - {node: DescribePerson, ports: {out_text: "{${slot}_look}"}}
+          - {node: AlwaysSuccess}
+
+  tell_look:
+    description: "Say what was remembered with note_look about a guest, to another person ('Alice is wearing glasses'); says nothing when nothing was certain"
+    params: {slot: {default: guest1}}
+    example_args: {slot: guest1}
+    steps:
+      - {node: Speak, ports: {text: "By the way, {person} is {detail}.", person: "{${slot}_name}", detail: "{${slot}_look}", skip_if_unknown: "true"}}
+
+  introduce_to:
+    description: "Face the nearest person and introduce a remembered guest to them by name and favourite drink (who = the name to greet, e.g. the host)"
+    params: {slot: {default: guest1}, who: {default: host}}
+    example_args: {slot: guest1, who: John}
+    steps:
+      - group: Fallback
+        steps:
+          - {macro: look_at_person}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Hello ${who}. This is {person}.", person: "{${slot}_name}"}}
+      - {node: Speak, ports: {text: "Their favourite drink is {person}", person: "{${slot}_drink}"}}
 
   receive_guest:
-    description: "Wait for the doorbell, go to the door, ask the guest's name and favourite drink and remember them under a slot (opening the door is NOT automated: a person must open it)"
+    description: "Wait for the doorbell, go to the door, welcome the guest, face them, ask their name and favourite drink and remember them (and how they look) under a slot (opening the door is NOT automated: a person must open it)"
     params: {slot: {default: guest1}}
     example_args: {slot: guest1}
     steps:
       - {macro: wait_for_doorbell}
       - {macro: go_to_place, args: {place: door}}
+      - {macro: say, args: {text: "Welcome, please come in"}}
+      - group: Fallback
+        steps:
+          - {macro: look_at_person}
+          - {node: AlwaysSuccess}
       - {macro: meet_guest, args: {slot: "${slot}"}}
+      - {macro: note_look, args: {slot: "${slot}"}}
 
   hric_round:
-    description: "Receptionist task for two guests: receive each one, give them a seat, then introduce the first guest to the second"
+    description: "Use ALONE for the whole receptionist task (it already receives both guests, introduces and seats them; never add receive_guest or offer_seat around it): receive each one at the door, lead them to the living room, introduce them to the host and each other (name, drink, how the first guest looks) and offer a free seat. host = the host's name (default host), living_place = where the host and the seats are"
+    params: {host: {default: host}, living_place: {default: left_room}}
+    example_args: {host: John, living_place: left_room}
     steps:
       - {macro: receive_guest, args: {slot: guest1}}
+      - {macro: escort_person_to, args: {place: "${living_place}"}}
+      - {macro: introduce_to, args: {slot: guest1, who: "${host}"}}
       - {macro: offer_seat}
       - {macro: receive_guest, args: {slot: guest2}}
+      - {macro: escort_person_to, args: {place: "${living_place}"}}
+      - {macro: introduce_to, args: {slot: guest2, who: "${host}"}}
+      - {node: Speak, ports: {text: "Hello {person}. This is {detail}.", person: "{guest1_name}", detail: "{guest2_name}"}}
+      - {macro: tell_look, args: {slot: guest1}}
       - {macro: offer_seat}
-      - {macro: introduce_guest, args: {slot: guest1}}
+
+  follow_until_told:
+    description: "Follow a person (obstacle avoiding, locked to the first person seen) and keep following until they say stop / we are here, then stop; if the person is lost, looks again (3 tries). distance = gap in metres (min 0.5)"
+    params: {distance: {default: "1.0"}, words: {default: "stop,we are here,we have arrived"}}
+    example_args: {distance: "1.0"}
+    steps:
+      - {macro: say, args: {text: "I will follow you. Say stop when we have arrived."}}
+      - group: Sequence
+        retry: 3
+        steps:
+          - {macro: find_person}
+          - group: Parallel
+            success_count: 1
+            steps:
+              - {node: FollowTarget, ports: {approach: "true", distance: "${distance}", until_cancelled: "true", lock: "true", timeout_ms: "900000"}}
+              - {node: WaitForPhrase, ports: {words: "${words}", timeout_ms: "900000"}}
+      - {macro: say, args: {text: "Okay, I stop here."}}
+
+  help_me_carry:
+    description: "Help Me Carry: follow the operator until they say stop (obstacle avoiding), then drive back to the start place"
+    params: {distance: {default: "1.0"}}
+    example_args: {distance: "1.0"}
+    steps:
+      - {macro: follow_until_told, args: {distance: "${distance}"}}
+      - {macro: say, args: {text: "Going back to the start"}}
+      - {macro: return_home}
+
+  find_waving_person:
+    description: "Look around (turning on the spot, about two full turns) until somebody waves; fails if nobody does"
+    steps:
+      - group: Fallback
+        retry: 24
+        steps:
+          - {node: IsPersonWaving}
+          - group: Sequence
+            steps:
+              - {node: RotateBy, ports: {radians: "0.5"}}
+              - {node: Sleep, ports: {msec: "1500"}}
+              - {node: AlwaysFailure}
+
+  assist_waving_person:
+    description: "Find somebody who waves for help, walk up to them and ask how to help; what they answer becomes the next task"
+    steps:
+      - {macro: find_waving_person}
+      - {macro: approach_person}
+      - {macro: say, args: {text: "Hello, how can I help you?"}}
+
+  take_order:
+    description: "Ask a customer what they want, repeat it back and ask for a yes before accepting it (up to 3 tries); remembers it under a slot (customer1, customer2...)"
+    params: {slot: {default: customer1}}
+    example_args: {slot: customer1}
+    steps:
+      - group: Fallback
+        retry: 3
+        steps:
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "Hello, what would you like to order?"}}
+              - {node: WaitForTranscript, ports: {out_text: "{${slot}_order}"}}
+              - {node: Speak, ports: {text: "You would like: {person}. Is that right? Please say yes or no.", person: "{${slot}_order}"}}
+              - {node: WaitForTranscript, ports: {out_text: "{${slot}_reply}"}}
+              - {node: ExtractAnswer, ports: {kind: "yes", text: "{${slot}_reply}"}}
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "Sorry, let us try again."}}
+              - {node: AlwaysFailure}
+      - {node: Speak, ports: {text: "Thank you, I will pass on your order."}}
+
+  tell_order:
+    description: "Say aloud the order remembered with take_order (to the barman at the counter)"
+    params: {slot: {default: customer1}}
+    example_args: {slot: customer1}
+    steps:
+      - {node: Speak, ports: {text: "New order: {person}.", person: "{${slot}_order}", skip_if_unknown: "true"}}
+
+  restaurant_round:
+    description: "Restaurant for two customers: wait for a customer to wave, walk up, take and confirm the order, go back to the counter and tell it, then the same for the second customer (fetching and serving the items needs the arm)"
+    steps:
+      - {macro: find_waving_person}
+      - {macro: approach_person}
+      - {macro: take_order, args: {slot: customer1}}
+      - {macro: return_home}
+      - {macro: tell_order, args: {slot: customer1}}
+      - {macro: find_waving_person}
+      - {macro: approach_person}
+      - {macro: take_order, args: {slot: customer2}}
+      - {macro: return_home}
+      - {macro: tell_order, args: {slot: customer2}}
 
   # ---- walking around ----
   wander:

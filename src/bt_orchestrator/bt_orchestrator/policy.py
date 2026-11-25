@@ -7,13 +7,16 @@ _ARM = re.compile(r"\b(?:take|bring|carry|fetch|deliver|put|place (?:the|a|an|it
                   r"make (?:me|us)|get (?:me|us))\b", re.I)
 _ESCORT = re.compile(r"\b(?:take|bring|lead|show|guide|escort|walk)\s+(?:me|us|them|him|her|"
                      r"(?:the |our |my )?(?:guests?|visitors?|person|people))\b(?!\s+(?:a|an|the|some)\b)", re.I)
+# 'carry' / 'take' that are NOT arm work: Help Me Carry (follow the operator, who carries) and taking a customer's order (speech)
+_NOT_ARM = re.compile(r"\bhelp (?:me|us) carry\b|\bcarry (?:my|the|our) (?:bags?|luggage)\b.*\bfollow|"
+                      r"\btake (?:the|their|his|her|our|my) orders?\b|\btake an? order\b", re.I)
 REFUSAL = {'steps': [{'macro': 'say', 'args': {'text': 'Sorry, I have no arm and cannot do that'}}]}
 
 
 def needs_arm(goal):
     """True when the goal asks to move, hand over or open something. shortcut: verb list on the model's restated goal, no parsing;
     add a verb here when a new arm request slips through."""
-    return bool(_ARM.search(goal)) and not _ESCORT.search(goal)
+    return bool(_ARM.search(goal)) and not _ESCORT.search(goal) and not _NOT_ARM.search(goal)
 
 
 def refuse_no_arm(task_spec):

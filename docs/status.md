@@ -11,6 +11,7 @@ Read this before trusting any claim. The honest summary: **everything works in s
 |---|---|
 | Build | workspace builds on Jazzy in CI on every push; builds on Humble in a `ros:humble` container (`build-test-humble`) |
 | Planning chain | task -> stub or real llama-server -> SLM fallback -> validator -> executor, including a rejected-then-repaired attempt |
+| Real LLM, Gemma 4 E4B Q4_0 (RTX 3080 laptop, 2026-11-26) | GPSR-style eval: 99-100/100 plans valid, 95/100 meet what the command asked, median 0.7 s ([RoboCup tasks](robocup-tasks.md)) |
 | Real LLM (Gemma 4 E2B on a 4 GB GPU) | GPSR-style eval: 99 % on 100 generated commands, 95 % on 44 hand-written ones, all plans valid ([Evaluation](evaluation.md)) |
 | SLM | held-out valid / exact vs the rule generator ([benchmark](slm-benchmark.md)); published to Hugging Face |
 | Execution in a **simulated robot** | a node integrating `cmd_vel` into `odom`: live drive + turn (0.29 m / 0.47 rad for 0.30 / 0.50 requested), dry-run does not move, halt mid-drive, SIGKILL of an extension stops the robot within the mux timeout |

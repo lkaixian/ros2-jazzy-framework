@@ -2,9 +2,11 @@
 go to them, ask what they need, do it; 10 minutes, more than three tasks allowed, repeating a task is penalised.
 
 Starts: speech, LLM + validator + executor (plan read aloud), objects, people + pose (waving), depth, arm + OAK, Nav2.
-GAPS: nothing watches for a waving person while idle (macro wait_for_wave exists: the planner has to start it, and the spec grammar needs "when someone
-waves"); rubbish is not a detector class; picking and the dustbin need the arm; no memory of tasks already done (repeat penalty); the Final's format is open until 3 Dec.
-
+Plan: "help the person who waves" -> macro assist_waving_person (find_waving_person: turns on the spot, ~2 turns, until IsPersonWaving; approach_person; asks how it
+can help; the answer is heard as the next task by the normal speech -> plan -> run path). Macros validated, never run on a robot.
+GAPS: it only looks while that macro runs (nothing watches for waving while another task runs, and the macro starts only when a task asks for it, e.g. the
+operator says "look for someone who needs help"); waving is hand-tuned geometry tested on synthetic skeletons (T-13); rubbish is not a detector class and
+binning it needs the arm; no memory of tasks already done (repeat penalty); the Final's format is open until 3 Dec.
 Any enable_* below can be overridden on the command line; dry_run stays true until you pass dry_run:=false. Notes: docs/robocup-tasks.md.
 """
 from bt_common.launch_utils import task_launch

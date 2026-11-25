@@ -245,6 +245,7 @@ pid_extension_node:
     scan_required: true         # no fresh scan = refuse to drive (real robot)
     scan_yaw_offset: 3.1416     # rad: lidar faces backwards on this robot (= base_to_laser yaw in navigation.yaml)
     blocked_give_up_sec: 3.0     # blocked this long -> the node fails instead of waiting forever
+    avoid_turn: 0.4              # rad/s: FollowTarget turns this fast toward the freer side when an obstacle (not the person) is ahead
 
 pose_extension_node:
   ros__parameters:
