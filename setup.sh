@@ -20,7 +20,7 @@ DRY=0; YES=0; MINIMAL=0; BACKEND=auto
 ONLY=""; SKIP=""
 LLAMA_DIR="${LLAMA_DIR:-$HOME/llama.cpp}"
 ROBOT_WS="${ROBOT_WS:-$HOME/ros2_ws}"   # robot drivers live outside this repo
-LLM_REPO="${LLM_REPO:-ggml-org/gemma-4-E2B-it-GGUF}"   # E2B: E4B Q4_0 does not fit a 4 GB GPU well
+LLM_REPO="${LLM_REPO:-ggml-org/gemma-4-E4B-it-GGUF}"   # E4B Q4_0 is 4.28 GiB: needs a GPU with >= 8 GB; on a 4 GB GPU use --llm-repo ggml-org/gemma-4-E2B-it-GGUF
 SLM_BASE="${SLM_BASE:-LiquidAI/LFM2.5-230M-Base}"
 MIN_LLAMA_BUILD=8637          # first llama.cpp build with Gemma 4 support
 LLAMA_TAG="${LLAMA_TAG:-b12375}"   # the llama.cpp release this was tested with (CUDA 12.8 prebuilt); LLAMA_TAG=latest takes the newest
