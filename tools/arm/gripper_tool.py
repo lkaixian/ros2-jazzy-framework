@@ -28,22 +28,9 @@ import telemetry
 
 GRIPPER_ID = 15
 _LOCK = None     # held for the whole run so no other tool talks to the servos at the same time
-M_PER_TICK, M_OFFSET = 1.7627e-5, -0.0361
-CLOSED_TICKS, OPEN_TICKS, GAP_CLOSED_MM, GAP_OPEN_MM = 590, -930, 20.0, 72.0   # hand-measured, see param/arm_gripper.yaml
+from arm_control.gripper import (CLOSED_TICKS, GAP_CLOSED_MM, GAP_OPEN_MM, M_OFFSET, M_PER_TICK, OPEN_TICKS, gap_mm,  # noqa: E402,F401
+                                 ticks_for_gap, to_m)
 A_PER_UNIT = 0.00269
-
-
-def to_m(raw):
-    return raw * M_PER_TICK + M_OFFSET
-
-
-def gap_mm(raw):
-    """Estimated distance between the finger pads (padding excluded) for a servo position, from the two ruler-measured ends (+-3 mm)."""
-    return GAP_CLOSED_MM + (CLOSED_TICKS - raw) * (GAP_OPEN_MM - GAP_CLOSED_MM) / (CLOSED_TICKS - OPEN_TICKS)
-
-
-def ticks_for_gap(gap):
-    return round(CLOSED_TICKS - (gap - GAP_CLOSED_MM) * (CLOSED_TICKS - OPEN_TICKS) / (GAP_OPEN_MM - GAP_CLOSED_MM))
 
 
 def open_bus():
@@ -120,7 +107,7 @@ def range_mode(path):
 
 
 CURRENT_CAP = 250                  # units (0.67 A): more needs --force
-SAFE_OPEN, SAFE_CLOSE = OPEN_TICKS + 80, CLOSED_TICKS + 30   # stop short of the open stop; go a little past the soft closed end so it presses
+from arm_control.gripper import SAFE_CLOSE, SAFE_OPEN  # noqa: E402
 STEP, TICK, STALL_SEC, MOVE_LIMIT_SEC = 25, 0.05, 0.3, 12.0
 V_MIN, TEMP_MAX = 10.5, 55
 
