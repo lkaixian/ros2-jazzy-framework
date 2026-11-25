@@ -20,6 +20,9 @@ whitelist:
   - look_around
   - find_person
   - find_object
+  - pick_object
+  - put_down
+  - move_object
   - go_find_object
   - go_find_person
   - go_find_and_say
@@ -196,6 +199,45 @@ macros:
             steps:
               - {node: Speak, ports: {text: "I cannot find the ${label}"}}
               - {node: AlwaysFailure}
+
+  pick_object:
+    description: "Pick up an object (detector label) that the arm camera sees right here; says so and FAILS if it cannot. The robot then holds it"
+    params: {label: {required: true}}
+    example_args: {label: cup}
+    steps:
+      - group: Fallback
+        steps:
+          - {node: PickObject, ports: {label: "${label}"}}
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "I could not pick up the ${label}"}}
+              - {node: AlwaysFailure}
+
+  put_down:
+    description: "Put the object being held down at a named arm place (table, shelf, bin), let go, and fold the arm away"
+    params: {place: {required: true}}
+    example_args: {place: table}
+    steps:
+      - group: Fallback
+        steps:
+          - group: Sequence
+            steps:
+              - {node: PlaceObject, ports: {place: "${place}"}}
+              - {node: ArmPark}
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "I could not put it down at the ${place}"}}
+              - {node: AlwaysFailure}
+
+  move_object:
+    description: "Take an object from one place to another: go to from_place, pick the object up, go to to_place, put it down at the arm place put_place (table, shelf, bin)"
+    params: {label: {required: true}, from_place: {required: true}, to_place: {required: true}, put_place: {required: true}}
+    example_args: {label: cup, from_place: kitchen, to_place: door, put_place: table}
+    steps:
+      - {macro: go_to_place, args: {place: "${from_place}"}}
+      - {macro: pick_object, args: {label: "${label}"}}
+      - {macro: go_to_place, args: {place: "${to_place}"}}
+      - {macro: put_down, args: {place: "${put_place}"}}
 
   go_find_object:
     description: "Go to a named place and only look for an object there (never picks up, takes or brings it)"

@@ -6,8 +6,8 @@ that uses the whitelisted macros). Uses: (1) an evaluation set for the LLM (`too
 a fine-tune (command -> gold), checked against the real validator by a test.
 
   python3 tools/gpsr/commands.py --n 200 --seed 1 --out /tmp/gpsr_eval.jsonl
-Templates are ours (inspired by the GPSR style: navigation, people, vision, and manipulation that this robot must refuse because it has no
-working arm); they are not the official generator's sentences.
+Templates are ours (inspired by the GPSR style: navigation, people, vision, picking and moving small objects with the arm, and requests it must refuse
+(hand-overs, doors, pouring)); they are not the official generator's sentences.
 
 expect keys (all given keys must hold): visit [places in order] | says | macro name | node id | detects label |
 any_node [ids] | laps N | refuse (says something and drives nowhere)
@@ -94,12 +94,17 @@ def templates(rng, P):
     add('vision', ['tell me what you see', 'describe what is around you'],
         lambda: ({}, [call('look_around'), call('report_object', label='person')],
                  {'says': True, 'any_node': ['DetectObject', 'DetectPerson', 'CountPeople', 'CountObjects']}))
-    refuse = [call('say', text='Sorry, I have no arm and cannot do that')]
-    add('refuse', ['bring me a {l}', 'fetch a {l}', 'get me a {l}'],
+    arm_places = ['table', 'shelf', 'bin']
+    add('manipulate', ['pick up the {l}', 'grab the {l}'],
+        lambda: (lambda lb: ({'l': lb}, [call('pick_object', label=lb)], {'macro': 'pick_object'}))(lab()))
+    add('manipulate', ['take the {l} from the {a} to the {b} and put it on the {s}'],
+        lambda: (lambda lb, ab, s: ({'l': lb, 'a': say(ab[0]), 'b': say(ab[1]), 's': s},
+                                    [call('move_object', label=lb, from_place=ab[0], to_place=ab[1], put_place=s)],
+                                    {'visit': list(ab), 'macro': 'move_object'}))(lab(), two(), rng.choice(arm_places)))
+    refuse = [call('say', text='Sorry, I cannot do that')]
+    add('refuse', ['bring me a {l}', 'fetch a {l}', 'get me a {l}', 'hand me the {l}'],
         lambda: (lambda lb: ({'l': lb}, refuse, {'refuse': True}))(lab()))
-    add('refuse', ['pick up the {l}', 'grab the {l} from the {p}', 'put the {l} on the table', 'take the {l} to the {p}'],
-        lambda: (lambda lb, p: ({'l': lb, 'p': say(p)}, refuse, {'refuse': True}))(lab(), pl()))
-    add('refuse', ['open the door', 'open the cupboard', 'pour me a drink'], lambda: ({}, refuse, {'refuse': True}))
+    add('refuse', ['open the door', 'open the cupboard', 'pour me a drink', 'throw this away'], lambda: ({}, refuse, {'refuse': True}))
     return T
 
 

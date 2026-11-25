@@ -1,6 +1,6 @@
 Robot facts (read before planning):
 - Kobuki TurtleBot2 base, speed limited to 0.3 m/s forward and 0.8 rad/s turning. It has a camera and a lidar.
-- It cannot pick up, carry or hand over objects: there is no working arm. Never plan grasping.
+- It has a small arm with a gripper (finger gap 20-72 mm, so only small objects fit). It can pick up an object it sees in front of it, carry it on the base and put it down at an arm place (table, shelf, bin). It CANNOT hand an object to a person, open doors, pour or throw. Plan picking only with `pick_object`, `put_down` and `move_object`.
 - Named places (use with `NavigateToPlace`): start, left_room, door, right_room, far_corner.
 - `NavigateToPlace` and `NavigateToPose` need a localized robot. After a blocked path run `ClearCostmaps` and retry once.
 - `DetectObject` only knows the labels listed under "Object labels"; `DetectPerson` needs a person in view.
@@ -16,7 +16,10 @@ Example: go to the door and say hello -> [{"macro":"go_and_say","args":{"place":
 Example: find a person in the left room and tell them hello -> [{"macro":"go_find_and_say","args":{"place":"left_room","text":"Hello"}}]
 Example: follow me -> [{"macro":"follow_person"}]
 Example: go home -> [{"macro":"return_home"}]
-Example: bring me a cup -> [{"macro":"say","args":{"text":"Sorry, I have no arm and cannot bring objects"}}]
+Example: pick up the cup -> [{"macro":"pick_object","args":{"label":"cup"}}]
+Example: put it on the table -> [{"macro":"put_down","args":{"place":"table"}}]
+Example: take the cup from the left room to the door and put it on the table -> [{"macro":"move_object","args":{"label":"cup","from_place":"left_room","to_place":"door","put_place":"table"}}]
+Example: hand me the cup -> [{"macro":"say","args":{"text":"Sorry, I cannot hand objects to people"}}]
 Example: guide the guest to the right room -> [{"macro":"escort_person_to","args":{"place":"right_room"}}]
 Example: welcome the guest and ask their name and drink -> [{"macro":"meet_guest","args":{"slot":"guest1"}}]
 Example: is there anyone in the right room -> [{"macro":"go_find_person","args":{"place":"right_room"}}]
@@ -29,8 +32,8 @@ Example: tell me when someone rings the bell -> [{"macro":"wait_for_doorbell"}]
 Example: patrol between the door and the start 4 times -> [{"macro":"patrol_laps","args":{"first":"door","second":"start","laps":"4"}}]
 Example: say hello at the start -> [{"macro":"go_and_say","args":{"place":"start","text":"hello"}}]
 Example: go to the far corner and look for a backpack -> [{"macro":"go_find_object","args":{"place":"far_corner","label":"backpack"}}]
-Example: take the orange to the door -> [{"macro":"say","args":{"text":"Sorry, I have no arm and cannot bring objects"}}]
-Example: open the door -> [{"macro":"say","args":{"text":"Sorry, I have no arm and cannot open doors"}}]
+Example: take the orange from the far corner to the start and put it on the shelf -> [{"macro":"move_object","args":{"label":"orange","from_place":"far_corner","to_place":"start","put_place":"shelf"}}]
+Example: open the door -> [{"macro":"say","args":{"text":"Sorry, I cannot open doors"}}]
 Example: tell me how many people you see -> [{"node":"CountPeople","ports":{"out_count":"{n}"}},{"node":"Speak","ports":{"text":"I see {person} people","person":"{n}"}}]
 Example: visit the left room, then the right room, then the door, saying hello in each -> [{"foreach":["left_room","right_room","door"],"as":"p","steps":[{"macro":"go_and_say","args":{"place":"${p}","text":"hello"}}]}]
 Example: walk around for a while -> [{"macro":"wander","args":{"legs":"6"}}]

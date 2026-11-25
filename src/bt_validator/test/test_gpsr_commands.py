@@ -38,7 +38,7 @@ def ex(s):
 def test_generation_is_deterministic_and_varied():
     assert gc.generate(50, seed=1) == gc.generate(50, seed=1) and gc.generate(50, seed=1) != gc.generate(50, seed=2)
     assert len({i['command'] for i in ITEMS}) > 150                      # many different sentences
-    assert {i['category'] for i in ITEMS} == {'navigation', 'people', 'vision', 'refuse'}
+    assert {i['category'] for i in ITEMS} == {'navigation', 'people', 'vision', 'manipulate', 'refuse'}
     json.dumps(ITEMS)                                                    # plain JSON for the JSONL file
 
 
@@ -72,7 +72,7 @@ def test_handwritten_commands_are_well_formed():
     rows = [json.loads(line) for line in open(os.path.join(ROOT, 'tools', 'gpsr', 'handwritten.jsonl')) if line.strip()]
     keys = {'visit', 'says', 'macro', 'node', 'detects', 'any_node', 'laps', 'refuse'}
     assert len(rows) >= 30 and len({r['id'] for r in rows}) == len(rows) == len({r['command'] for r in rows})
-    assert all(r['category'] in {'navigation', 'people', 'vision', 'refuse'} and r['expect'] and set(r['expect']) <= keys for r in rows)
+    assert all(r['category'] in {'navigation', 'people', 'vision', 'manipulate', 'refuse'} and r['expect'] and set(r['expect']) <= keys for r in rows)
     assert all(m in LIB for r in rows for m in [r['expect'].get('macro')] if m)
 
 
@@ -81,7 +81,7 @@ def test_no_arm_policy_matches_the_refuse_category():
     from bt_orchestrator.policy import needs_arm
     rows = [{'command': i['command'], 'category': i['category']} for i in gc.generate(600, seed=7)]
     rows += [json.loads(line) for line in open(os.path.join(ROOT, 'tools', 'gpsr', 'handwritten.jsonl')) if line.strip()]
-    bad = [(r['command'], r['category']) for r in rows if needs_arm(r['command']) != (r['category'] == 'refuse')]
+    bad = [(r['command'], r['category']) for r in rows if needs_arm(r['command']) != (r['category'] in ('refuse', 'manipulate'))]
     assert not bad, bad[:5]
 
 
