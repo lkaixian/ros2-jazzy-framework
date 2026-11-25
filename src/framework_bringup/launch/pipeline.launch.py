@@ -1,7 +1,7 @@
 """llama.cpp (C++ bridge) -> SLM -> validator -> bt_executor. Parameters: param/pipeline.yaml,
 param/llama_server.yaml. dry_run defaults to true (pipeline.yaml)."""
 from bt_common.launch_utils import (cast_like, declare_overrides, declare_params_dir, given,
-                                    load_yaml, make_node, param_path)
+                                    load_yaml, local_params, make_node, param_path)
 from launch import LaunchDescription
 from launch.actions import ExecuteProcess, OpaqueFunction
 
@@ -10,7 +10,7 @@ ARGS = ('start_llama_server', 'llama_model', 'llama_hf_repo', 'llama_port', 'lla
 
 
 def _nodes(context):
-    srv = load_yaml(param_path(context, 'llama_server.yaml'))
+    srv = {**load_yaml(param_path(context, 'llama_server.yaml')), **((local_params()[1].get('llama_server') or {}).get('ros__parameters') or {})}
 
     def pick(arg, key):
         v = given(context, arg)

@@ -5,7 +5,7 @@
 
 start: true               # true: launch llama-server together with the pipeline
 model: ""                 # local GGUF path; "" = download hf_repo below into llama.cpp's cache
-hf_repo: ggml-org/gemma-4-E4B-it-GGUF   # E4B (RTX 3080 laptop). On a 4 GB GPU use ggml-org/gemma-4-E2B-it-GGUF (E4B Q4_0 is 4.28 GiB)
+hf_repo: ggml-org/gemma-4-E4B-it-GGUF:Q4_0   # E4B (RTX 3080 laptop). On a 4 GB GPU use ggml-org/gemma-4-E2B-it-GGUF (E4B Q4_0 is 4.28 GiB)
 port: 8080                # keep in step with llm_bridge_node.server_url (pipeline.yaml)
 # --reasoning off: Gemma 4 otherwise spends the 512-token reply budget on hidden "thinking" and the JSON is cut off
 extra_args: ["-ngl", "99", "-c", "8192", "-np", "1", "--reasoning", "off"]   # the planner prompt is ~4.3k tokens + 768 reply: 4096 rejected every request; -np 1: one request at a time gets the whole window

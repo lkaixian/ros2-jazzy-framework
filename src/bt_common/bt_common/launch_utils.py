@@ -82,10 +82,23 @@ def overrides(context, path, node, mapping):
     return out
 
 
+def local_params():
+    """Per-machine overrides written by setup.sh: the nearest `models/local.yaml` above this file (the repository's models
+    folder, gitignored), or $ROBOCUP_LOCAL_PARAMS. Holds the model paths/devices chosen for THIS computer. ('', {}) when absent."""
+    path = os.environ.get('ROBOCUP_LOCAL_PARAMS', '')
+    d = os.path.dirname(os.path.realpath(__file__))
+    for _ in range(8):
+        if path and os.path.isfile(path):
+            break
+        path, d = os.path.join(d, 'models', 'local.yaml'), os.path.dirname(d)
+    return (path, load_yaml(path)) if os.path.isfile(path) else ('', {})
+
+
 def make_node(context, pkg, exe, node, filename, mapping=None, extra=None, **kw):
     """Node loading `filename`, plus explicitly-given launch args (and `extra` programmatic values)."""
     path = param_path(context, filename)
-    params = [path]
+    local, _ = local_params()
+    params = [path] + ([local] if local else [])    # local.yaml wins over the tracked file; launch args win over both
     merged = overrides(context, path, node, mapping or {})
     merged.update(extra or {})
     if merged:

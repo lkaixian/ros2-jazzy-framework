@@ -43,6 +43,22 @@ class Vosk:
         return res.get('text', ''), '', conf
 
 
+def _preload_cuda12():
+    """ctranslate2 wants CUDA 12 cuBLAS/cuDNN; pip's nvidia-cublas-cu12 / nvidia-cudnn-cu12 keep them off the loader path.
+    Load them from there so no LD_LIBRARY_PATH export is needed. Silent when absent (CPU, or the system has them)."""
+    import ctypes
+    import glob
+    import importlib.util
+    spec = importlib.util.find_spec('nvidia')
+    for root in (spec.submodule_search_locations if spec and spec.submodule_search_locations else []):
+        for pat in ('cublas/lib/libcublas.so.12', 'cudnn/lib/libcudnn.so.9'):
+            for lib in glob.glob(f'{root}/{pat}'):
+                try:
+                    ctypes.CDLL(lib, mode=ctypes.RTLD_GLOBAL)
+                except OSError:
+                    pass
+
+
 class FasterWhisper:
     name = 'faster_whisper'
 
@@ -51,12 +67,27 @@ class FasterWhisper:
             from faster_whisper import WhisperModel
         except ImportError as e:
             raise SttError('faster-whisper not installed: pip install faster-whisper') from e
+        _preload_cuda12()
         try:
-            self.model = WhisperModel(model, device=device, compute_type=compute_type)
+            self.model = self._load(WhisperModel, model, device, compute_type)
         except Exception as e:  # noqa: BLE001  bad name/path, no network, wrong compute type...
-            raise SttError(f'faster-whisper could not load {model!r}: {e}') from e
+            if device == 'cpu':
+                raise SttError(f'faster-whisper could not load {model!r}: {e}') from e
+            try:    # a GPU choice made on another computer (no CUDA, missing cuBLAS/cuDNN): run on CPU instead of crashing
+                print(f'faster-whisper: {device} unusable ({e}); falling back to cpu/int8', flush=True)
+                self.model = self._load(WhisperModel, model, 'cpu', 'int8')
+            except Exception as e2:  # noqa: BLE001
+                raise SttError(f'faster-whisper could not load {model!r}: {e2}') from e2
         self.language = language or None
         self.initial_prompt = initial_prompt or None
+
+    @staticmethod
+    def _load(WhisperModel, model, device, compute_type):
+        m = WhisperModel(model, device=device, compute_type=compute_type)
+        if device != 'cpu':     # missing CUDA libraries only fail at the first encode, so run one now
+            import numpy as np
+            list(m.transcribe(np.zeros(16000, dtype=np.float32), vad_filter=False)[0])
+        return m
 
     def transcribe(self, pcm, rate):
         import numpy as np

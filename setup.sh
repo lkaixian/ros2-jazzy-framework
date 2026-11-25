@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-shot setup for ros2-jazzy-robocup-fw: system + ROS + Python packages, llama.cpp (LLM
-# runtime), the LLM (Gemma 4 E4B GGUF) and the SLM base (LFM2.5-230M-Base), then the build.
+# runtime), the LLM, STT and TTS models you pick for this computer (menus, with "other") and the SLM base (LFM2.5-230M-Base), then the build.
 #
 #   ./setup.sh                      # everything, asks before starting
 #   ./setup.sh --dry-run            # print every command, change nothing
@@ -8,19 +8,21 @@
 #   ./setup.sh --skip models,llamacpp
 #   ./setup.sh --yes --backend cuda --minimal
 #
-# Steps (in order): apt rosdep python llamacpp models voice build robot   (optional, never default: slm, slmweights)
+# Steps (in order): apt rosdep python llamacpp choose models voice build robot   (optional, never default: slm, slmweights)
 # slmweights: download a published fine-tuned SLM instead of training one:  SLM_WEIGHTS_REPO=<user>/<repo> ./setup.sh --only slmweights
 # robot: Kobuki base (turtlebot2_ros2_jazzy + kobuki_*), RPLIDAR (sllidar_ros2), audio_common into ROBOT_WS (~/ros2_ws), plus udev rules. Jazzy only.
 # --backend prebuilt: download the official llama.cpp CUDA 12.8 release (no CUDA toolkit, no compiling).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ALL_STEPS=(apt rosdep python llamacpp models voice build robot)
+ALL_STEPS=(apt rosdep python llamacpp choose models voice build robot)
 DRY=0; YES=0; MINIMAL=0; BACKEND=auto
 ONLY=""; SKIP=""
 LLAMA_DIR="${LLAMA_DIR:-$HOME/llama.cpp}"
 ROBOT_WS="${ROBOT_WS:-$HOME/ros2_ws}"   # robot drivers live outside this repo
-LLM_REPO="${LLM_REPO:-ggml-org/gemma-4-E4B-it-GGUF}"   # E4B Q4_0 is 4.28 GiB: needs a GPU with >= 8 GB; on a 4 GB GPU use --llm-repo ggml-org/gemma-4-E2B-it-GGUF
+ROS_DOMAIN_ID_CHOICE="${ROS_DOMAIN_ID_CHOICE:-}"
+LLM_REPO="${LLM_REPO:-}"; STT_MODEL="${STT_MODEL:-}"; STT_DEVICE="${STT_DEVICE:-}"; STT_COMPUTE="${STT_COMPUTE:-}"; TTS_ENGINE="${TTS_ENGINE:-}"   # empty = the choose step picks (menu, or the hardware default with --yes)
+CHOICE="$ROOT/models/choice.env"   # what choose picked (gitignored with models/)
 SLM_BASE="${SLM_BASE:-LiquidAI/LFM2.5-230M-Base}"
 MIN_LLAMA_BUILD=8637          # first llama.cpp build with Gemma 4 support
 LLAMA_TAG="${LLAMA_TAG:-b12375}"   # the llama.cpp release this was tested with (CUDA 12.8 prebuilt); LLAMA_TAG=latest takes the newest
@@ -38,7 +40,10 @@ Options:
   --minimal          skip the optional heavy Python extras (STT/TTS engines)
   --backend B        llama.cpp backend: auto|cpu|cuda|vulkan|prebuilt   (default auto: cuda if nvcc exists)
   --llama-dir DIR    llama.cpp checkout/build dir (default $LLAMA_DIR); LLAMA_TAG=<bNNNN|latest> pins the llama.cpp release (default $LLAMA_TAG)
-  --llm-repo REPO    GGUF repo for llama-server -hf (default $LLM_REPO)
+  --llm-repo REPO    GGUF repo[:quant] for llama-server -hf (skips the LLM menu)
+  --stt-model M      faster-whisper size name or CTranslate2 HF repo (skips the STT menu)
+  --tts-engine E     espeak | piper | kokoro (skips the TTS menu)
+  --ros-domain-id N  write export ROS_DOMAIN_ID=N into env.sh (default: ask; with --yes nothing is written)
   --slm-base REPO    base model to fine-tune (default $SLM_BASE)
 EOF
 }
@@ -53,6 +58,9 @@ while [[ $# -gt 0 ]]; do
     --backend) BACKEND="$2"; shift ;;
     --llama-dir) LLAMA_DIR="$2"; shift ;;
     --llm-repo) LLM_REPO="$2"; shift ;;
+    --stt-model) STT_MODEL="$2"; shift ;;
+    --tts-engine) TTS_ENGINE="$2"; shift ;;
+    --ros-domain-id) ROS_DOMAIN_ID_CHOICE="$2"; shift ;;
     --slm-base) SLM_BASE="$2"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -191,7 +199,74 @@ step_llamacpp() {
   fi
 }
 
+# menu TITLE DEFAULT "label|value"...  -> MENU_VAL. A value of "other" asks for free text. Unattended: the default.
+menu() {
+  local title="$1" def="$2"; shift 2; local opts=("$@") i=1 ans
+  if [[ $YES -eq 1 || $DRY -eq 1 || ! -t 0 ]]; then MENU_VAL="${opts[def-1]#*|}"; return; fi
+  echo; echo "$title"
+  for o in "${opts[@]}"; do printf '  %d) %s%s\n' "$i" "${o%%|*}" "$([[ $i -eq $def ]] && echo '   [default]')"; i=$((i + 1)); done
+  read -r -p "Choice [$def]: " ans; ans="${ans:-$def}"
+  [[ "$ans" =~ ^[0-9]+$ && $ans -ge 1 && $ans -le ${#opts[@]} ]] || die "bad choice: $ans"
+  MENU_VAL="${opts[ans-1]#*|}"
+  if [[ "$MENU_VAL" == other ]]; then read -r -p "  enter it: " MENU_VAL; [[ -n "$MENU_VAL" ]] || die "empty answer"; fi
+}
+
+# Models are chosen per computer: nothing machine-specific is committed (models/local.yaml overrides the param files).
+step_choose() {
+  local vram=0
+  command -v nvidia-smi >/dev/null && vram="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | sort -n | tail -1)"
+  vram="${vram:-0}"; [[ "$vram" =~ ^[0-9]+$ ]] || vram=0
+  log "choose models (GPU memory detected: ${vram} MiB; 0 = no NVIDIA GPU, everything runs on the CPU)"
+  [[ -f "$CHOICE" ]] && { local a=$LLM_REPO b=$STT_MODEL c=$STT_DEVICE d=$STT_COMPUTE e=$TTS_ENGINE; . "$CHOICE"
+    LLM_REPO=${a:-$LLM_REPO}; STT_MODEL=${b:-$STT_MODEL}; STT_DEVICE=${c:-$STT_DEVICE}; STT_COMPUTE=${d:-$STT_COMPUTE}; TTS_ENGINE=${e:-$TTS_ENGINE}
+    echo "  earlier choice from $CHOICE kept: delete it to choose again"; }
+  local big=1; (( vram >= 8000 )) || big=2
+  if [[ -z "$LLM_REPO" ]]; then
+    menu "LLM (planner, runs in llama-server):" "$big" \
+      "Gemma 4 E4B Q4_0, 4.3 GiB, needs a GPU with >= 8 GB|ggml-org/gemma-4-E4B-it-GGUF:Q4_0" \
+      "Gemma 4 E2B, smaller, for 4 GB GPUs and slow CPUs|ggml-org/gemma-4-E2B-it-GGUF" \
+      "other: a Hugging Face GGUF repo, optionally with :quant|other"
+    LLM_REPO="$MENU_VAL"
+  fi
+  if [[ -z "$STT_MODEL" ]]; then
+    local sd=4; (( vram >= 6000 )) && sd=1
+    menu "Speech-to-text (faster-whisper; GPU entries get CUDA 12 libraries installed):" "$sd" \
+      "large-v3-turbo, best accuracy, GPU|deepdml/faster-whisper-large-v3-turbo-ct2" \
+      "distil-large-v3, English only, GPU|Systran/faster-distil-whisper-large-v3" \
+      "small.en, CPU|small.en" \
+      "base.en, CPU, smallest|base.en" \
+      "other: a faster-whisper size name or a CTranslate2 Hugging Face repo|other"
+    STT_MODEL="$MENU_VAL"
+  fi
+  if [[ -z "$STT_DEVICE" ]]; then
+    local dd=2; (( vram >= 6000 )) && dd=1
+    case "$STT_MODEL" in *.en|tiny|base|small|medium) dd=2 ;; esac
+    menu "STT device for $STT_MODEL (falls back to the CPU at run time if CUDA is unusable):" "$dd" "GPU (cuda, int8_float16)|cuda:int8_float16" "CPU (int8)|cpu:int8"
+    STT_DEVICE="${MENU_VAL%%:*}"; STT_COMPUTE="${MENU_VAL##*:}"
+  fi
+  if [[ -z "$TTS_ENGINE" ]]; then
+    menu "Text-to-speech:" 1 \
+      "Kokoro, natural voice, runs on the CPU|kokoro" \
+      "Piper lessac, lighter|piper" \
+      "espeak, robotic, no download|espeak" \
+      "other: an engine name (mock) you configure by hand|other"
+    TTS_ENGINE="$MENU_VAL"
+  fi
+  if [[ $DRY -eq 0 ]]; then
+    mkdir -p "$ROOT/models"
+    printf 'LLM_REPO=%q\nSTT_MODEL=%q\nSTT_DEVICE=%q\nSTT_COMPUTE=%q\nTTS_ENGINE=%q\n' "$LLM_REPO" "$STT_MODEL" "$STT_DEVICE" "$STT_COMPUTE" "$TTS_ENGINE" >"$CHOICE"
+  fi
+  echo "  LLM $LLM_REPO | STT $STT_MODEL on $STT_DEVICE/$STT_COMPUTE | TTS $TTS_ENGINE   (saved to $CHOICE)"
+}
+
+# The later steps also run alone (--only models): take what choose saved, else the hardware default.
+load_choice() {
+  [[ -n "$LLM_REPO" && -n "$STT_MODEL" && -n "$STT_DEVICE" && -n "$TTS_ENGINE" ]] && return
+  step_choose >/dev/null
+}
+
 step_models() {
+  load_choice
   log "models: LLM $LLM_REPO (via llama-server) and SLM base $SLM_BASE"
   local srv="$HOME/.local/bin/llama-server"; command -v llama-server >/dev/null && srv="$(command -v llama-server)"
   if [[ $DRY -eq 1 ]]; then
@@ -231,21 +306,46 @@ PYEOF
 }
 
 step_voice() {
-  log "voice models: Piper voice (TTS) and faster-whisper base.en (STT) into $ROOT/models"
-  if [[ $DRY -eq 1 ]]; then
-    echo "  \$ $PY -c 'hf_hub_download(\"rhasspy/piper-voices\", en/en_US/lessac/medium/en_US-lessac-medium.onnx[.json], local_dir=models/tts)'"
-    echo "  \$ $PY -c 'WhisperModel(\"base.en\", download_root=models/stt)'"
-    return
+  load_choice
+  log "voice models: STT $STT_MODEL, TTS $TTS_ENGINE into $ROOT/models; settings for this computer go to models/local.yaml"
+  if [[ $DRY -eq 1 ]]; then echo "  (dry run: nothing downloaded or written)"; return; fi
+  if [[ $STT_DEVICE != cpu ]]; then   # ctranslate2 wants CUDA 12 cuBLAS + cuDNN 9; the system may only have CUDA 13
+    local pip=("$PY" -m pip install --user); [[ $DISTRO == humble ]] || pip+=(--break-system-packages)
+    run "${pip[@]}" nvidia-cublas-cu12 nvidia-cudnn-cu12
   fi
-  "$PY" - "$ROOT/models" <<'PYEOF' || die "voice model download failed (pip install faster-whisper huggingface_hub piper-tts first: python step)"
-import sys
-from huggingface_hub import hf_hub_download
-from faster_whisper import WhisperModel
-root = sys.argv[1]
-for f in ("en/en_US/lessac/medium/en_US-lessac-medium.onnx", "en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"):
-    hf_hub_download("rhasspy/piper-voices", f, local_dir=root + "/tts")
-WhisperModel("base.en", device="cpu", compute_type="int8", download_root=root + "/stt")
-print("  Piper voice: models/tts/en/en_US/lessac/medium/en_US-lessac-medium.onnx ; whisper: models/stt")
+  "$PY" - "$ROOT/models" "$STT_MODEL" "$STT_DEVICE" "$STT_COMPUTE" "$TTS_ENGINE" "$LLM_REPO" <<'PYEOF' || die "voice model download failed (pip install faster-whisper huggingface_hub piper-tts kokoro-onnx first: python step)"
+import glob, os, sys, urllib.request
+import yaml
+root, stt, dev, comp, tts, llm = sys.argv[1:7]
+os.makedirs(root, exist_ok=True)
+if '/' in stt:
+    from huggingface_hub import snapshot_download
+    snapshot_download(stt, cache_dir=root + "/stt")
+    sub = 'models--' + stt.replace('/', '--')
+else:
+    from faster_whisper import WhisperModel
+    WhisperModel(stt, device="cpu", compute_type="int8", download_root=root + "/stt")
+    sub = 'models--Systran--faster-whisper-' + stt
+snap = sorted(glob.glob(f"{root}/stt/{sub}/snapshots/*"))
+# a local folder: a bare name makes faster-whisper contact huggingface.co first, which hung start-up
+stt_node = {'model': snap[-1] if snap else stt, 'device': dev, 'compute_type': comp}
+tts_node = {'engine': tts}
+if tts == 'piper':
+    from huggingface_hub import hf_hub_download
+    d = "en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+    for f in (d, d + ".json"):
+        hf_hub_download("rhasspy/piper-voices", f, local_dir=root + "/tts")
+    tts_node['piper_model'] = f"{root}/tts/{d}"
+elif tts == 'kokoro':
+    base = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
+    os.makedirs(root + "/tts/kokoro", exist_ok=True)
+    for f in ("kokoro-v1.0.onnx", "voices-v1.0.bin"):
+        if not os.path.exists(f"{root}/tts/kokoro/{f}"):
+            urllib.request.urlretrieve(base + f, f"{root}/tts/kokoro/{f}")
+    tts_node.update(kokoro_model=f"{root}/tts/kokoro/kokoro-v1.0.onnx", kokoro_voices=f"{root}/tts/kokoro/voices-v1.0.bin", voice='af_heart')
+local = {'stt_node': {'ros__parameters': stt_node}, 'tts_node': {'ros__parameters': tts_node}, 'llama_server': {'ros__parameters': {'hf_repo': llm}}}   # no such node: ROS ignores it, pipeline.launch.py reads it
+yaml.safe_dump(local, open(root + "/local.yaml", "w"), sort_keys=False)
+print("  wrote", root + "/local.yaml")
 PYEOF
 }
 
@@ -259,6 +359,15 @@ export PATH=/usr/bin:\$HOME/.local/bin:\$PATH
 . /opt/ros/$DISTRO/setup.bash
 . "$ROOT/install/setup.bash"
 EOF
+    # exports beyond the above only when you answer: ROS_DOMAIN_ID (0-101 is the range DDS port numbers allow)
+    local dom="$ROS_DOMAIN_ID_CHOICE"
+    if [[ -z "$dom" && $YES -eq 0 && -t 0 ]]; then
+      read -r -p "ROS_DOMAIN_ID for this workspace (0-101; Enter = write nothing, keep the shell's value '${ROS_DOMAIN_ID:-unset}'): " dom
+    fi
+    if [[ -n "$dom" ]]; then
+      [[ "$dom" =~ ^[0-9]+$ && $dom -le 101 ]] || die "ROS_DOMAIN_ID must be 0-101, got '$dom'"
+      echo "export ROS_DOMAIN_ID=$dom" >>"$ROOT/env.sh"
+    fi
     echo "  wrote $ROOT/env.sh   ->  source it in every new terminal"
   fi
 }

@@ -341,7 +341,7 @@ sound_event_node:           # steady-tone (doorbell) detector; tuned on syntheti
 stt_node:
   ros__parameters:
     engine: faster_whisper  # faster_whisper | vosk | mock
-    model: /home/larm/ros2-jazzy-robocup-fw/models/stt/models--Systran--faster-whisper-base.en/snapshots/3d3d5dee26484f91867d81cb899cfcf72b96be6c   # local folder: a bare name makes faster-whisper contact huggingface.co first, which hung start-up
+    model: base.en   # portable default; setup.sh writes this computer's model to models/local.yaml, which overrides it
     language: ""
     device: cpu
     compute_type: int8
@@ -354,10 +354,10 @@ transcript_to_task_node:
 
 tts_node:
   ros__parameters:
-    engine: piper           # espeak (robotic, no model) | piper | kokoro | mock
+    engine: espeak         # espeak (robotic, no model) | piper | kokoro | mock
     voice: ""               # kokoro needs a voice name here
     rate: 160
-    piper_model: /home/larm/ros2-jazzy-robocup-fw/models/tts/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+    piper_model: ""
     piper_rate: 22050
     audio_device: ""
     max_queue: 16
