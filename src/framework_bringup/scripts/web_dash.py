@@ -31,11 +31,14 @@ from audio_msgr.msg import AudioChunk, Transcript, TtsStatus
 from nav_msgs.msg import OccupancyGrid
 from rcl_interfaces.msg import Log
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from sensor_msgs.msg import Image, LaserScan
+from bt_pipeline_msgs.msg import BtPlan
+from sensor_msgs.msg import Image, JointState, LaserScan
+from std_msgs.msg import String
+from std_srvs.srv import Trigger
 from yolo11_common.base_node import image_to_bgr
 
 VIDEO = {'objects': '/detections/image', 'persons': '/detections/person_image',
-         'faces': '/detections/face_image', 'raw': '/camera/image_raw'}
+         'faces': '/detections/face_image', 'raw': '/camera/image_raw', 'arm': '/arm_cam/rgb/image_raw'}
 HERE = os.path.dirname(os.path.realpath(__file__))
 PAGE = os.path.join(HERE, 'web_dash.html')
 
@@ -60,6 +63,19 @@ class Live:
         node.create_subscription(TtsStatus, 'tts/status', self._tts, 10)
         self.logs, self.log_seq = collections.deque(maxlen=3000), 0      # /rosout ring: [seq, time, level, node, text]
         node.create_subscription(Log, '/rosout', self._log, 200)
+        self.node = node
+        self.plan, self.tasks, self.errors = None, collections.deque(maxlen=20), collections.deque(maxlen=20)   # prompt page
+        self.status, self.stop_state, self.mode = '', '', ''
+        self.joints, self.joints_t = {}, 0.0                                                                    # arm page
+        self.task_pub = node.create_publisher(String, 'bt/task', 10)
+        self.run_cli = node.create_client(Trigger, 'bt_executor/run')
+        node.create_subscription(BtPlan, 'bt/plan', self._plan, 10)
+        node.create_subscription(String, 'bt/task', lambda m: self.tasks.append([time.strftime('%H:%M:%S'), m.data]), 10)
+        node.create_subscription(String, 'llm/error', lambda m: self.errors.append([time.strftime('%H:%M:%S'), m.data]), 10)
+        node.create_subscription(String, 'bt/status', lambda m: setattr(self, 'status', m.data), 10)
+        node.create_subscription(String, 'safety/stop_state', lambda m: setattr(self, 'stop_state', m.data), 10)
+        node.create_subscription(String, 'robot/mode', lambda m: setattr(self, 'mode', m.data), 10)
+        node.create_subscription(JointState, '/joint_states', self._joints, 10)
         self._t_img, self._t_scan = {}, 0.0
         self.watched = {}   # source -> last time a browser asked for it: encode JPEGs only while someone watches
         self.jpeg = {}      # source -> latest JPEG
@@ -68,6 +84,22 @@ class Live:
         node.create_subscription(LaserScan, '/scan', self._scan, qos_profile_sensor_data)
         node.create_subscription(OccupancyGrid, '/map', self._map, QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+
+    def _plan(self, m):
+        self.plan = {'time': time.strftime('%H:%M:%S'), 'task': m.task, 'spec': m.task_spec, 'xml': m.xml, 'valid': m.valid,
+                     'errors': list(m.errors), 'attempts': m.attempts}
+
+    def _joints(self, m):
+        self.joints_t = time.monotonic()
+        eff = list(m.effort) + [None] * len(m.name)
+        self.joints = {n: [round(p, 3), round(m.velocity[i], 3) if i < len(m.velocity) else None, eff[i]]
+                       for i, (n, p) in enumerate(zip(m.name, m.position))}
+
+    def prompt(self):
+        return json.dumps({'plan': self.plan, 'tasks': list(self.tasks), 'errors': list(self.errors), 'status': self.status})
+
+    def arm(self):
+        return json.dumps({'age': round(time.monotonic() - self.joints_t, 1) if self.joints_t else None, 'joints': self.joints})
 
     @staticmethod
     def _rms(m):
@@ -162,7 +194,7 @@ def snapshot(dash, d, expected, live):
                      for j in cs.jobs]},
         'nodes': [{'name': a, 'state': b, 'note': c} for a, b, c in d.node_rows(names, online, now)],
         'video': sorted(live.jpeg), 'map': live.map_meta,
-        'msg': d.msg,
+        'msg': d.msg, 'stop': live.stop_state, 'mode': live.mode,
     }
 
 
@@ -215,6 +247,10 @@ def make_handler(token, cache, actions, live):
             if path == '/api/logs':
                 since = (parse_qs(urlparse(self.path).query).get('since') or ['0'])[0]
                 return self._send(200, live.logs_since(int(since) if since.isdigit() else 0))
+            if path == '/api/prompt':
+                return self._send(200, live.prompt())
+            if path == '/api/arm':
+                return self._send(200, live.arm())
             if path == '/api/scan':
                 return self._send(200, live.scan)
             if path == '/map.png' and live.map_png:
@@ -236,6 +272,10 @@ def make_handler(token, cache, actions, live):
             path, force = urlparse(self.path).path, bool(body.get('force'))
             if path == '/api/node' and body.get('name') in cache['names']:
                 actions.put(('node', body['name'], force))
+            elif path == '/api/task' and isinstance(body.get('text'), str) and body['text'].strip():
+                actions.put(('task', body['text'].strip()[:500]))
+            elif path == '/api/run':
+                actions.put(('run',))
             elif path == '/api/halt':
                 actions.put(('halt',))
             elif path == '/api/system' and body.get('act') in ('stop', 'restart'):
@@ -272,6 +312,13 @@ def main(argv=None):
                 act = actions.get()
                 if act[0] == 'node':
                     d._node(act[1], act[2])
+                elif act[0] == 'task':
+                    live.task_pub.publish(String(data=act[1]))
+                elif act[0] == 'run':
+                    if live.run_cli.service_is_ready():
+                        live.run_cli.call_async(Trigger.Request())
+                    else:
+                        d.say('bt_executor/run not available')
                 elif act[0] == 'halt':
                     d.key('h')
                 else:

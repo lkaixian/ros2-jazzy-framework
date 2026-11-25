@@ -56,3 +56,12 @@ Prints CPU, RAM, GPU utilisation and VRAM, temperature and battery of every mach
 ros2 run framework_bringup preflight        # PASS/WARN/FAIL: key, SROS2, mux, executor dry-run, LLM, /scan, TF, clock, disk
 tools/record_run.sh                          # rosbag2 of the run topics
 ```
+
+## Web dashboard (`web_dash`)
+
+```bash
+ros2 run framework_bringup web_dash      # prints http://localhost:8765/?t=<token>
+```
+
+Pages: **Overview** (tiles: LLM, battery, task, devices, nodes, safety stop latch, robot mode), **Prompt** (send a task to `bt/task`, latest plan: validator verdict, attempts, errors, LLM task spec, BT XML, `Run plan` = `bt_executor/run`, which only logs unless the executor runs with `dry_run:=false`; tasks sent, `llm/error`), **Arm** (`/joint_states` with bars, the arm eye from `/arm_cam/rgb/image_raw`; read-only, no arm motion from the page), Live, Voice, Logs, Plan, Nodes. Servo health and the free-space map stay in `tools/arm/arm_gui.py` (port 8088). Tested with fake publishers (endpoints, a posted task reaching `bt/task`) and a headless Firefox render of the layout; not with the real arm, a real plan or a populated page in a browser.
+
