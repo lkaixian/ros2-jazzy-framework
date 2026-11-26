@@ -36,7 +36,9 @@ arm_extension_node:         # guarded arm (src/arm_control): moves nothing while
     base_to_arm_x: 0.16     # arm joint-1 axis ahead of the Kobuki centre (m, best effort): FaceObject turns the base about ITS centre
     face_max_turn_rad: 0.6  # FaceObject refuses a turn bigger than this (about 34 deg)
     approach_m: 0.06
-    grasp_pitch_deg: 0.0    # finger angle above horizontal
+    grasp_pitch_deg: -30.0  # finger angle above horizontal (negative = pointing down). Level fingers cannot reach the pre-grasp pose (approach_m
+                            # nearer the base) for an object ~0.2-0.26 m out at the arm's height; -20 or steeper can, -30 leaves margin on joint 4.
+                            # Made the first real pick work 2026-11-27 (empty plastic bottle, RealSense source).
     grasp_depth_offset_m: 0.03   # ESTIMATE: front surface -> object middle
     workspace_min: [0.05, -0.4, -0.3]   # arm base frame, metres. ESTIMATE: the free-space map is the real limit
     workspace_max: [0.45, 0.4, 0.4]
