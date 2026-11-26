@@ -199,10 +199,16 @@ class ArmExtension(ExtensionExecutor):
 
     # ---- gripper
     def _check_current(self, ctl):
-        r, err = call_service(self.dxl, GetDataFromDxl.Request(id=GRIPPER_ID, item_name='Goal Current', timeout_sec=1.0), ctl, 3.0)
-        cap = self.p('goal_current_cap')
+        """Refuse to touch the gripper unless its Goal Current register is readable and under the cap. A read the busy bus drops is retried twice."""
+        cap, r, err = self.p('goal_current_cap'), None, ''
+        for attempt in range(3):
+            r, err = call_service(self.dxl, GetDataFromDxl.Request(id=GRIPPER_ID, item_name='Goal Current', timeout_sec=1.0), ctl, 3.0)
+            if r is not None and r.result:
+                break
+            if attempt < 2:
+                ctl.sleep(0.4)
         if r is None or not r.result:
-            raise ArmError(f'cannot read the gripper Goal Current ({err or "driver refused"}): not moving it')
+            raise ArmError(f'cannot read the gripper Goal Current ({err or "driver refused"}) after 3 tries: not moving it')
         if r.item_data > cap:
             raise ArmError(f'gripper Goal Current is {r.item_data} (cap {cap}): set it lower first '
                            '(a power cycle resets it to the 3.2 A maximum)')
