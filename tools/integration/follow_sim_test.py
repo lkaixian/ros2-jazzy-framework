@@ -20,7 +20,7 @@ from ament_index_python.packages import get_package_share_directory  # noqa: E40
 from bt_pipeline_msgs.action import ExecuteNode  # noqa: E402
 from geometry_msgs.msg import PoseArray, PoseStamped  # noqa: E402
 from rclpy.action import ActionClient  # noqa: E402
-from std_msgs.msg import Int32  # noqa: E402
+from std_msgs.msg import Empty, Int32  # noqa: E402
 
 SCENARIO = os.path.join(get_package_share_directory('framework_bringup'), 'scenarios', 'follow.yaml')
 WALK_SEC = 48.0                     # the operator needs ~40 s for the whole path
@@ -41,7 +41,7 @@ def run(search):
     quiet = dict(start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     procs = [
         subprocess.Popen(['ros2', 'run', 'nav_sim', 'nav_sim_node', '--ros-args', '-p', f'scenario:={SCENARIO}', '-p', 'start_x:=1.0',
-                          '-p', 'start_y:=2.9', '-p', 'cmd_vel_topic:=pid_extension/cmd_vel', '-p', 'lidar_x:=0.15', '-p', 'lidar_yaw:=3.1416'], **quiet),
+                          '-p', 'start_y:=2.9', '-p', 'manual_start:=true', '-p', 'cmd_vel_topic:=pid_extension/cmd_vel', '-p', 'lidar_x:=0.15', '-p', 'lidar_yaw:=3.1416'], **quiet),
         subprocess.Popen(['ros2', 'run', 'pid_extension', 'pid_extension_node', '--ros-args', '-p', 'scan_yaw_offset:=3.1416',
                           '-p', 'max_linear:=0.25'], **quiet)]
     rclpy.init()
@@ -62,6 +62,9 @@ def run(search):
         rclpy.spin_until_future_complete(n, fut, timeout_sec=5)
         gh = fut.result()
         rf = gh.get_result_async()
+        go = n.create_publisher(Empty, 'nav_sim/scenario_start', 10)
+        time.sleep(1)
+        go.publish(Empty())                                     # the operator starts walking now
         t0 = time.monotonic()
         while time.monotonic() - t0 < WALK_SEC and not rf.done():
             rclpy.spin_once(n, timeout_sec=0.05)

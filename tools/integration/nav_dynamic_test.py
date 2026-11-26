@@ -27,7 +27,7 @@ from geometry_msgs.msg import PoseArray, PoseStamped, PoseWithCovarianceStamped 
 from nav2_msgs.action import NavigateToPose  # noqa: E402
 from rclpy.action import ActionClient  # noqa: E402
 from rclpy.qos import QoSProfile  # noqa: E402
-from std_msgs.msg import Int32  # noqa: E402
+from std_msgs.msg import Empty, Int32  # noqa: E402
 
 # case: (scenario, start x, y, goal x, y, depth_obstacles, limit s, must arrive, must touch)
 CASES = {
@@ -63,7 +63,7 @@ def main():
     quiet = dict(start_new_session=True, stdout=logf, stderr=subprocess.STDOUT)
     procs = [subprocess.Popen(c, **quiet) for c in (
         ['ros2', 'launch', 'framework_bringup', 'nav_sim.launch.py', f'initial_pose:={sx},{sy},0.0', f'start_x:={sx}', f'start_y:={sy}',
-         f'scenario:={os.path.join(share, "scenarios", scen + ".yaml")}', f'depth_obstacles:={str(depth).lower()}', f'params_dir:={params}'],
+         f'scenario:={os.path.join(share, "scenarios", scen + ".yaml")}', 'manual_start:=true', f'depth_obstacles:={str(depth).lower()}', f'params_dir:={params}'],
         ['ros2', 'launch', 'framework_bringup', 'extensions.launch.py', 'enable_arm:=false', 'enable_pose:=false', 'enable_odom:=false',
          'enable_pid:=false', 'enable_social:=false', 'enable_nav:=false', 'cmd_vel_topic:=cmd_vel', f'params_dir:={params}'])]
     rclpy.init()
@@ -89,6 +89,9 @@ def main():
         goal.pose.header.frame_id = 'map'
         goal.pose.pose.position.x, goal.pose.pose.position.y = gx, gy
         goal.pose.pose.orientation.w = 1.0
+        go = n.create_publisher(Empty, 'nav_sim/scenario_start', 10)
+        time.sleep(1)
+        go.publish(Empty())                                         # the people start now, not whenever Nav2 happened to be up
         t0 = time.monotonic()
         fb = dict(rec=0, left=None)
         fut = cli.send_goal_async(goal, feedback_callback=lambda m: fb.update(rec=m.feedback.number_of_recoveries, left=m.feedback.distance_remaining))
