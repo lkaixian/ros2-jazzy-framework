@@ -56,6 +56,10 @@ whitelist:
   - wander
   - wander_until_person
   - scout_room
+  - count_objects_at
+  - count_people_at
+  - count_people_wearing_at
+  - tell_extreme_object_at
   - describe_person
   - announce_and_go
   - guide_to
@@ -748,6 +752,42 @@ macros:
             steps:
               - {macro: wander, args: {legs: "1"}}
               - {node: AlwaysFailure}
+
+  count_objects_at:
+    description: "Go to a named place and say how many objects with this label (detector label) are seen there ('how many cups are on the dining table')"
+    params: {place: {required: true}, label: {required: true}}
+    example_args: {place: dining_table, label: cup}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {node: CountObjects, ports: {label: "${label}", out_count: "{n}"}}
+      - {node: Speak, ports: {person: "{n}", text: "I see {person} ${label}"}}
+
+  count_people_at:
+    description: "Go to a named place and say how many people are seen there ('how many people are in the kitchen'); counts everybody, with no filter by pose"
+    params: {place: {required: true}}
+    example_args: {place: kitchen}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {node: CountPeople, ports: {out_count: "{n}"}}
+      - {node: Speak, ports: {person: "{n}", text: "I see {person} people"}}
+
+  count_people_wearing_at:
+    description: "Go to a named place and say how many people wear a top of this colour ('how many people in the kitchen wear red'); colour is one of black, white, grey, red, orange, yellow, green, cyan, blue, purple, pink"
+    params: {place: {required: true}, colour: {required: true}}
+    example_args: {place: kitchen, colour: red}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {node: CountPeople, ports: {colour: "${colour}", out_count: "{n}"}}
+      - {node: Speak, ports: {person: "{n}", text: "I see {person} people wearing ${colour}"}}
+
+  tell_extreme_object_at:
+    description: "Go to a named place and say which object there is the biggest, largest, smallest or thinnest (property); weight (heaviest, lightest) cannot be measured"
+    params: {place: {required: true}, property: {required: true}}
+    example_args: {place: shelves, property: biggest}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {node: FindExtremeObject, ports: {property: "${property}", out_label: "{x}"}}
+      - {node: Speak, ports: {detail: "{x}", text: "The ${property} object is the {detail}"}}
 
   scout_room:
     description: "Turn a full circle in quarter turns and say how many people are seen at each stop"
