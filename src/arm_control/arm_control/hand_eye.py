@@ -62,6 +62,13 @@ def box_depth_m(depth_mm, box, width, height, rotate, frac=0.4, band_mm=40, min_
     return float(np.median(v[ok[0]:hi[ok[0]]])) / 1000.0 if ok.size else None
 
 
+def fixed_cam_point(u, v, depth_m, k, xyz):
+    """Pixel (u, v) + depth of a camera bolted to the robot, looking forward (parallel to the arm's x axis, upright image) -> arm base frame.
+    k = (fx, fy, cx, cy); xyz = the lens in the arm frame (x forward, y left, z up), hand-measured. Optical: x right, y down, z forward."""
+    fx, fy, cx, cy = k
+    return np.array([depth_m + xyz[0], -(u - cx) * depth_m / fx + xyz[1], -(v - cy) * depth_m / fy + xyz[2]])
+
+
 def backproject(u, v, depth_m, k):
     """Raw pixel + depth along the optical axis (metres) -> point in the raw optical frame."""
     return np.array([(u - k[0, 2]) * depth_m / k[0, 0], (v - k[1, 2]) * depth_m / k[1, 1], depth_m])

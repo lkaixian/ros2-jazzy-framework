@@ -337,3 +337,10 @@ def test_box_depth_threshold_scales_with_the_depth_image_size():
     box = (1279 - 700, 719 - 260, 1279 - 600, 719 - 200)
     assert box_depth_m(d, box, 1280, 720, 180) == 0.45
 
+
+def test_fixed_camera_point_is_ahead_right_pixels_go_negative_y_and_down_pixels_go_negative_z():
+    from hand_eye import fixed_cam_point
+    k, xyz = (600.0, 600.0, 320.0, 240.0), (0.0, -0.08, -0.02)
+    assert [round(float(x), 3) for x in fixed_cam_point(320, 240, 0.5, k, xyz)] == [0.5, -0.08, -0.02]
+    p = fixed_cam_point(420, 340, 0.6, k, xyz)         # 100 px right and 100 px down at 0.6 m = 0.1 m each way
+    assert [round(float(x), 3) for x in p] == [0.6, -0.18, -0.12]
