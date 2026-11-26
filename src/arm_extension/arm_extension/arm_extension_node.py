@@ -67,7 +67,9 @@ class ArmExtension(ExtensionExecutor):
 
     # ---- sensors
     def _on_js(self, m):
-        self.js, self.js_t = dict(zip(m.name, m.position)), time.monotonic()
+        d = dict(zip(m.name, m.position))
+        if all(j in d for j in JOINTS):      # the Kobuki driver publishes wheel-only /joint_states on the same topic
+            self.js, self.js_t = d, time.monotonic()
 
     def _on_state(self, m):
         e = max(abs(x) for x in m.error.positions) if m.error.positions else 0.0
