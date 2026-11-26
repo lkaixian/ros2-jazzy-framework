@@ -4,7 +4,7 @@
 set -euo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$HOME/.config/systemd/user"
-cp "$D"/robocup-llm.service "$D"/robocup-stack.service "$HOME/.config/systemd/user/"
+cp "$D"/robocup-llm.service "$D"/robocup-stack.service "$D"/robocup-estop.service "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload
-if [[ "${1:-}" == "--enable" ]]; then systemctl --user enable --now robocup-llm.service robocup-stack.service; fi
+if [[ "${1:-}" == "--enable" ]]; then systemctl --user enable --now robocup-llm.service robocup-stack.service robocup-estop.service; fi
 echo "installed; status: systemctl --user status robocup-stack"

@@ -1,0 +1,4 @@
+# Only our "E0"/"E1" lines may reach the laptop: no IDF log output on the serial port.
+CONFIG_LOG_DEFAULT_LEVEL_NONE=y
+CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200

@@ -8,6 +8,10 @@ and ignores every input. The latch clears only through the `safety_reset` servic
 while a sensor is still active, and it discards all buffered commands so a reset never replays
 an old command (it restores permission, not motion). This is a software gate: it is not a
 hardware e-stop and is unverified on a real Kobuki.
+
+`estop_topic` (std_msgs/Bool, True = button pressed or circuit open) latches the same stop. It is
+fail-closed: no message for `estop_timeout_sec` (reader dead, cable cut) counts as pressed. The
+executor halt and the arm hold follow from the `safety/stop_state` latch (robot_mode -> halt).
 """
 import time
 
@@ -15,7 +19,7 @@ import rclpy
 from geometry_msgs.msg import Twist, TwistStamped
 from rclpy.node import Node
 from rosidl_runtime_py.utilities import get_message
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
 
@@ -34,6 +38,13 @@ def select(last, now, timeout):
         if stamp is not None and now - stamp <= timeout:
             return i
     return None
+
+
+def estop_hit(pressed, stamp, now, timeout):
+    """-> (hit, reason). Pressed, never heard, or silent for `timeout` seconds all count as a stop."""
+    if stamp is None or now - stamp > timeout:
+        return True, 'e-stop: no signal from the button reader'
+    return bool(pressed), 'e-stop pressed'
 
 
 class StopLatch:
@@ -153,6 +164,10 @@ class CmdVelMux(Node):
         # Bumper-only latch: back off and turn away by itself. Off until tried on the real robot.
         self.declare_parameter('bump_recovery_enabled', False)
         self.declare_parameter('bump_back_dist', 0.10)
+        # E-stop button as a software stop (a hardware cut is still needed). Empty topic = not watched.
+        self.declare_parameter('estop_topic', '')
+        self.declare_parameter('estop_timeout_sec', 1.0)
+        self.declare_parameter('estop_sound_topic', 'commands/sound')   # Kobuki beeps (ERROR sound) when the button is pressed; '' = silent
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         self.stamped = p('stamped')
         self.last = []
@@ -174,7 +189,41 @@ class CmdVelMux(Node):
             self._watch('cliff', p('cliff_topic'), p('cliff_type'), 'sensor', 'state')
         else:
             self.get_logger().warn('safety_events_enabled=false: bumper/cliff do NOT stop the robot')
+        self.estop_t, self.estop_pressed, self.beep = None, True, None
+        if p('estop_topic'):
+            self.create_subscription(Bool, p('estop_topic'), self._on_estop, 10)
+            self.beep = self._sound_publisher(p('estop_sound_topic'))
+        else:
+            self.get_logger().warn('estop_topic empty: no e-stop button is watched')
         self.create_timer(1.0 / p('rate_hz'), self._tick)
+
+    def _sound_publisher(self, topic):
+        if not topic:
+            return None
+        try:
+            return self.create_publisher(get_message('kobuki_ros_interfaces/msg/Sound'), topic, 10)
+        except (ImportError, AttributeError, ValueError) as e:
+            self.get_logger().warn(f'no e-stop beep: cannot load kobuki_ros_interfaces/msg/Sound ({e})')
+            return None
+
+    def _on_estop(self, m):
+        self.estop_t, self.estop_pressed = time.monotonic(), m.data
+        self._estop_check()
+
+    def _estop_check(self):
+        if not self.get_parameter('estop_topic').value:
+            return
+        hit, why = estop_hit(self.estop_pressed, self.estop_t, time.monotonic(),
+                             self.get_parameter('estop_timeout_sec').value)
+        was = 'estop' in self.stop.active
+        self.stop.event('estop', hit, why)
+        if hit and not was:
+            self.recovery.cancel()                  # no blind manoeuvre after an e-stop
+            self._drop_commands()
+            self.get_logger().error(f'STOP latched: {why}')
+            if self.beep and why == 'e-stop pressed':          # not for a lost signal: that would beep at every start
+                self.beep.publish(self.beep.msg_type(value=4))   # 4 = Sound.ERROR
+            self._publish_state()
 
     def _watch(self, kind, topic, type_name, id_field, state_field):
         if not topic:
@@ -253,6 +302,7 @@ class CmdVelMux(Node):
         self._out(out)
 
     def _tick(self):
+        self._estop_check()
         if self.stop.latched:
             move = self.recovery.cmd(time.monotonic())
             if move:

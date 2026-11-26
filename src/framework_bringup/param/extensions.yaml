@@ -27,6 +27,8 @@ cmd_vel_mux_node:
     cliff_topic: events/cliff
     bump_recovery_enabled: true   # bumper-only latch: back off bump_back_dist, turn away (side) or 90 deg (centre/both = wall); latch stays set. Unverified: backs up blind
     bump_back_dist: 0.10          # m, timed open loop at 0.1 m/s
+    estop_topic: estop            # std_msgs/Bool from tools/estop/estop_node.py (ESP32 button). True/silent = stopped (fail-closed); empty = not watched
+    estop_timeout_sec: 1.0
 
 odom_extension_node:
   ros__parameters:

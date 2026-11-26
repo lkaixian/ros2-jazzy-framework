@@ -1,0 +1,5 @@
+# Stable names for the CP2102 serial adapters. The old /etc/udev/rules.d/rplidar.rules matched EVERY CP2102 (10c4:ea60), so
+# /dev/rplidar went to whichever one was plugged in last (once the ESP32 e-stop: the lidar driver would open the e-stop port).
+# Match each adapter by its USB serial number instead. Look yours up with:  udevadm info -q property -n /dev/ttyUSBx | grep ID_SERIAL_SHORT
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="df4a3b70dc750749a3ff47ab82a59f99", MODE:="0777", SYMLINK+="rplidar"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0001", GROUP="dialout", MODE="0660", SYMLINK+="estop"

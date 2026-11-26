@@ -1,0 +1,13 @@
+[Unit]
+Description=E-stop button listener (ESP32 -> /estop). Independent of the stack: stopping the stack must not stop it.
+
+[Service]
+# ESTOP_PORT comes from ~/.config/robocup-estop.env: ESTOP_PORT=/dev/estop (needs tools/udev/robot-serial.rules installed).
+ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && exec /usr/bin/python3 /home/ubuntu/ros2-jazzy-framework/tools/estop/estop_node.py --port ${ESTOP_PORT}'
+EnvironmentFile=-%h/.config/robocup-estop.env
+Restart=always
+RestartSec=1
+KillSignal=SIGINT
+
+[Install]
+WantedBy=default.target
