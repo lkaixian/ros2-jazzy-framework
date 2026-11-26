@@ -62,6 +62,11 @@ def box_depth_m(depth_mm, box, width, height, rotate, frac=0.4, band_mm=40, min_
     return float(np.median(v[ok[0]:hi[ok[0]]])) / 1000.0 if ok.size else None
 
 
+def clipped_by_edge(box, width, height, margin=3):
+    """True when a detection box touches the picture border: the object is cut off, so its centre (and depth window) is biased."""
+    return box[0] < margin or box[1] < margin or box[2] > width - 1 - margin or box[3] > height - 1 - margin
+
+
 def fixed_cam_point(u, v, depth_m, k, xyz):
     """Pixel (u, v) + depth of a camera bolted to the robot, looking forward (parallel to the arm's x axis, upright image) -> arm base frame.
     k = (fx, fy, cx, cy); xyz = the lens in the arm frame (x forward, y left, z up), hand-measured. Optical: x right, y down, z forward."""

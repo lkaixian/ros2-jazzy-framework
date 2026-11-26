@@ -344,3 +344,10 @@ def test_fixed_camera_point_is_ahead_right_pixels_go_negative_y_and_down_pixels_
     assert [round(float(x), 3) for x in fixed_cam_point(320, 240, 0.5, k, xyz)] == [0.5, -0.08, -0.02]
     p = fixed_cam_point(420, 340, 0.6, k, xyz)         # 100 px right and 100 px down at 0.6 m = 0.1 m each way
     assert [round(float(x), 3) for x in p] == [0.6, -0.18, -0.12]
+
+
+def test_a_box_touching_the_picture_border_is_cut_off():
+    from hand_eye import clipped_by_edge
+    assert not clipped_by_edge((200, 100, 300, 400), 640, 480)
+    assert clipped_by_edge((0, 100, 80, 400), 640, 480) and clipped_by_edge((560, 100, 639, 400), 640, 480)
+    assert clipped_by_edge((200, 0, 300, 200), 640, 480) and clipped_by_edge((200, 300, 300, 479), 640, 480)
