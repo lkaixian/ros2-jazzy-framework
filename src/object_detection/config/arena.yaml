@@ -1,0 +1,66 @@
+# Ultralytics dataset for the arena objects of the arm eye (RoboCup@Home 2025 list: robocupmalaysia/at-home-2025 objects/objects.md, plus the usual
+# GPSR / Clean the Table / Storing Groceries / EGPSR extras). Train:
+#   ros2 run object_detection train_detector --data src/object_detection/config/arena.yaml --base yolo26s.pt --epochs 100 --name arena
+# Boxes are enough (the arm uses the box centre + depth). Class names are the words plans use verbatim: keep the spelling, never rename after labelling.
+# Put the photos under datasets/arena/{images,labels}/{train,val}/ (YOLO txt labels, ids = the order below; do not reorder or delete, only append).
+path: datasets/arena
+train: images/train
+val: images/val
+names:
+  # drinks (coffee table)
+  0: cola
+  1: coffee
+  2: water
+  3: milk
+  # food (shelves)
+  4: cereal
+  5: tom-yam cup noodle
+  6: yen-ta-four cup noodle
+  # snacks (office cabinet)
+  7: biscuit roll
+  8: paprika
+  9: potae
+  10: cornae
+  11: pringles
+  12: lay stax
+  13: pocky
+  # tableware (dining table)
+  14: spoon
+  15: plate
+  16: cup
+  17: mug
+  18: fork
+  19: bowl
+  # extras: other kitchenware and cutlery
+  20: knife
+  21: glass
+  22: tray
+  23: pitcher
+  24: napkin
+  # extras: other drinks and food
+  25: juice
+  26: tea
+  27: soda can
+  28: bottle
+  29: apple
+  30: banana
+  31: orange
+  32: bread
+  33: chips
+  34: cookie
+  35: chocolate
+  36: sandwich
+  # extras: Clean the Table / EGPSR
+  37: dishwasher tablet
+  38: rubbish
+  39: tissue
+  40: sponge
+  # extras: things people ask for
+  41: book
+  42: remote
+  43: cell phone
+  44: keys
+  45: bag
+  46: backpack
+  47: towel
+  48: toy
