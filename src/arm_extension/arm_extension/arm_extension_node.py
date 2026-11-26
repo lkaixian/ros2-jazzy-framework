@@ -319,7 +319,8 @@ class ArmExtension(ExtensionExecutor):
             else:
                 tr.step(t, [c[0] for c in cands])
             if tr is not None and tr.seen >= need and tr.missed == 0 and tr.sigma <= self.p('track_max_sigma_m'):
-                note = f'{tr.seen} looks, sigma {tr.sigma * 100:.1f} cm' + (f', {len(scans)} scan(s)' if scans else '')
+                note = (f'{tr.seen} looks, sigma {tr.sigma * 100:.1f} cm' + (f', coasted through {tr.coasted} missed' if tr.coasted else '') +
+                        (f', {len(scans)} scan(s)' if scans else ''))
                 return tr.pos, note
             if tr is not None and tr.missed >= give_up:
                 raise ArmError(f'lost the {label} ({why or "not matching the pinned object"}) after {tr.missed} looks, last at {np.round(tr.pos, 3).tolist()}')

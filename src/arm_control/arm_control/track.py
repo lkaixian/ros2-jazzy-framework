@@ -20,7 +20,7 @@ class Track:
         self.x = np.concatenate([np.asarray(p, float), np.zeros(3)])
         self.P = np.diag([pos_sd ** 2] * 3 + [vel_sd ** 2] * 3)
         self.R, self.q = np.eye(3) * r_sd ** 2, accel_sd ** 2
-        self.seen, self.missed = 1, 0
+        self.seen, self.missed, self.coasted = 1, 0, 0       # coasted = looks answered by the prediction alone, over the whole track
 
     @property
     def pos(self):
@@ -57,6 +57,7 @@ class Track:
         near = min(points, key=lambda z: float(np.linalg.norm(np.asarray(z, float) - self.x[:3])), default=None)
         if near is None or not self._gate(near):
             self.missed += 1
+            self.coasted += 1
             return 'coasting'
         z = np.asarray(near, float)
         S = self.P[:3, :3] + self.R

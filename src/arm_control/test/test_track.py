@@ -33,14 +33,14 @@ def test_it_coasts_through_missed_looks_along_the_estimated_velocity():
     y = tr.pos[1]
     for i in range(10, 13):
         assert tr.step(i * 0.5, []) == 'coasting'
-    assert tr.missed == 3 and tr.pos[1] > y + 0.03 and tr.sigma > 0.02     # it moved on its prediction and is less sure
+    assert tr.missed == 3 and tr.coasted == 3 and tr.pos[1] > y + 0.03 and tr.sigma > 0.02     # it moved on its prediction and is less sure
 
 
 def test_a_found_object_resets_the_miss_count():
     tr = Track([0.3, 0, 0.05], 0.0)
     tr.step(0.5, [])
     assert tr.missed == 1
-    assert tr.step(1.0, [[0.3, 0, 0.05]]) == 'seen' and tr.missed == 0
+    assert tr.step(1.0, [[0.3, 0, 0.05]]) == 'seen' and tr.missed == 0 and tr.coasted == 1       # the total survives
 
 
 def test_scan_yaws_start_at_the_prediction_alternate_and_stay_in_the_taught_range():
