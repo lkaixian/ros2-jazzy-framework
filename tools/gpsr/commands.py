@@ -120,8 +120,11 @@ def templates(rng, P):
                                     [call('move_object', label=lb, from_place=ab[0], to_place=ab[1], put_place=s)],
                                     {'visit': list(ab), 'macro': 'move_object'}))(lab(), two(), rng.choice(arm_places)))
     refuse = [call('say', text='Sorry, I cannot do that')]
-    add('refuse', ['bring me a {l}', 'fetch a {l}', 'get me a {l}', 'hand me the {l}'],
-        lambda: (lambda lb: ({'l': lb}, refuse, {'refuse': True}))(lab()))
+    add('manipulate', ['bring me a {l} from the {a}', 'take the {l} from the {a} and give it to me'],
+        lambda: (lambda lb, ab: ({'l': lb, 'a': say(ab[0])},
+                                 [call('move_object', label=lb, from_place=ab[0], to_place='start', put_place='table')],
+                                 {'visit': [ab[0], 'start'], 'macro': 'move_object'}))(lab(), two()))     # no hand-over: leaves it on the table at start
+    refuse = [call('say', text='Sorry, I cannot do that')]
     add('refuse', ['open the door', 'open the cupboard', 'pour me a drink', 'throw this away'], lambda: ({}, refuse, {'refuse': True}))
     return T
 
