@@ -14,9 +14,27 @@ from pose_extension import attributes, gestures
 from pose_extension.categories import load_table, pick_next
 
 
-def count_confident(items, min_conf, label=None):
-    """How many detections reach min_conf (and carry `label`, when given)."""
-    return sum(1 for i in items if i.confidence >= min_conf and (label is None or i.label == label))
+def count_confident(items, min_conf, label=None, colour=None):
+    """How many detections reach min_conf (and carry `label` / a `clothes_colour`, when given)."""
+    colour = (colour or '').lower().replace('gray', 'grey')          # the detector says grey (person_detection/colour.py); people say gray
+    return sum(1 for i in items if i.confidence >= min_conf and (label is None or i.label == label)
+               and (not colour or getattr(i, 'clothes_colour', '') == colour))
+
+
+def _area(o):
+    return (o.x_max - o.x_min) * (o.y_max - o.y_min)
+
+
+# shortcut: size is the box area in the image, so it is only comparable for objects at about the same distance; upgrade with depth.
+EXTREME = {'biggest': (_area, max), 'largest': (_area, max), 'smallest': (_area, min),
+           'thinnest': (lambda o: min(o.x_max - o.x_min, o.y_max - o.y_min), min)}
+
+
+def extreme_object(objects, prop, min_conf=0.5):
+    """The confident detection that is the `prop` (biggest / largest / smallest / thinnest) by box size, or None."""
+    key, pick = EXTREME[prop]
+    cands = [o for o in objects if o.confidence >= min_conf]
+    return pick(cands, key=key) if cands else None
 
 
 SEAT_LABELS = ('chair', 'couch', 'bench')
@@ -76,7 +94,7 @@ class PoseExtension(ExtensionExecutor):
                                  lambda m: self.last.__setitem__('image', (time.monotonic(), m)), qos_profile_sensor_data)
         self.handlers = {'GetPersonPose': self._get_pose, 'IsPersonWaving': self._waving,
                          'IsPersonPointing': self._pointing, 'CountPeople': self._count_people,
-                         'CountObjects': self._count_objects, 'FindFreeSeat': self._find_seat,
+                         'CountObjects': self._count_objects, 'FindExtremeObject': self._extreme_object, 'FindFreeSeat': self._find_seat,
                          'DescribePerson': self._describe, 'DescribeAttributes': self._attributes, 'NextObject': self._next_object}
 
     def _on_persons(self, m):
@@ -104,8 +122,9 @@ class PoseExtension(ExtensionExecutor):
         m = self._fresh('persons')
         if m is None:    # a silent detector is not an empty room
             return False, 'no recent person detections'
-        n = count_confident(m.persons, mc)
-        return True, f'{n} people', {'out_count': n}
+        colour = port_str(ports, 'colour', '')
+        n = count_confident(m.persons, mc, colour=colour)
+        return True, f'{n} people' + (f' wearing {colour}' if colour else ''), {'out_count': n}
 
     def _count_objects(self, ports, ctl):
         mc = port_float(ports, 'min_conf', 0.5, lo=0.0, hi=1.0)
@@ -115,6 +134,18 @@ class PoseExtension(ExtensionExecutor):
             return False, 'no recent object detections'
         n = count_confident(m.objects, mc, label)
         return True, f'{n} {label}', {'out_count': n}
+
+    def _extreme_object(self, ports, ctl):
+        prop = port_str(ports, 'property')
+        if prop not in EXTREME:
+            return False, f"I can only compare size, not {prop}: use one of {', '.join(sorted(EXTREME))}"
+        m = self._fresh('objects')
+        if m is None:
+            return False, 'no recent object detections'
+        o = extreme_object(m.objects, prop, port_float(ports, 'min_conf', 0.5, lo=0.0, hi=1.0))
+        if o is None:
+            return False, 'no object in view'
+        return True, f'the {prop} object is the {o.label}', {'out_label': o.label}
 
     def _describe(self, ports, ctl):
         m = self._fresh('persons')
