@@ -1,4 +1,7 @@
 import json
+import os
+
+import yaml
 
 import rclpy
 from bt_common.catalog import Catalog, format_listing
@@ -25,6 +28,8 @@ class ValidatorNode(Node):
         self.declare_parameter('max_nodes', 64)
         self.declare_parameter('macros_file', '')     # '' = framework_bringup/param/macros.yaml
         self.declare_parameter('labels', '')       # comma-separated; used until a detector announces
+        self.declare_parameter('places_file', '')      # '' = framework_bringup/param/places.yaml; its names constrain the LLM's place slots
+        self.declare_parameter('extensions_file', '')  # '' = param/extensions.yaml: the arm places taught there (arm_extension_node.places) constrain put_place
         self.catalog = Catalog()
         try:
             path = self.get_parameter('macros_file').value or None
@@ -42,6 +47,24 @@ class ValidatorNode(Node):
                                  MANIFEST_QOS)
         self.create_service(ValidateTree, 'bt_validator/validate', self._on_validate)
         self.create_service(GetCatalog, 'bt_validator/catalog', self._on_catalog)
+
+    def _param_yaml(self, param, default):
+        path = self.get_parameter(param).value
+        if not path:
+            from ament_index_python.packages import get_package_share_directory
+            path = os.path.join(get_package_share_directory('framework_bringup'), 'param', default)
+        try:
+            return yaml.safe_load(open(path)) or {}
+        except (OSError, yaml.YAMLError) as e:
+            self.get_logger().warn(f'{path} not loaded ({e}): its slots stay free text')
+            return {}
+
+    def _places(self):
+        return list(self._param_yaml('places_file', 'places.yaml').get('places') or {})
+
+    def _arm_places(self):
+        taught = ((self._param_yaml('extensions_file', 'extensions.yaml').get('arm_extension_node') or {}).get('ros__parameters') or {}).get('places') or []
+        return [t.split(':', 1)[0] for t in taught if ':' in t]
 
     def _on_manifest(self, msg):
         self.catalog.add_manifest_msg(msg)
@@ -71,8 +94,10 @@ class ValidatorNode(Node):
             res.listing += ('\n\nMacros: a step {"macro": "<name>", "args": {...}} expands to several '
                             'nodes - prefer a macro when one fits (shorter, faster):\n' +
                             describe(self.macros))
-        res.schema = json.dumps(spec_schema(list(self.catalog.all().values()), self.macros))
-        res.labels = sorted(self.vocab.get(LABEL_KEY, ()))
+        labels = sorted(self.vocab.get(LABEL_KEY, ()))
+        enums = {'nav': self._places(), 'arm': self._arm_places(), 'label': labels}
+        res.schema = json.dumps(spec_schema(list(self.catalog.all().values()), self.macros, enums))
+        res.labels = labels
         return res
 
 

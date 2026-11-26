@@ -34,3 +34,12 @@ def test_whitelist_restricts_only_the_spec_not_macro_bodies():
     assert expand(spec, lib, allowed=['outer'])['steps']                  # outer calls go: fine
     with pytest.raises(MacroError, match="'go' is not available"):
         expand({'goal': 'g', 'steps': [{'macro': 'go', 'args': {'place': 'a'}}]}, lib, allowed=['outer'])
+
+
+def test_enums_restrict_place_label_and_arm_place_slots_by_owner():
+    lib = {'go': {'params': {'place': {'required': True}}, 'description': '', 'steps': [], 'example_args': {}},
+           'put_down': {'params': {'place': {'required': True}}, 'description': '', 'steps': [], 'example_args': {}}}
+    s = spec_schema(NODES, lib, {'nav': ['door'], 'arm': ['table'], 'label': ['cup']})
+    props = {v['properties']['macro']['const']: v['properties']['args']['properties']['place'] for v in s['$defs']['step']['anyOf'] if 'macro' in v['properties']}
+    assert props['go'] == {'enum': ['door']} and props['put_down'] == {'enum': ['table']}
+    assert spec_schema(NODES, lib)['$defs']['step']['anyOf'][0]['properties']['args']['properties']['place'] == {'type': 'string'}
