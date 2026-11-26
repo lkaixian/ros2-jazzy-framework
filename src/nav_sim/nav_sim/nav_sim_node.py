@@ -14,12 +14,16 @@ import time
 import numpy as np
 import rclpy
 from ament_index_python.packages import get_package_share_directory
-from geometry_msgs.msg import PoseStamped, TransformStamped, Twist
+from geometry_msgs.msg import Pose, PoseArray, PoseStamped, TransformStamped, Twist
 from nav_msgs.msg import Odometry
+from person_detection_msgr.msg import Person, PersonArray
 from rclpy.node import Node
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, PointCloud2
+from sensor_msgs_py.point_cloud2 import create_cloud_xyz32
+from std_msgs.msg import Int32
 from tf2_ros import TransformBroadcaster
 
+from nav_sim.actors import CAMERA, box_touches, detections, load_scenario, overhead_cloud, ray_circles
 from nav_sim.kinematics import Robot
 from nav_sim.occupancy import OccupancyMap
 
@@ -37,7 +41,7 @@ class NavSim(Node):
                         lidar_range_min=0.15, lidar_range_max=12.0, lidar_beams=360,
                         scan_rate_hz=10.0, scan_noise_std=0.01, physics_hz=50.0,
                         cmd_timeout_sec=0.6, max_lin_acc=1.5, max_ang_acc=4.0,
-                        odom_slip=0.0)
+                        odom_slip=0.0, scenario='', camera_frame='camera_link', camera_rate_hz=10.0)
         for k, v in defaults.items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
@@ -57,6 +61,15 @@ class NavSim(Node):
         self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
         self.gt_pub = self.create_publisher(PoseStamped, 'nav_sim/ground_truth', 10)
         self.create_subscription(Twist, p('cmd_vel_topic'), self._on_cmd, 10)
+        # people and overhead boxes (nav_sim/actors.py): they walk, block the robot, show in /scan, /persons and /depth_cloud
+        self.actors, self.boxes = load_scenario(os.path.expanduser(p('scenario')))
+        self.contacts, self.touching = 0, set()
+        if self.actors or self.boxes:
+            self.persons_pub = self.create_publisher(PersonArray, 'persons', 10)
+            self.cloud_pub = self.create_publisher(PointCloud2, 'depth_cloud', 10)
+            self.actors_pub = self.create_publisher(PoseArray, 'nav_sim/actors', 10)
+            self.contacts_pub = self.create_publisher(Int32, 'nav_sim/contacts', 10)
+            self.create_timer(1.0 / p('camera_rate_hz'), self._camera)
         self.dt = 1.0 / p('physics_hz')
         self.last = time.monotonic()
         self.bumps = 0
@@ -72,7 +85,11 @@ class NavSim(Node):
     def _physics(self):
         now = time.monotonic()
         dt, self.last = now - self.last, now
-        if self.robot.step(dt, lambda x, y: self.map.collides(x, y, self.radius)):
+        for a in self.actors:
+            a.step(dt)
+        if self.robot.step(dt, lambda x, y: self.map.collides(x, y, self.radius)
+                           or any(math.hypot(x - a.x, y - a.y) < self.radius + a.radius for a in self.actors)
+                           or box_touches(x, y, self.radius, self.boxes)):
             self.bumps += 1
             self.get_logger().warn('collision: translation blocked', throttle_duration_sec=2.0)
         stamp = self.get_clock().now().to_msg()
@@ -91,6 +108,10 @@ class NavSim(Node):
         o.pose.pose.orientation = t.transform.rotation
         o.twist.twist.linear.x, o.twist.twist.angular.z = r.v, r.w
         self.odom_pub.publish(o)
+        near = {a.name for a in self.actors if math.hypot(r.x - a.x, r.y - a.y) < self.radius + a.radius + 0.02}
+        near |= {f'box{i}' for i, b in enumerate(self.boxes) if box_touches(r.x, r.y, self.radius + 0.02, [b])}
+        self.contacts += len(near - self.touching)         # one contact per touch, not per physics tick
+        self.touching = near
         g = PoseStamped()
         g.header.stamp, g.header.frame_id = stamp, 'map'
         g.pose.position.x, g.pose.position.y = r.x, r.y
@@ -108,6 +129,9 @@ class NavSim(Node):
         noise = p('scan_noise_std')
         if noise > 0:
             rng = rng + self.rng.normal(0.0, noise, rng.shape)
+        if self.actors:
+            hit = ray_circles(lx, lyp, r.yaw + ly + self.angles, [(a.x, a.y, a.radius) for a in self.actors], p('lidar_range_max'))
+            rng = np.minimum(np.where(np.isfinite(rng), rng, np.inf), np.where(hit >= p('lidar_range_min'), hit, np.inf))
         m = LaserScan()
         m.header.stamp = self.get_clock().now().to_msg()
         m.header.frame_id = p('laser_frame')
@@ -118,6 +142,33 @@ class NavSim(Node):
         m.range_min, m.range_max = p('lidar_range_min'), p('lidar_range_max')
         m.ranges = [float(x) if np.isfinite(x) else float('inf') for x in rng]
         self.scan_pub.publish(m)
+
+
+    def _camera(self):
+        """The RealSense as the stack sees it: persons (detector output with depth) and a depth cloud in camera_link."""
+        r, stamp = self.robot, self.get_clock().now().to_msg()
+        arr = PersonArray()
+        arr.header.stamp, arr.header.frame_id = stamp, 'camera_color_optical_frame'
+        arr.image_width, arr.image_height = CAMERA['width'], CAMERA['height']
+        for d in detections(r.x, r.y, r.yaw, self.actors, self.map):
+            q = Person()
+            q.track_id, q.confidence, q.distance_m, q.clothes_colour = d['track_id'], 0.9, d['distance_m'], d['colour']
+            q.x_min, q.y_min, q.x_max, q.y_max = d['x_min'], d['y_min'], d['x_max'], d['y_max']
+            arr.persons.append(q)
+        self.persons_pub.publish(arr)
+        pts = overhead_cloud(r.x, r.y, r.yaw, self.boxes)
+        cloud = create_cloud_xyz32(arr.header, pts)
+        cloud.header.frame_id = self.get_parameter('camera_frame').value
+        self.cloud_pub.publish(cloud)
+        gt = PoseArray()
+        gt.header.stamp, gt.header.frame_id = stamp, 'map'
+        for a in self.actors:
+            q = Pose()
+            q.position.x, q.position.y = a.x, a.y
+            q.orientation.z, q.orientation.w = math.sin(a.yaw / 2), math.cos(a.yaw / 2)
+            gt.poses.append(q)
+        self.actors_pub.publish(gt)
+        self.contacts_pub.publish(Int32(data=self.contacts))
 
 
 def main(args=None):

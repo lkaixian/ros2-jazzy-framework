@@ -3,6 +3,8 @@
   ros2 launch framework_bringup nav_sim.launch.py                       # AMCL on maps/test_room
   ros2 launch framework_bringup nav_sim.launch.py map:=$HOME/maps/my_map.yaml start_x:=5.6 start_y:=0.1
   ros2 launch framework_bringup nav_sim.launch.py slam:=slam_toolbox    # build a map in the sim
+  ros2 launch framework_bringup nav_sim.launch.py scenario:=$(ros2 pkg prefix framework_bringup)/share/framework_bringup/scenarios/crossing.yaml
+      # people walking about, overhead boxes: see nav_sim/actors.py
 
 Run the safety mux too (it forwards nav2/cmd_vel to the simulated robot's cmd_vel):
   ros2 launch framework_bringup extensions.launch.py scan_yaw_offset:=0.0 scan_required:=false enable_arm:=false enable_pose:=false \
@@ -21,9 +23,10 @@ from launch.actions import IncludeLaunchDescription, OpaqueFunction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 ARGS = ('map', 'cmd_vel_topic', 'start_x', 'start_y', 'start_yaw', 'odom_slip', 'slam',
-        'initial_pose', 'planner')
+        'initial_pose', 'planner', 'scenario')
 SIM_MAP = {'map': 'map_yaml', 'cmd_vel_topic': 'cmd_vel_topic', 'start_x': 'start_x',
-           'start_y': 'start_y', 'start_yaw': 'start_yaw', 'odom_slip': 'odom_slip'}
+           'start_y': 'start_y', 'start_yaw': 'start_yaw', 'odom_slip': 'odom_slip',
+           'scenario': 'scenario'}
 
 
 def _actions(context):
