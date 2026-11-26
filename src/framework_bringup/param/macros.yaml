@@ -293,7 +293,7 @@ macros:
       - {node: Speak, ports: {text: "Nice to meet you ${name}"}}
 
   follow_person:
-    description: "Follow me / come with me / walk behind a person: find a person and follow them at a distance in metres (min 0.5); if the person is lost, turns a little, looks again and retries up to 3 times"
+    description: "Follow me / come with me / walk behind a person: find a person and follow them at a distance in metres (min 0.5); a person who disappears is looked for where they were last seen, and if still lost it turns a little, looks again and retries up to 3 times"
     params: {distance: {default: "1.0"}}
     steps:
       - {macro: find_person}
@@ -528,7 +528,7 @@ macros:
       - {macro: offer_seat}
 
   follow_until_told:
-    description: "Follow a person (obstacle avoiding, locked to the first person seen) and keep following until they say stop / we are here, then stop; if the person is lost, looks again (3 tries). distance = gap in metres (min 0.5)"
+    description: "Follow a person (obstacle avoiding, locked to the first person seen) and keep following until they say stop / we are here, then stop; a person who disappears is looked for where they were last seen, then if still lost it looks again (3 tries). distance = gap in metres (min 0.5)"
     params: {distance: {default: "1.0"}, words: {default: "stop,we are here,we have arrived"}}
     example_args: {distance: "1.0"}
     steps:

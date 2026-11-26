@@ -27,11 +27,11 @@ the top of its launch file** (and the score-sheet tables below for the two score
 
 ## Help Me Carry and Receptionist: what is built, what is not (2026-11-26)
 Built (nodes tested in simulators with fake persons / scans / transcripts: `tools/integration/follow_test.py`, `phrase_test.py`; macros validated, never run on a robot):
-- `FollowTarget until_cancelled=true` keeps following after arriving; `lock=true` stays with the first person (track id); an obstacle that is not the person makes it turn toward the freer side (`ScanGuard.freer_side`, reactive, no detour planning).
+- `FollowTarget until_cancelled=true` keeps following after arriving; `lock=true` stays with the first person (track id); an obstacle that is not the person makes it turn toward the freer side (`ScanGuard.freer_side`, reactive, no detour planning); a person who vanishes is looked for where they were last seen (drive there, sweep toward the side they left on) and a renamed track id is matched again by clothes colour and position (`pid_extension/follow.py`); speed eases off toward anything ahead. Simulator: `follow_sim_test.py` (operator through a door, a person cutting in, search-off control) and `help_me_carry_sim_test.py` (the whole BT path: spec -> validator -> executor -> FollowTarget -> `return_home`).
 - `WaitForPhrase` (social_extension) ends a long action by voice; `Speak` got `detail` and `skip_if_unknown`.
 - Macros `follow_until_told` (Parallel of FollowTarget and WaitForPhrase, 3 searches for a lost person) and `help_me_carry` (follow, stop word, `return_home`).
 - `hric_round` now: doorbell, door, welcome, face the guest, name + drink, how they look (`note_look`), lead to the living room, introduce to the host (`introduce_to`), offer a seat with its side ("chair on my left"), guest 2 introduced to guest 1 and told how guest 1 looks (`tell_look`). 146 of the validator's 160 nodes.
-Still open (also in each launch file's GAPS): door opening, bag handover / drop (arm); a real host (found, recognised) and checking the guest follows; looking at the right guest (only the nearest person); no path retrace outside the arena map, no detour planning, the lock is lost when the tracker changes the id; seat finder on synthetic boxes only; all of it unproven on the robot and with real audio.
+Still open (also in each launch file's GAPS): door opening, bag handover / drop (arm); a real host (found, recognised) and checking the guest follows; looking at the right guest (only the nearest person); no path retrace outside the arena map, no detour planning, two similarly dressed people are not told apart; seat finder on synthetic boxes only; all of it unproven on the robot and with real audio.
 
 ## The four arm tasks: what is built (2026-11-26)
 Software only, on top of the guarded arm stack (`arm_extension`: moves nothing live until `live: true` AND `dry_run:=false`; arm places are still an empty `places` parameter). Needs `tools/arm/arm_up.sh` and `tools/arm/arm_eye.sh` (-> `/arm_eye/objects`) running.
@@ -80,5 +80,5 @@ hard-code paths, and task1 has a syntax error at line 286.
 - The arm chain (grasp, object 3D pose, hand-eye calibration, force limit, door / dishwasher): `notes/ARM_BRINGUP.md`. Five of the nine launch files depend on it.
 - The competition maps, places (`start`, `inspection`, shelves, dishwasher, dustbin, the door) and detector classes for the real objects come from the 3 Dec
   mapping and dataset slots; none exist yet.
-- Depth obstacles stay off until the RealSense mount is measured (`tools/camera/floor_plane.py`), so obstacle avoidance is lidar-only (one plane).
+- Depth obstacles (`navigation.launch.py depth_obstacles:=true`, `nav2_depth.yaml`) are off by default: the mount is hand-measured but the camera tilt is not (`tools/camera/floor_plane.py`), so avoidance is lidar-only (one plane) until someone turns it on with a spotter. In the simulator a table top the lidar cannot see is avoided with it on and hit with it off (`nav_dynamic_test.py overhead|overhead_off`).
 - Stage II tasks and the Final are known only from the minutes (no score sheet): scoring and details come from the 3 Dec team leaders' meeting.
