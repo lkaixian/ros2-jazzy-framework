@@ -402,6 +402,8 @@ private:
         "until a new plan is submitted)");
     }
     emergency_active_ = false;
+    std::lock_guard<std::mutex> lk(state_mu_);
+    last_halt_msg_.clear();
   }
 
   // Emergency procedure: report down, halt the BT executor (its extensions stop publishing, so
@@ -423,7 +425,13 @@ private:
     halt_client_->async_send_request(
       std::make_shared<std_srvs::srv::Trigger::Request>(),
       [this](rclcpp::Client<std_srvs::srv::Trigger>::SharedFuture f) {
-        RCLCPP_ERROR(get_logger(), "EMERGENCY halt sent: %s", f.get()->message.c_str());
+        // the halt is repeated for the whole outage: say it once per distinct reply, not every 5 s
+        const std::string msg = f.get()->message;
+        std::lock_guard<std::mutex> lk(state_mu_);
+        if (msg != last_halt_msg_) {
+          last_halt_msg_ = msg;
+          RCLCPP_ERROR(get_logger(), "EMERGENCY halt sent: %s", msg.c_str());
+        }
       });
   }
 
@@ -467,7 +475,7 @@ private:
   rclcpp::TimerBase::SharedPtr probe_timer_;
   std::atomic<bool> initialized_{false};
   std::mutex state_mu_;
-  std::string last_state_, last_sig_;   // guarded by state_mu_
+  std::string last_state_, last_sig_, last_halt_msg_;   // guarded by state_mu_
   std::atomic<bool> emergency_active_{false};
   double started_ = 0.0;
   rclcpp::CallbackGroup::SharedPtr work_group_;
