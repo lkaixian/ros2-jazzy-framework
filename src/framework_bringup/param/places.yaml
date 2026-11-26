@@ -9,3 +9,21 @@ places:
   door: {x: 5.05, y: 2.9, yaw: 0.0}
   right_room: {x: 9.5, y: 5.5, yaw: 1.57}
   far_corner: {x: 9.5, y: 0.5, yaw: 3.14}
+
+# RoboCup@Home 2025 arena (robocupmalaysia/at-home-2025, maps/room_names.md + location_names.md; assumed the same for 2026).
+# POSES ARE PLACEHOLDERS inside the sample map: the real ones come from the venue map on the preparation day. Never run on them.
+# Rooms
+  bedroom: {x: 2.0, y: 6.5, yaw: 0.0}
+  kitchen: {x: 8.5, y: 6.5, yaw: 3.14}
+  office: {x: 2.0, y: 1.5, yaw: 0.0}
+  living_room: {x: 8.5, y: 1.5, yaw: 3.14}
+# Locations ("(p)" = objects are placed there; the category it holds in brackets)
+  bed: {x: 1.5, y: 7.0, yaw: 1.57}
+  shelves: {x: 7.5, y: 7.2, yaw: 1.57}                # (p) food
+  dishwasher: {x: 9.5, y: 6.0, yaw: 0.0}
+  dining_table: {x: 9.0, y: 4.5, yaw: 1.57}           # (p) tableware
+  coffee_table: {x: 9.5, y: 2.0, yaw: 3.14}           # (p) drinks
+  office_desk: {x: 1.0, y: 1.0, yaw: 3.14}
+  office_cabinet: {x: 3.0, y: 0.8, yaw: -1.57}        # (p) snacks
+  entrance: {x: 0.6, y: 3.0, yaw: 0.0}
+  exit: {x: 11.0, y: 3.0, yaw: 0.0}
