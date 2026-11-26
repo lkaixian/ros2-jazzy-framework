@@ -25,3 +25,6 @@ bt_dataset_v4_*/
 # local-only media and library caches (not part of the project)
 .cache/
 *.webp
+
+# downloaded product photos (CC-BY-SA, large): see tools/dataset/fetch_off.py
+datasets/arena/web/
