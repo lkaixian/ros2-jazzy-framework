@@ -65,4 +65,4 @@ ros2 launch framework_bringup framework.launch.py enable_audio:=true wake_word:=
 
 ## Systemd (optional)
 
-`tools/systemd/` holds restart-always user units (for example `robocup-llm.service`, which runs `llama-server` with `-c 6144 -np 1`). `tools/systemd/install.sh --enable` installs and enables them so the stack survives a reboot. Not enabled by default.
+`tools/systemd/` holds restart-always user units (for example `robocup-llm.service`, which runs `llama-server` with `-c 32768 -np 1`). `tools/systemd/install.sh --enable` installs and enables them so the stack survives a reboot. Not enabled by default.

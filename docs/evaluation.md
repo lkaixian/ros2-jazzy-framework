@@ -14,7 +14,7 @@ The second is what matters on the robot. It sends commands to a live `llm_bridge
 ```bash
 # own DDS domain, extensions up BEFORE the pipeline (pose extension included, or FindFreeSeat / CountPeople plans are invalid)
 export ROS_DOMAIN_ID=82
-llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 6144 -np 1 -ngl 99 --reasoning off &
+llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 32768 -np 1 -ngl 99 --reasoning off &
 ros2 launch framework_bringup extensions.launch.py enable_arm:=false &
 ros2 launch framework_bringup pipeline.launch.py llama_url:=http://127.0.0.1:8081 &
 python3 tools/integration/llm_eval.py --gen 100 --seed 1                      # 100 generated GPSR-style commands
@@ -55,5 +55,5 @@ After any change re-run both sets and `tools/integration/prompt_lab.py`: the sma
 
 * **Scores shifted by one command** when a plan from an earlier run was still in flight: the script now drains for 60 s first.
 * **Leaked nodes** from an earlier run (or starting `extensions.launch.py` twice) exhaust DDS participants (`error creating node`): stop everything and use a fresh `ROS_DOMAIN_ID`.
-* **Context too small**: the planning prompt is 3.2-3.7k tokens; four slots sharing 4096 truncate it. Use `-c 6144 -np 1`.
+* **Context too small**: the planning prompt is 3.2-3.7k tokens; four slots sharing 4096 truncate it. Use `-c 32768 -np 1` (E4B: 8k = 3.4 GB VRAM, 32k = 3.8 GB, 64k = 4.4 GB; the size only reserves cache, latency is unchanged).
 * **Thinking on**: Gemma 4 spends `max_tokens` thinking and the reply is cut ("not a JSON object"). Use `--reasoning off`.
