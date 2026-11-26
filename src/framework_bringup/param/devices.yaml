@@ -7,7 +7,7 @@
 devices:
   - {name: base,   path: /dev/kobuki,           topic: /odom}
   - {name: lidar,  path: /dev/rplidar,          topic: /scan}
-  - {name: camera, path: /dev/video0,           topic: /camera/image_raw}   # laptop webcam (published by object_detection_node)
+  - {name: camera, path: "/dev/v4l/by-id/*RealSense*", topic: /camera/camera/color/image_raw}   # RealSense colour; the detectors read it (models/local.yaml); driver: sensors.launch.py enable_camera
   - {name: mic,    path: /dev/snd/pcmC3D0c,     topic: /audio/raw}          # DMIC; match audio.yaml device
-  - {name: depth,  path: "/dev/v4l/by-id/*RealSense*", topic: "", optional: true}  # not fitted yet (globs allowed)
+  - {name: depth,  path: "/dev/v4l/by-id/*RealSense*", topic: /camera/camera/aligned_depth_to_color/image_raw}   # globs allowed
   - {name: arm cam, path: /dev/oak, topic: /arm_cam/rgb/image_raw, optional: true}  # Luxonis OAK (03e7); udev symlink; driver: sensors.launch.py enable_oak:=true
