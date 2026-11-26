@@ -62,9 +62,11 @@ def box_depth_m(depth_mm, box, width, height, rotate, frac=0.4, band_mm=40, min_
     return float(np.median(v[ok[0]:hi[ok[0]]])) / 1000.0 if ok.size else None
 
 
-def clipped_by_edge(box, width, height, margin=3):
-    """True when a detection box touches the picture border: the object is cut off, so its centre (and depth window) is biased."""
-    return box[0] < margin or box[1] < margin or box[2] > width - 1 - margin or box[3] > height - 1 - margin
+def clipped_at_side(box, width, margin=3):
+    """'left' / 'right' when a detection box touches that side of the picture, else ''. Cut off sideways, the centre (so the sideways position
+    the gripper needs) is biased. Top / bottom do not count: a tall object at close range always fills the 42 deg vertical view, and that only
+    shifts the estimated height a little."""
+    return 'left' if box[0] < margin else 'right' if box[2] > width - 1 - margin else ''
 
 
 def fixed_cam_point(u, v, depth_m, k, xyz):

@@ -266,12 +266,12 @@ class ArmExtension(ExtensionExecutor):
         hits = [o for o in self.objs.objects if o.label == label]
         if not hits:
             raise ArmError(f'{label} not seen by the camera')
-        from arm_control.hand_eye import box_depth_m, clipped_by_edge, fixed_cam_point, load, upright_pixel_to_arm
+        from arm_control.hand_eye import box_depth_m, clipped_at_side, fixed_cam_point, load, upright_pixel_to_arm
         fixed = self.p('target_source') == 'base_camera'
         w, h = self.objs.image_width, self.objs.image_height
         out, cut = [], 0
         for o in hits:
-            if clipped_by_edge((o.x_min, o.y_min, o.x_max, o.y_max), w, h):
+            if clipped_at_side((o.x_min, o.y_min, o.x_max, o.y_max), w):
                 cut += 1
                 continue
             d = box_depth_m(self.depth, (o.x_min, o.y_min, o.x_max, o.y_max), w, h, 0 if fixed else load()[2])   # a fixed camera is upright
@@ -285,7 +285,7 @@ class ArmExtension(ExtensionExecutor):
             else:
                 out.append((np.array(upright_pixel_to_arm(arm, cur, u, v, d, w, h), float), o.confidence))
         if not out:
-            raise ArmError(f'the {label} is cut off by the edge of the picture: turn the robot toward it' if cut else f'no valid depth at the {label}')
+            raise ArmError(f'the {label} is cut off at the side of the picture: turn the robot toward it' if cut else f'no valid depth at the {label}')
         return out
 
     def _track_target(self, label, arm, fmap, ctl):
@@ -374,16 +374,14 @@ class ArmExtension(ExtensionExecutor):
             hits = [o for o in self.objs.objects if o.label == label]
             if not hits:
                 raise ArmError(f'{label} not seen by the camera')
-            from arm_control.hand_eye import box_depth_m, clipped_by_edge, fixed_cam_point
+            from arm_control.hand_eye import box_depth_m, clipped_at_side, fixed_cam_point
             o = max(hits, key=lambda x: x.confidence)
             w, h = self.objs.image_width, self.objs.image_height
             box = (o.x_min, o.y_min, o.x_max, o.y_max)
-            if clipped_by_edge(box, w, h):
-                if o.x_min < 3 or o.x_max > w - 4:             # cut off at a side: nudge toward that side and look again
-                    a = 0.2 if o.x_min < 3 else -0.2
-                    return True, f'the {label} is cut off at the {"left" if a > 0 else "right"} edge: turn {math.degrees(abs(a)):.0f} deg ' \
-                                 f'{"left" if a > 0 else "right"} and look again', {'out_radians': a}
-                raise ArmError(f'the {label} is cut off at the top or bottom of the picture: move it or the robot')
+            side = clipped_at_side(box, w)
+            if side:                                            # cut off at a side: nudge toward that side and look again
+                a = 0.2 if side == 'left' else -0.2
+                return True, f'the {label} is cut off at the {side} edge: turn {math.degrees(abs(a)):.0f} deg {side} and look again', {'out_radians': a}
             if self.fixed_k is None:
                 raise ArmError(f"no camera_info on {self.p('fixed_cam_info_topic')}")
             d = box_depth_m(self.depth, box, w, h, 0)

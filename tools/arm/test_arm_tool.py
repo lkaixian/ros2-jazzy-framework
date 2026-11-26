@@ -346,8 +346,8 @@ def test_fixed_camera_point_is_ahead_right_pixels_go_negative_y_and_down_pixels_
     assert [round(float(x), 3) for x in p] == [0.6, -0.18, -0.12]
 
 
-def test_a_box_touching_the_picture_border_is_cut_off():
-    from hand_eye import clipped_by_edge
-    assert not clipped_by_edge((200, 100, 300, 400), 640, 480)
-    assert clipped_by_edge((0, 100, 80, 400), 640, 480) and clipped_by_edge((560, 100, 639, 400), 640, 480)
-    assert clipped_by_edge((200, 0, 300, 200), 640, 480) and clipped_by_edge((200, 300, 300, 479), 640, 480)
+def test_only_a_side_cut_off_box_is_unusable_top_and_bottom_are_fine():
+    from hand_eye import clipped_at_side
+    assert clipped_at_side((200, 100, 300, 400), 640) == ''
+    assert clipped_at_side((0, 100, 80, 400), 640) == 'left' and clipped_at_side((560, 100, 639, 400), 640) == 'right'
+    assert clipped_at_side((200, 0, 300, 479), 640) == ''          # a tall bottle at close range fills the 42 deg vertical view
