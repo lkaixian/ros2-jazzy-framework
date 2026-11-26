@@ -23,7 +23,7 @@ from launch.actions import IncludeLaunchDescription, OpaqueFunction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 ARGS = ('map', 'cmd_vel_topic', 'start_x', 'start_y', 'start_yaw', 'odom_slip', 'slam',
-        'initial_pose', 'planner', 'scenario')
+        'initial_pose', 'planner', 'scenario', 'depth_obstacles')
 SIM_MAP = {'map': 'map_yaml', 'cmd_vel_topic': 'cmd_vel_topic', 'start_x': 'start_x',
            'start_y': 'start_y', 'start_yaw': 'start_yaw', 'odom_slip': 'odom_slip',
            'scenario': 'scenario'}
@@ -39,6 +39,9 @@ def _actions(context):
         y = float(given(context, 'start_y') or ref['start_y'])
         yaw = float(given(context, 'start_yaw') or ref['start_yaw'])
         launch_args['initial_pose'] = f'{x},{y},{yaw}'
+    launch_args['depth_cloud_node'] = 'false'        # the simulator publishes /depth_cloud itself (nav_sim scenario overhead boxes)
+    if given(context, 'depth_obstacles') is not None:
+        launch_args['depth_obstacles'] = given(context, 'depth_obstacles')
     nav = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(share('framework_bringup'), 'launch',
                                                    'navigation.launch.py')),

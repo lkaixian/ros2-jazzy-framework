@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Robot inspection (3 Dec): navigate to a predefined place in the arena within 3 minutes, in the simulator (nav_sim + real Nav2/AMCL + the
 safety mux, no robot). The mux gets safety_events_enabled=false (a copy of the param folder) because the simulator has no Kobuki bumper messages;
-that is the only change. usage: inspection_test.py [goal_x goal_y] [limit_sec]   (default: right_room 9.5 5.5 through the door, 180 s).
+that and the ESP32 e-stop watch (estop_topic '') are the only changes. usage: inspection_test.py [goal_x goal_y] [limit_sec]   (default: right_room 9.5 5.5 through the door, 180 s).
 Domain INSPECT_DOMAIN (default 85). Exit 0 only if the goal was reached within 0.35 m inside the limit. NOT a test of obstacle avoidance
 (nothing is placed in the way) and not of the real robot, its lidar or the arena."""
 import math
@@ -43,7 +43,8 @@ def main():
     f = os.path.join(params, 'extensions.yaml')
     txt = open(f).read()
     assert 'safety_events_enabled: true' in txt
-    open(f, 'w').write(re.sub(r'safety_events_enabled: true', 'safety_events_enabled: false', txt, count=1))
+    txt = re.sub(r'safety_events_enabled: true', 'safety_events_enabled: false', txt, count=1)
+    open(f, 'w').write(re.sub(r'estop_topic: estop', "estop_topic: ''", txt, count=1))      # no ESP32 e-stop in the simulator
     quiet = dict(start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     procs = [subprocess.Popen(c, **quiet) for c in (
         ['ros2', 'launch', 'framework_bringup', 'nav_sim.launch.py', 'initial_pose:=0.5,0.5,0.0', f'params_dir:={params}'],
