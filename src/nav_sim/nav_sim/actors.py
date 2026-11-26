@@ -33,7 +33,9 @@ class Actor:
         self.x, self.y = self.path[0]
         self.yaw, self.t, self._leg, self._dir = 0.0, 0.0, 0, 1
 
-    def step(self, dt):
+    def step(self, dt, robot=None):
+        """Advance dt s. robot = (x, y, radius): the person waits rather than step into the robot (people do not walk into a stopped robot;
+        a contact in the tests is then the robot's doing)."""
         self.t += dt
         if self.t < self.start_after or len(self.path) < 2:
             return
@@ -45,6 +47,10 @@ class Actor:
             d = math.hypot(tx - self.x, ty - self.y)
             if d > 1e-9:
                 self.yaw = math.atan2(ty - self.y, tx - self.x)
+                nx, ny = self.x + (tx - self.x) / d * min(left, d), self.y + (ty - self.y) / d * min(left, d)
+                if robot and math.hypot(nx - robot[0], ny - robot[1]) < self.radius + robot[2] + 0.1 \
+                        and math.hypot(nx - robot[0], ny - robot[1]) < math.hypot(self.x - robot[0], self.y - robot[1]):
+                    return
             if d <= left:
                 self.x, self.y, left = tx, ty, left - d
                 self._leg += self._dir

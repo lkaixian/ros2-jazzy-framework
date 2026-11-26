@@ -81,3 +81,14 @@ def test_box_touches_only_when_the_robot_overlaps_the_footprint_and_the_box_is_l
     b = [dict(x=2.0, y=0.0, w=0.4, d=0.4, z0=0.55, z1=0.8)]
     assert box_touches(1.7, 0.0, 0.17, b) and not box_touches(1.5, 0.0, 0.17, b)
     assert not box_touches(1.7, 0.0, 0.17, [dict(b[0], z0=1.2, z1=1.4)])      # a shelf above the robot's top: it drives under
+
+
+def test_actor_waits_instead_of_walking_into_the_robot_and_goes_on_when_it_leaves():
+    a = Actor('p', 1, [(0, 0), (3, 0)], speed=1.0)
+    for _ in range(20):
+        a.step(0.05, robot=(1.5, 0.0, 0.17))          # a robot standing on the path
+    assert a.x < 1.5 - 0.22 - 0.17 + 1e-6
+    x = a.x
+    for _ in range(20):
+        a.step(0.05, robot=(1.5, 2.0, 0.17))          # robot gone from the path
+    assert a.x > x + 0.5

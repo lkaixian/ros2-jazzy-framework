@@ -23,10 +23,10 @@ from launch.actions import IncludeLaunchDescription, OpaqueFunction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 ARGS = ('map', 'cmd_vel_topic', 'start_x', 'start_y', 'start_yaw', 'odom_slip', 'slam',
-        'initial_pose', 'planner', 'scenario', 'depth_obstacles')
+        'initial_pose', 'planner', 'scenario', 'depth_obstacles', 'manual_start')
 SIM_MAP = {'map': 'map_yaml', 'cmd_vel_topic': 'cmd_vel_topic', 'start_x': 'start_x',
            'start_y': 'start_y', 'start_yaw': 'start_yaw', 'odom_slip': 'odom_slip',
-           'scenario': 'scenario'}
+           'scenario': 'scenario', 'manual_start': 'manual_start'}
 
 
 def _actions(context):

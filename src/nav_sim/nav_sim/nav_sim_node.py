@@ -20,7 +20,7 @@ from person_detection_msgr.msg import Person, PersonArray
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, PointCloud2
 from sensor_msgs_py.point_cloud2 import create_cloud_xyz32
-from std_msgs.msg import Int32
+from std_msgs.msg import Empty, Int32
 from tf2_ros import TransformBroadcaster
 
 from nav_sim.actors import CAMERA, box_touches, detections, load_scenario, overhead_cloud, ray_circles
@@ -41,7 +41,7 @@ class NavSim(Node):
                         lidar_range_min=0.15, lidar_range_max=12.0, lidar_beams=360,
                         scan_rate_hz=10.0, scan_noise_std=0.01, physics_hz=50.0,
                         cmd_timeout_sec=0.6, max_lin_acc=1.5, max_ang_acc=4.0,
-                        odom_slip=0.0, scenario='', camera_frame='camera_link', camera_rate_hz=10.0)
+                        odom_slip=0.0, scenario='', manual_start=False, camera_frame='camera_link', camera_rate_hz=10.0)
         for k, v in defaults.items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
@@ -64,6 +64,8 @@ class NavSim(Node):
         # people and overhead boxes (nav_sim/actors.py): they walk, block the robot, show in /scan, /persons and /depth_cloud
         self.actors, self.boxes = load_scenario(os.path.expanduser(p('scenario')))
         self.contacts, self.touching = 0, set()
+        self.running = not p('manual_start')            # manual_start: people stand still until /nav_sim/scenario_start (an Empty)
+        self.create_subscription(Empty, 'nav_sim/scenario_start', lambda _m: setattr(self, 'running', True), 10)
         if self.actors or self.boxes:
             self.persons_pub = self.create_publisher(PersonArray, 'persons', 10)
             self.cloud_pub = self.create_publisher(PointCloud2, 'depth_cloud', 10)
@@ -85,8 +87,8 @@ class NavSim(Node):
     def _physics(self):
         now = time.monotonic()
         dt, self.last = now - self.last, now
-        for a in self.actors:
-            a.step(dt)
+        for a in self.actors if self.running else ():
+            a.step(dt, (self.robot.x, self.robot.y, self.radius))
         if self.robot.step(dt, lambda x, y: self.map.collides(x, y, self.radius)
                            or any(math.hypot(x - a.x, y - a.y) < self.radius + a.radius for a in self.actors)
                            or box_touches(x, y, self.radius, self.boxes)):

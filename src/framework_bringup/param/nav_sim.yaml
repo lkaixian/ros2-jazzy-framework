@@ -23,4 +23,5 @@ nav_sim_node:                 # 2D simulator for testing Nav2/SLAM without a rob
     max_lin_acc: 1.5
     max_ang_acc: 4.0
     odom_slip: 0.0            # heading drift factor, e.g. 0.03 to stress AMCL/SLAM
+    manual_start: false       # true: scenario people stand still until an Empty arrives on /nav_sim/scenario_start (tests use it: Nav2 needs a variable time to come up)
     scenario: ""              # people walking + overhead boxes (scenarios/*.yaml, nav_sim/actors.py); "" = an empty room
