@@ -69,6 +69,16 @@ ros2 launch framework_bringup nav_sim.launch.py slam:=slam_toolbox   # mapping i
 `maps/my_map.yaml` is a copy of `~/maps/my_map.yaml`; it is a patchy partial scan whose connected
 free space is only about 2.6 m^2 for a 0.18 m robot, so Nav2 cannot plan long routes on it.
 
+## Depth obstacles at the robot's full height (`depth_obstacles:=true`)
+The lidar sees one slice at ~14 cm; the robot is ~0.9 m tall with the arm folded. `navigation.launch.py depth_obstacles:=true` starts
+`depth_cloud_node` (RealSense depth -> thin `/depth_cloud`, every 4th pixel) and loads `param/nav2_depth.yaml`: both costmaps mark depth
+points 0.10-0.95 m above the floor (a second source with the floor included only clears), and `collision_monitor` gets a point-cloud
+source with the same height band. Because `collision_monitor` stops on a silent source, a dead camera stops the robot. Default is off
+(nav_sim has no camera). Camera mount: `param/navigation.yaml` `base_to_camera` (hand-measured, tilt assumed level; check with
+`tools/camera/floor_plane.py`); geometry in `notes/ROBOT_GEOMETRY.md`. Verified: cloud from the live RealSense (7399 points, optical
+frame), unit tests, nav_sim brings both costmaps and the collision monitor up with the overlay. NOT verified: that obstacles appear in
+the costmap in the right place, clearing behaviour, CPU cost, the real robot.
+
 ## Choosing the global planner
 `planner:=navfn` (default) or `planner:=dstar_lite` on `navigation.launch.py` / `nav_sim.launch.py`.
 `dstar_lite` is `src/dstar_lite_planner`: an incremental D* Lite (8-connected, costmap-aware) ported
