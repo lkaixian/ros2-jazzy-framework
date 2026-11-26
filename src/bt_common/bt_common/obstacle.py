@@ -38,15 +38,26 @@ class ScanGuard:
     def update(self, msg):
         self.scan, self.t = msg, self.clock()
 
-    def blocked(self, v):
+    def clearance(self, v):
+        """Distance (m) to the nearest valid beam in the direction of travel, regardless of stop_distance: None = nothing there (or
+        v == 0, or no fresh scan and not required); 0.0 = no fresh scan while required."""
         if v == 0.0:
             return None
         if self.scan is None or self.clock() - self.t > self.stale:
             return 0.0 if self.required else None
         s = self.scan
-        d = min_range_in_sector(s.ranges, s.angle_min, s.angle_increment, (0.0 if v > 0 else math.pi) - self.yaw_offset,
-                                self.half, max(s.range_min, 0.05), s.range_max or 12.0)
+        return min_range_in_sector(s.ranges, s.angle_min, s.angle_increment, (0.0 if v > 0 else math.pi) - self.yaw_offset,
+                                   self.half, max(s.range_min, 0.05), s.range_max or 12.0)
+
+    def blocked(self, v):
+        d = self.clearance(v)
         return d if d is not None and d < self.stop else None
+
+    def slow_factor(self, v, ramp=0.3):
+        """1.0 far from anything, falling linearly to 0.0 at stop_distance over `ramp` metres: multiply a forward speed by it so the
+        robot eases up to a person or wall instead of braking at the last moment."""
+        d = self.clearance(v)
+        return 1.0 if d is None else max(0.0, min(1.0, (d - self.stop) / ramp))
 
     def freer_side(self):
         """+1 (turn left) or -1 (turn right): the side ahead with more room, from the nearest valid beam in each 20-80 degree sector;
