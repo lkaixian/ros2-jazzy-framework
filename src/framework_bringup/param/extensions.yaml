@@ -110,6 +110,8 @@ arm_extension_node:         # guarded arm (src/arm_control): moves nothing while
     target_source: arm_eye
     fixed_cam_xyz: [0.0, -0.08, -0.02]   # RealSense lens in the arm frame (x fwd, y left, z up), m. HAND-ESTIMATED 2026-11-26, not ruler-checked
     fixed_cam_info_topic: ''
+    base_to_arm_x: 0.16     # arm joint-1 axis ahead of the Kobuki centre (m, best effort): FaceObject turns the base about ITS centre
+    face_max_turn_rad: 0.6  # FaceObject refuses a turn bigger than this (about 34 deg)
     approach_m: 0.06
     grasp_pitch_deg: 0.0    # finger angle above horizontal
     grasp_depth_offset_m: 0.03   # ESTIMATE: front surface -> object middle

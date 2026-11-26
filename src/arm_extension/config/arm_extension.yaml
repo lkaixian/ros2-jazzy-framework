@@ -5,4 +5,5 @@ nodes:
   OpenGripper: {category: Action, required: [], optional: [width], description: "Open the gripper to a finger gap in mm (default 60, max 72)"}
   CloseGripper: {category: Action, required: [], optional: [force], description: "Close the gripper; succeeds only if it stalled on an object"}
   PickObject: {category: Action, required: [label], optional: [], description: "Grasp the object with this detector label seen by the arm camera, then hold it at the approach pose; fails if not seen, unreachable or nothing was grasped"}
+  FaceObject: {category: Action, required: [label], optional: [out_radians], description: "How far to turn the BASE (radians, left positive, in out_radians) so the object is in the middle of the base camera's view and within the arm's reach; moves nothing; only with the base camera (target_source: base_camera). Follow it with RotateBy"}
   PlaceObject: {category: Action, required: [place], optional: [], description: "Put the held object down at a named place (shelf, table, bin) and release it; refuses an unknown place or one outside the taught range"}

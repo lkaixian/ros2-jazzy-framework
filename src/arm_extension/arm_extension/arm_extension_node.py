@@ -1,10 +1,12 @@
 """Arm BT nodes on the guarded stack (arm_control): every motion is checked against the taught free-space map first, runs at a fixed slow
 rate, and freezes on cancel. No MoveIt. Moves nothing unless the `live` parameter is true (dry-run plans and checks only)."""
 import json
+import math
 import threading
 import time
 
 import numpy as np
+from arm_control.face import turn_to_face
 from arm_control.free_map import JOINTS, FreeMap
 from arm_control.gripper import joint_m_for_gap
 from arm_control.ik import map_limits, solve
@@ -45,6 +47,7 @@ class ArmExtension(ExtensionExecutor):
                          objects_topic='/arm_eye/objects', depth_topic='/arm_cam/stereo/image_raw', max_age_sec=1.0,
                          track_cycles=4, track_max_cycles=20, track_period_sec=0.4, track_scan_after=3, track_give_up=12,
                          track_max_sigma_m=0.02, scan_fov_rad=0.5, target_source='arm_eye', fixed_cam_xyz=[0.0, -0.08, -0.02], fixed_cam_info_topic='',
+                         base_to_arm_x=0.16, face_max_turn_rad=0.6,
                          approach_m=0.06, grasp_pitch_deg=0.0, grasp_depth_offset_m=0.03,
                          workspace_min=[0.05, -0.4, -0.3], workspace_max=[0.45, 0.4, 0.4],
                          gripper_open_gap_mm=60.0, gripper_max_gap_mm=72.0, gripper_max_effort=20.0, goal_current_cap=250,
@@ -68,7 +71,8 @@ class ArmExtension(ExtensionExecutor):
             depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self._fk = self._fmap = None
         self.handlers = {'ArmPark': self._park, 'MoveArmToPose': self._move, 'OpenGripper': self._open,
-                         'CloseGripper': self._close, 'PickObject': self._pick, 'PlaceObject': self._place}
+                         'CloseGripper': self._close, 'PickObject': self._pick, 'PlaceObject': self._place,
+                         'FaceObject': self._face}
 
     # ---- sensors
     def _on_js(self, m):
@@ -356,6 +360,42 @@ class ArmExtension(ExtensionExecutor):
             self._drive(legs[2], ctl)
             return True, f'holding {label}'
         except (ArmError, Refused) as e:
+            return False, str(e)
+
+    def _face(self, ports, ctl):
+        """How far to turn the base so the object sits in the middle of the fixed camera's view (where the arm can also reach it). Moves nothing:
+        the turn comes back in out_radians (left positive) for RotateBy. Only for target_source: base_camera."""
+        label = port_str(ports, 'label')
+        try:
+            if self.p('target_source') != 'base_camera':
+                raise ArmError('FaceObject needs target_source: base_camera (a camera that stays on the base)')
+            if self.objs is None or not self._fresh(self.objs_t) or self.depth is None or not self._fresh(self.depth_t):
+                raise ArmError('no fresh detections or depth from the camera')
+            hits = [o for o in self.objs.objects if o.label == label]
+            if not hits:
+                raise ArmError(f'{label} not seen by the camera')
+            from arm_control.hand_eye import box_depth_m, clipped_by_edge, fixed_cam_point
+            o = max(hits, key=lambda x: x.confidence)
+            w, h = self.objs.image_width, self.objs.image_height
+            box = (o.x_min, o.y_min, o.x_max, o.y_max)
+            if clipped_by_edge(box, w, h):
+                if o.x_min < 3 or o.x_max > w - 4:             # cut off at a side: nudge toward that side and look again
+                    a = 0.2 if o.x_min < 3 else -0.2
+                    return True, f'the {label} is cut off at the {"left" if a > 0 else "right"} edge: turn {math.degrees(abs(a)):.0f} deg ' \
+                                 f'{"left" if a > 0 else "right"} and look again', {'out_radians': a}
+                raise ArmError(f'the {label} is cut off at the top or bottom of the picture: move it or the robot')
+            if self.fixed_k is None:
+                raise ArmError(f"no camera_info on {self.p('fixed_cam_info_topic')}")
+            d = box_depth_m(self.depth, box, w, h, 0)
+            if d is None:
+                raise ArmError(f'no valid depth at the {label}')
+            p = fixed_cam_point((o.x_min + o.x_max) / 2, (o.y_min + o.y_max) / 2, d, self.fixed_k, self.p('fixed_cam_xyz'))
+            a = turn_to_face(p[0], p[1], self.p('fixed_cam_xyz')[1], self.p('base_to_arm_x'), self.p('face_max_turn_rad'))
+            if a is None:
+                raise ArmError(f'the {label} at {np.round(p, 3).tolist()} needs more than {math.degrees(self.p("face_max_turn_rad")):.0f} deg of turn')
+            where = 'already well placed' if a == 0.0 else f'turn {math.degrees(abs(a)):.0f} deg {"left" if a > 0 else "right"}'
+            return True, f'{label} at {np.round(p, 3).tolist()}: {where}', {'out_radians': round(a, 3)}
+        except ArmError as e:
             return False, str(e)
 
     def _place(self, ports, ctl):
