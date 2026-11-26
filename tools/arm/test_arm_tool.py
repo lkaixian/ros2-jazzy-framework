@@ -351,3 +351,15 @@ def test_only_a_side_cut_off_box_is_unusable_top_and_bottom_are_fine():
     assert clipped_at_side((200, 100, 300, 400), 640) == ''
     assert clipped_at_side((0, 100, 80, 400), 640) == 'left' and clipped_at_side((560, 100, 639, 400), 640) == 'right'
     assert clipped_at_side((200, 0, 300, 479), 640) == ''          # a tall bottle at close range fills the 42 deg vertical view
+
+
+def test_arm_parameter_page_gathers_the_files_and_the_code_constants():
+    import importlib.util
+    import os
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
+    spec = importlib.util.spec_from_file_location('gen_arm_params', os.path.join(root, 'tools', 'gen_arm_params.py'))
+    g = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(g)
+    text = g.page()
+    for needle in ('live:', 'require_health', 'fixed_cam_xyz', 'image_rotate_deg', '`CURRENT_CAP`', '`V_MIN`', '`CLOSED_TICKS`', '`TRACK_ERR`'):
+        assert needle in text, needle
