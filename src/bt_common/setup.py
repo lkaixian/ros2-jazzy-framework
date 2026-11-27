@@ -21,6 +21,7 @@ setup(
             'cmd_vel_mux_node = bt_common.cmd_vel_mux:main',
             'battery_guard_node = bt_common.battery_guard:main',
             'scan_mask_node = bt_common.scan_mask:main',
+            'depth_cloud_node = bt_common.depth_cloud:main',
         ],
     },
 )

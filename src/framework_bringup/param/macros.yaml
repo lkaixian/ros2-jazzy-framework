@@ -56,6 +56,10 @@ whitelist:
   - wander
   - wander_until_person
   - scout_room
+  - count_objects_at
+  - count_people_at
+  - count_people_wearing_at
+  - tell_extreme_object_at
   - describe_person
   - announce_and_go
   - guide_to
@@ -289,7 +293,7 @@ macros:
       - {node: Speak, ports: {text: "Nice to meet you ${name}"}}
 
   follow_person:
-    description: "Follow me / come with me / walk behind a person: find a person and follow them at a distance in metres (min 0.5); if the person is lost, turns a little, looks again and retries up to 3 times"
+    description: "Follow me / come with me / walk behind a person: find a person and follow them at a distance in metres (min 0.5); a person who disappears is looked for where they were last seen, and if still lost it turns a little, looks again and retries up to 3 times"
     params: {distance: {default: "1.0"}}
     steps:
       - {macro: find_person}
@@ -524,7 +528,7 @@ macros:
       - {macro: offer_seat}
 
   follow_until_told:
-    description: "Follow a person (obstacle avoiding, locked to the first person seen) and keep following until they say stop / we are here, then stop; if the person is lost, looks again (3 tries). distance = gap in metres (min 0.5)"
+    description: "Follow a person (obstacle avoiding, locked to the first person seen) and keep following until they say stop / we are here, then stop; a person who disappears is looked for where they were last seen, then if still lost it looks again (3 tries). distance = gap in metres (min 0.5)"
     params: {distance: {default: "1.0"}, words: {default: "stop,we are here,we have arrived"}}
     example_args: {distance: "1.0"}
     steps:
@@ -748,6 +752,42 @@ macros:
             steps:
               - {macro: wander, args: {legs: "1"}}
               - {node: AlwaysFailure}
+
+  count_objects_at:
+    description: "Go to a named place and say how many objects with this label (detector label) are seen there ('how many cups are on the dining table')"
+    params: {place: {required: true}, label: {required: true}}
+    example_args: {place: dining_table, label: cup}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {node: CountObjects, ports: {label: "${label}", out_count: "{n}"}}
+      - {node: Speak, ports: {person: "{n}", text: "I see {person} ${label}"}}
+
+  count_people_at:
+    description: "Go to a named place and say how many people are seen there ('how many people are in the kitchen'); counts everybody, with no filter by pose"
+    params: {place: {required: true}}
+    example_args: {place: kitchen}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {node: CountPeople, ports: {out_count: "{n}"}}
+      - {node: Speak, ports: {person: "{n}", text: "I see {person} people"}}
+
+  count_people_wearing_at:
+    description: "Go to a named place and say how many people wear a top of this colour ('how many people in the kitchen wear red'); colour is one of black, white, grey, red, orange, yellow, green, cyan, blue, purple, pink"
+    params: {place: {required: true}, colour: {required: true}}
+    example_args: {place: kitchen, colour: red}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {node: CountPeople, ports: {colour: "${colour}", out_count: "{n}"}}
+      - {node: Speak, ports: {person: "{n}", text: "I see {person} people wearing ${colour}"}}
+
+  tell_extreme_object_at:
+    description: "Go to a named place and say which object there is the biggest, largest, smallest or thinnest (property); weight (heaviest, lightest) cannot be measured"
+    params: {place: {required: true}, property: {required: true}}
+    example_args: {place: shelves, property: biggest}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {node: FindExtremeObject, ports: {property: "${property}", out_label: "{x}"}}
+      - {node: Speak, ports: {detail: "{x}", text: "The ${property} object is the {detail}"}}
 
   scout_room:
     description: "Turn a full circle in quarter turns and say how many people are seen at each stop"

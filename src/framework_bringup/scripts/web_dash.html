@@ -122,6 +122,11 @@ select { font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid 
   .grid, .live { grid-template-columns: 1fr; }
   .row .name { width: 110px; }
 }
+.acv { width: 100%; display: block; background: var(--plot); border-radius: 8px; }
+.atab { width: 100%; border-collapse: collapse; }
+.atab td, .atab th { padding: 3px 6px; text-align: right; border-bottom: 1px solid var(--line); }
+.atab th:first-child, .atab td:first-child { text-align: left; }
+.atab th { color: var(--mute); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -175,9 +180,16 @@ select { font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid 
         <div class="card" id="c-joints"></div>
         <div class="card"><h2>Arm eye</h2><div class="view"><img id="armvideo" alt=""><div class="none" id="no-arm">no image on /arm_cam/rgb/image_raw
           (start sensors.launch.py enable_oak:=true)</div></div></div>
-        <div class="card"><h2>More arm detail</h2><div class="empty">Servo temperature, voltage, gripper current and the free-space map are in the
-          arm monitor: <code>python3 tools/arm/arm_gui.py</code> then open port 8088. It reads the servos directly and is read-only.
-          Arm moves are not started from here: use <code>tools/arm/arm_tool.py</code> (slow, checked against the taught free space).</div></div>
+        <div class="card"><h2>Pose: top view (front is up)</h2><canvas class="acv" id="a-top" height="300"></canvas></div>
+        <div class="card"><h2>Pose: side view (front is right)</h2><canvas class="acv" id="a-side" height="340"></canvas>
+          <div class="empty" style="padding:6px 0 0">light area = space the arm has been hand-guided through without touching anything (ideal case, not a load limit)</div></div>
+        <div class="card"><h2>Gripper</h2><div class="row"><b id="a-gap" style="font-size:20px">-</b><span class="detail" id="a-gcur">-</span></div>
+          <canvas class="acv" id="a-hist" height="120"></canvas><div class="empty" style="padding:6px 0 0">last 45 s: gap (blue, mm) and current (orange, mA)</div></div>
+        <div class="card"><h2>Servo health</h2><table class="atab" id="a-health"></table>
+          <div class="row"><span class="name">gravity load estimate</span><b id="a-load">-</b></div>
+          <div class="empty" style="padding:6px 0 0" id="a-msg">-</div></div>
+        <div class="card"><h2>Arm moves</h2><div class="empty">Read-only here. Arm moves are not started from this page: use
+          <code>tools/arm/arm_tool.py</code> (slow, checked against the taught free space).</div></div>
       </div>
     </section>
 
@@ -442,10 +454,65 @@ async function pollVoice() {
 }
 
 const RAD = 180 / Math.PI;
+let ARMMAP = {top: [], side: []}, armMapLoaded = false;
+function acanvas(c) {
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = +c.getAttribute('height');
+  c.width = w * dpr; c.height = h * dpr; c.style.height = h + 'px';
+  const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); return [x, w, h];
+}
+function aview(id, pts, sk, xr, yr, fx, fy, gripColor) {
+  const [x, w, h] = acanvas($(id)); x.clearRect(0, 0, w, h);
+  const s = Math.min(w / (xr[1] - xr[0]), h / (yr[1] - yr[0])), ox = (w - s * (xr[1] - xr[0])) / 2, oy = (h - s * (yr[1] - yr[0])) / 2;
+  const P = (a, b) => [ox + (a - xr[0]) * s, h - oy - (b - yr[0]) * s];
+  x.fillStyle = '#2a4a6b'; for (const p of pts) { const q = P(fx(p), fy(p)); x.fillRect(q[0] - 1.5, q[1] - 1.5, 3, 3); }
+  x.strokeStyle = '#3a4452'; x.beginPath(); const o = P(0, 0); x.moveTo(o[0] - 8, o[1]); x.lineTo(o[0] + 8, o[1]); x.moveTo(o[0], o[1] - 8); x.lineTo(o[0], o[1] + 8); x.stroke();
+  if (!sk) return;
+  x.lineWidth = 4; x.lineCap = 'round'; x.strokeStyle = '#58a6ff'; x.beginPath();
+  sk.forEach((p, i) => { const q = P(fx(p), fy(p)); i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1]); }); x.stroke();
+  sk.forEach((p, i) => { const q = P(fx(p), fy(p)), last = i === sk.length - 1; x.fillStyle = last ? gripColor : '#e6ebf1'; x.beginPath(); x.arc(q[0], q[1], last ? 7 : 4, 0, 7); x.fill(); });
+}
+function ahist(h) {
+  const [x, w, ht] = acanvas($('a-hist')); x.clearRect(0, 0, w, ht); if (!h.length) return;
+  const line = (k, lo, hi, col) => { x.strokeStyle = col; x.lineWidth = 1.6; x.beginPath();
+    h.forEach((r, i) => { const X = w * (1 + r[0] / 45), Y = ht - (r[k] - lo) / (hi - lo) * (ht - 6) - 3; i ? x.lineTo(X, Y) : x.moveTo(X, Y); }); x.stroke(); };
+  line(1, 10, 80, '#58a6ff'); line(2, 0, 900, '#e8833a');
+}
+const acls = (v, warn, bad) => v >= bad ? 'var(--err)' : v >= warn ? 'var(--warn)' : 'var(--ok)';
+function cell(txt, color) { const t = el('td', '', txt); if (color) t.style.color = color; return t; }
+const num = (v, d) => (v === null || v === undefined) ? '-' : (+v).toFixed(d);
+function armDetail(d) {
+  const s = d.detail;
+  if (!s) { $('a-msg').textContent = d.detail_off || 'no arm detail'; return; }
+  const ros = (s.src || '').startsWith('ROS'), g = s.grip, gc = g && !ros ? (g.cur_ma > 250 ? '#f85149' : g.cur_ma > 40 ? '#d29922' : '#3fb950') : '#8d97aa';
+  aview('a-top', ARMMAP.top || [], s.sk, [-0.45, 0.45], [-0.16, 0.42], p => -p[1], p => p[0], gc);
+  aview('a-side', ARMMAP.side || [], s.sk, [-0.16, 0.42], [-0.32, 0.46], p => p[0], p => p[2], gc);
+  if (g) {
+    $('a-gap').textContent = g.gap === null || g.gap === undefined ? '-' : g.gap.toFixed(0) + ' mm';
+    const cur = el('span', '', ros ? 'current n/a (driver mode)' : g.cur_ma.toFixed(0) + ' mA'); if (!ros) cur.style.color = acls(g.cur_ma, 40, 250);
+    $('a-gcur').replaceChildren(cur, document.createTextNode(ros ? '' : (g.torque ? '  torque on' : '  torque off')));
+  }
+  ahist(s.hist || []);
+  if (s.joints) {
+    $('a-load').textContent = (s.load * 100).toFixed(0) + ' % of stall'; $('a-load').style.color = acls(s.load, .4, .8);
+    const sv = s.servo || {}, rows = [el('tr', '', null, ['', 'mA', 'degC', 'V', 'err'].map(h => el('th', '', h)))];
+    for (let i = 0; i < 4; i++) {
+      const t = sv.temp ? sv.temp[i] : null, vv = sv.volt ? sv.volt[i] : null, e = sv.err ? sv.err[i] : null;
+      rows.push(el('tr', '', null, [el('td', '', 'joint ' + (i + 1)), cell(ros ? 'n/a' : num(sv.cur_ma ? sv.cur_ma[i] : null, 0)),
+        cell(num(t, 0), t >= 55 ? 'var(--err)' : t >= 50 ? 'var(--warn)' : ''), cell(num(vv, 1), vv !== null && vv < 11 ? 'var(--err)' : ''),
+        cell(e === null || e === undefined ? '-' : e, e ? 'var(--err)' : '')]));
+    }
+    if (g) rows.push(el('tr', '', null, [el('td', '', 'gripper'), cell(ros ? 'n/a' : num(g.cur_ma, 0)), cell(num(g.temp, 0), g.temp >= 55 ? 'var(--err)' : g.temp >= 50 ? 'var(--warn)' : ''),
+      cell(num(g.volt, 1)), cell(g.err === null || g.err === undefined ? '-' : g.err, g.err ? 'var(--err)' : '')]));
+    $('a-health').replaceChildren(...rows);
+  }
+  $('a-msg').textContent = [s.msg || (s.joints ? 'ok' : 'waiting for data from the servos or the driver'), d.detail_note, 'source: ' + s.src].filter(Boolean).join(' | ');
+}
 async function pollArm() {
   if (page !== 'arm') return;
   try {
-    const d = await (await fetch('/api/arm', {headers: H})).json(), names = Object.keys(d.joints || {});
+    if (!armMapLoaded) { armMapLoaded = true; fetch('/api/armmap', {headers: H}).then(r => r.json()).then(m => { ARMMAP = m; }).catch(() => { armMapLoaded = false; }); }
+    const d = await (await fetch('/api/arm', {headers: H})).json(), names = Object.keys(d.joints || {}).filter(n => /^(joint|gripper)/.test(n));
+    armDetail(d);
     const stale = d.age === null || d.age > 2;
     $('arm-tiles').replaceChildren(
       tile('Joint states', stale ? 'none' : names.length + ' joints', d.age === null ? 'no /joint_states: start the arm driver' : 'last ' + d.age + ' s ago', stale ? 'off' : 'ok'),

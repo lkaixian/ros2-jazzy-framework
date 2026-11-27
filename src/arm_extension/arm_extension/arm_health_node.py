@@ -77,7 +77,7 @@ class ArmHealth(Node):
             self._reboot()
         self.pub.publish(__import__('std_msgs.msg', fromlist=['String']).String(data=json.dumps(
             {'ok': not problems, 'problems': problems, 'rebootable': rebootable, 'reboot_gate': why,
-             'auto_reboot': self.p('auto_reboot')})))
+             'auto_reboot': self.p('auto_reboot'), 'temps': self.temps, 'volts': self.volts})))
 
     def _reboot(self):
         if not self.reboot_cli.service_is_ready():

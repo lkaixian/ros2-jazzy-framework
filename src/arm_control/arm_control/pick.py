@@ -15,7 +15,12 @@ from arm_control.motion import Refused
 def grasp_poses(arm, cur, u, v, depth_m, width, height, limits, ws_min, ws_max, offset=0.03, approach=0.06, pitch=0.0):
     """{'point': xyz, 'pre': joint dict, 'grasp': joint dict}. `offset` pushes the front-surface point back to the object's middle,
     `approach` is how far the pre-grasp stands off toward the base, `pitch` is the finger angle above horizontal (rad)."""
-    p = np.array(upright_pixel_to_arm(arm, cur, u, v, depth_m, width, height), float)
+    return grasp_from_point(arm, cur, upright_pixel_to_arm(arm, cur, u, v, depth_m, width, height), limits, ws_min, ws_max, offset, approach, pitch)
+
+
+def grasp_from_point(arm, cur, p, limits, ws_min, ws_max, offset=0.03, approach=0.06, pitch=0.0):
+    """grasp_poses for a front-surface point already in the arm base frame (e.g. from a camera fixed to the robot)."""
+    p = np.array(p, float)
     r = math.hypot(p[0], p[1])
     if r < 0.05:
         raise Refused(f'target {np.round(p, 3).tolist()} is above the arm base')

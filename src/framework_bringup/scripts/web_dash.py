@@ -3,10 +3,12 @@
 
   ros2 run framework_bringup web_dash                  # http://127.0.0.1:8765/?t=<token> (printed)
   ros2 run framework_bringup web_dash --host 0.0.0.0   # reachable from the LAN (phone, other PC)
+  ros2 run framework_bringup web_dash --arm-source ros # Arm page: follow the arm driver only (default auto: servos read directly while no driver runs)
 
 Shows what `dash` shows (LLM, battery, task, devices, plan tree, cluster, nodes) plus live views: the camera
 image (MJPEG, ~5 fps), the lidar scan and the SLAM map (/map, once navigation runs). Offers: restart a node,
-halt the task, stop / restart the whole system. Every request needs the token printed at startup (random per
+halt the task, stop / restart the whole system. The Arm page also shows the arm monitor (tools/arm/arm_gui.py, reused as a
+module): pose over the taught free space, servo temperature / voltage / current, gripper gap and current. Read-only. Every request needs the token printed at startup (random per
 run); the default bind is loopback only, because the buttons can stop the robot's software. Plain HTTP:
 do not expose it beyond a network you trust.
 """
@@ -18,6 +20,7 @@ import math
 import os
 import queue
 import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -51,6 +54,23 @@ def load_dash():
     raise FileNotFoundError('dash next to web_dash not found')
 
 
+def load_arm_tools():
+    """tools/arm/arm_gui.py as a module (the arm monitor's logic), found by walking up from this script; (module, note)."""
+    d = HERE
+    for _ in range(8):
+        cand = os.path.join(d, 'tools', 'arm')
+        if os.path.exists(os.path.join(cand, 'arm_gui.py')):
+            sys.path.insert(0, cand)
+            try:
+                import arm_gui
+                arm_gui.load_context()
+            except Exception as e:  # noqa: BLE001 - the dashboard must start without the arm tools
+                return None, f'arm tools failed to load: {type(e).__name__}: {e}'
+            return arm_gui, ''
+        d = os.path.dirname(d)
+    return None, 'tools/arm not found next to this install: arm detail is off'
+
+
 class Live:
     """Latest camera JPEG, lidar scan JSON and map PNG, filled by subscriptions (rate-limited)."""
 
@@ -67,6 +87,8 @@ class Live:
         self.plan, self.tasks, self.errors = None, collections.deque(maxlen=20), collections.deque(maxlen=20)   # prompt page
         self.status, self.stop_state, self.mode = '', '', ''
         self.joints, self.joints_t = {}, 0.0                                                                    # arm page
+        self.armmod, self.arm_note, self.arm_source, self.health, self.gripper_tool = None, 'arm detail off', 'off', None, None
+        self.arm_rotate = None      # cv2 rotate code for the arm eye (the OAK is mounted upside down); None = as published
         self.task_pub = node.create_publisher(String, 'bt/task', 10)
         self.run_cli = node.create_client(Trigger, 'bt_executor/run')
         node.create_subscription(BtPlan, 'bt/plan', self._plan, 10)
@@ -76,6 +98,8 @@ class Live:
         node.create_subscription(String, 'safety/stop_state', lambda m: setattr(self, 'stop_state', m.data), 10)
         node.create_subscription(String, 'robot/mode', lambda m: setattr(self, 'mode', m.data), 10)
         node.create_subscription(JointState, '/joint_states', self._joints, 10)
+        node.create_subscription(String, 'arm/health', self._health, QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self._t_img, self._t_scan = {}, 0.0
         self.watched = {}   # source -> last time a browser asked for it: encode JPEGs only while someone watches
         self.jpeg = {}      # source -> latest JPEG
@@ -90,16 +114,112 @@ class Live:
                      'errors': list(m.errors), 'attempts': m.attempts}
 
     def _joints(self, m):
+        if not any(n.startswith('joint') for n in m.name):
+            return          # the Kobuki publishes wheel_*_joint on the same topic: not the arm
         self.joints_t = time.monotonic()
         eff = list(m.effort) + [None] * len(m.name)
         self.joints = {n: [round(p, 3), round(m.velocity[i], 3) if i < len(m.velocity) else None, eff[i]]
-                       for i, (n, p) in enumerate(zip(m.name, m.position))}
+                       for i, (n, p) in enumerate(zip(m.name, m.position)) if n.startswith(('joint', 'gripper'))}
+        if self.arm_source == 'ros':
+            self._arm_feed({n: p for n, p in zip(m.name, m.position)})
+
+    def _health(self, m):
+        try:
+            self.health = json.loads(m.data)
+        except ValueError:
+            pass
+
+    @staticmethod
+    def arm_driver_running():
+        return subprocess.run(['pgrep', '-f', 'lib/controller_manager/[r]os2_control_node'], capture_output=True).returncode == 0
+
+    def _guarded(self, fn, stop):
+        try:
+            fn(stop)
+        except OSError as e:            # e.g. UDP 8089 already taken by a running arm_gui.py
+            self.arm_note = f'{fn.__name__}: {e}'
+
+    def _sdk(self, on):
+        """Start / stop the read-only direct servo poll (it releases the serial port when stopped)."""
+        if on and self._sdk_stop is None:
+            self._sdk_stop = threading.Event()
+            threading.Thread(target=self._guarded, args=(self.armmod.poll_sdk, self._sdk_stop), daemon=True).start()
+        elif not on and self._sdk_stop is not None:
+            self._sdk_stop.set()
+            self._sdk_stop = None
+
+    def _arm_watch(self):
+        """auto: read the servos directly while no arm driver runs; the moment one starts, let go of the port and follow the driver."""
+        while True:
+            driver = self.arm_driver_running()
+            if driver and self.arm_source == 'sdk':
+                self._sdk(False)
+                self.arm_source = 'ros'
+            elif not driver and self.arm_source == 'ros' and time.monotonic() - self.joints_t > 3.0:
+                self.arm_source = 'sdk'
+                self._sdk(True)
+            time.sleep(0.5)
+
+    def arm_start(self, source, rotate=180):
+        """source: ros (the driver's /joint_states + arm/health, no bus access), sdk (servos read directly, read-only, only when no
+        driver runs), auto (sdk while no driver runs, ros once one does), off."""
+        self.arm_rotate = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}[rotate]
+        if source == 'off':
+            return
+        self.armmod, self.arm_note = load_arm_tools()
+        if self.armmod is None:
+            return
+        self._sdk_stop = None
+        self.arm_source = 'ros' if source == 'ros' else 'sdk' if source == 'sdk' else ('ros' if self.arm_driver_running() else 'sdk')
+        stop = threading.Event()        # the threads live as long as the process
+        for fn in (self.armmod.sample_history, self.armmod.listen_udp):
+            threading.Thread(target=self._guarded, args=(fn, stop), daemon=True).start()
+        self._sdk(self.arm_source == 'sdk')
+        if source == 'auto':
+            threading.Thread(target=self._arm_watch, daemon=True).start()
+        try:
+            import gripper_tool
+            self.gripper_tool = gripper_tool
+        except Exception:  # noqa: BLE001 - no Dynamixel SDK here: the gripper gap is left out in ROS mode
+            self.gripper_tool = None
+
+    def _arm_feed(self, p):
+        """/joint_states (+ temperature / voltage from arm/health) -> the arm monitor's reading."""
+        if not self.armmod or not all(f'joint{i}' in p for i in range(1, 5)):
+            return
+        h = self.health or {}
+        t, v = h.get('temps') or {}, h.get('volts') or {}
+        ids = (11, 12, 13, 14)
+        arm = {'pos': [p[f'joint{i}'] for i in range(1, 5)], 'cur': [0] * 4,
+               'temp': [t.get(str(i)) for i in ids] if t else None, 'volt': [v.get(str(i)) for i in ids] if v else None}
+        gt, gm, grip = self.gripper_tool, p.get('gripper_left_joint'), None
+        if gt is not None and gm is not None:
+            raw = round((gm + gt.M_OFFSET * -1) / gt.M_PER_TICK)
+            grip = {'raw': raw, 'gap': round(gt.gap_mm(raw), 1), 'cur': 0, 'temp': t.get('15'), 'volt': v.get('15')}
+        msg = 'driver mode: servo current is not published (no mA); temperature and voltage come from arm_health_node'
+        if h and not h.get('ok', True):
+            msg = 'arm health: ' + '; '.join(h.get('problems', ['unknown']))
+        with self.armmod.S['lock']:
+            self.armmod.S['base'] = {'src': 'ROS /joint_states', 'arm': arm, 'gripper': grip, 'msg': msg}
 
     def prompt(self):
         return json.dumps({'plan': self.plan, 'tasks': list(self.tasks), 'errors': list(self.errors), 'status': self.status})
 
     def arm(self):
-        return json.dumps({'age': round(time.monotonic() - self.joints_t, 1) if self.joints_t else None, 'joints': self.joints})
+        out = {'age': round(time.monotonic() - self.joints_t, 1) if self.joints_t else None, 'joints': self.joints}
+        if self.armmod is None:
+            out['detail_off'] = self.arm_note
+        else:
+            try:
+                out['detail'] = self.armmod.snapshot()
+            except Exception as e:  # noqa: BLE001 - no reading yet: the page shows the note
+                out['detail_off'] = f'{type(e).__name__}: {e}'
+            if self.arm_note:
+                out['detail_note'] = self.arm_note
+        return json.dumps(out)
+
+    def arm_map(self):
+        return json.dumps(self.armmod.CTX.get('map', {}) if self.armmod else {})
 
     @staticmethod
     def _rms(m):
@@ -144,7 +264,10 @@ class Live:
             return          # nobody is watching this source / at most ~20 fps
         self._t_img[src] = time.monotonic()
         try:
-            ok, buf = cv2.imencode('.jpg', image_to_bgr(m), [cv2.IMWRITE_JPEG_QUALITY, 70])
+            img = image_to_bgr(m)
+            if src == 'arm' and self.arm_rotate is not None:
+                img = cv2.rotate(img, self.arm_rotate)
+            ok, buf = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 70])
         except ValueError:      # an encoding image_to_bgr does not decode (e.g. 16UC1 depth)
             return
         if ok:
@@ -251,6 +374,8 @@ def make_handler(token, cache, actions, live):
                 return self._send(200, live.prompt())
             if path == '/api/arm':
                 return self._send(200, live.arm())
+            if path == '/api/armmap':
+                return self._send(200, live.arm_map())
             if path == '/api/scan':
                 return self._send(200, live.scan)
             if path == '/map.png' and live.map_png:
@@ -290,6 +415,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--host', default='127.0.0.1', help='bind address (0.0.0.0 = whole LAN)')
     ap.add_argument('--port', type=int, default=8765)
+    ap.add_argument('--arm-source', choices=('auto', 'ros', 'sdk', 'off'), default='auto',
+                    help='Arm page detail: auto = read the servos directly (read-only) while no arm driver runs and follow the driver '
+                         '(/joint_states, arm/health) once one does; ros = driver only, no bus access; sdk = servos only; off')
+    ap.add_argument('--arm-rotate', type=int, default=180, choices=(0, 90, 180, 270),
+                    help='turn the arm eye upright (the OAK is mounted upside down)')
     a = ap.parse_args(argv)
     dash = load_dash()
     token = secrets.token_urlsafe(9)
@@ -298,6 +428,7 @@ def main(argv=None):
     node = rclpy.create_node('framework_web_dash')
     d, expected = dash.Dash(node, False, False), dash.expected_nodes()
     live = Live(node)
+    live.arm_start(a.arm_source, a.arm_rotate)
     server = ThreadingHTTPServer((a.host, a.port), make_handler(token, cache, actions, live))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     shown = 'localhost' if a.host in ('127.0.0.1', '0.0.0.0') else a.host

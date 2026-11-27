@@ -1,0 +1,4 @@
+# A person walks across the robot's straight path (start 0.5, 0.5 -> goal 4.0, 0.5 in maps/test_room) around the time it gets there.
+# Used by tools/integration/nav_dynamic_test.py. The walker never waits for or avoids the robot.
+actors:
+  - {name: walker, id: 1, colour: blue, radius: 0.22, speed: 0.3, start_after: 3.0, path: [[2.6, 2.4], [2.6, -0.4]]}

@@ -40,6 +40,42 @@ def raw_pixel(u, v, width, height, rotate):
     raise ValueError(f'rotate must be 0, 90, 180 or 270, got {rotate}')
 
 
+def box_depth_m(depth_mm, box, width, height, rotate, frac=0.4, band_mm=40, min_pixels=150):
+    """Depth (m) of a detection box (x0, y0, x1, y1 in the UPRIGHT image) from the raw depth image; None if no band has enough pixels.
+
+    Reads the central `frac` of the box, not one point: a bottle's centre is often a stereo hole. Returns the median of the NEAREST
+    band of `band_mm` that holds at least `min_pixels` valid pixels. A clear bottle gives only ~5% valid pixels on itself and the rest is
+    the wall behind it (measured: bottle 0.39 m, 10th pct 0.5 m, median 1-1.8 m), so no fixed percentile works; sparse speckle in front
+    does not reach `min_pixels`.
+    """
+    h, w = depth_mm.shape
+    (xa, ya), (xb, yb) = (raw_pixel(box[0], box[1], width, height, rotate), raw_pixel(box[2], box[3], width, height, rotate))
+    cx, cy, hw, hh = (xa + xb) / 2, (ya + yb) / 2, abs(xb - xa) * frac / 2, abs(yb - ya) * frac / 2
+    sx, sy = w / width, h / height
+    min_pixels = max(20, int(min_pixels * w * h / (1280 * 720)))      # tuned on 1280x720; a smaller depth image has fewer pixels on the object
+    win = depth_mm[max(0, int((cy - hh) * sy)):int((cy + hh) * sy) + 1, max(0, int((cx - hw) * sx)):int((cx + hw) * sx) + 1]
+    v = np.sort(win[(win > 0) & (win < 20000)])
+    if v.size < min_pixels:
+        return None
+    hi = np.searchsorted(v, v + band_mm, side='right')
+    ok = np.nonzero(hi - np.arange(v.size) >= min_pixels)[0]
+    return float(np.median(v[ok[0]:hi[ok[0]]])) / 1000.0 if ok.size else None
+
+
+def clipped_at_side(box, width, margin=3):
+    """'left' / 'right' when a detection box touches that side of the picture, else ''. Cut off sideways, the centre (so the sideways position
+    the gripper needs) is biased. Top / bottom do not count: a tall object at close range always fills the 42 deg vertical view, and that only
+    shifts the estimated height a little."""
+    return 'left' if box[0] < margin else 'right' if box[2] > width - 1 - margin else ''
+
+
+def fixed_cam_point(u, v, depth_m, k, xyz):
+    """Pixel (u, v) + depth of a camera bolted to the robot, looking forward (parallel to the arm's x axis, upright image) -> arm base frame.
+    k = (fx, fy, cx, cy); xyz = the lens in the arm frame (x forward, y left, z up), hand-measured. Optical: x right, y down, z forward."""
+    fx, fy, cx, cy = k
+    return np.array([depth_m + xyz[0], -(u - cx) * depth_m / fx + xyz[1], -(v - cy) * depth_m / fy + xyz[2]])
+
+
 def backproject(u, v, depth_m, k):
     """Raw pixel + depth along the optical axis (metres) -> point in the raw optical frame."""
     return np.array([(u - k[0, 2]) * depth_m / k[0, 0], (v - k[1, 2]) * depth_m / k[1, 1], depth_m])

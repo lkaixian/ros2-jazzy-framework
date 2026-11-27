@@ -69,6 +69,46 @@ ros2 launch framework_bringup nav_sim.launch.py slam:=slam_toolbox   # mapping i
 `maps/my_map.yaml` is a copy of `~/maps/my_map.yaml`; it is a patchy partial scan whose connected
 free space is only about 2.6 m^2 for a 0.18 m robot, so Nav2 cannot plan long routes on it.
 
+## People and overhead obstacles in the simulator (`scenario:=`)
+`nav_sim.launch.py scenario:=<file>` adds scripted walkers and overhead boxes (`nav_sim/actors.py`, files in `scenarios/`). A walker is
+a circle on a polyline path: it blocks the simulated robot, shows up in `/scan`, and is published on `/persons` the way the RealSense
+detector would report it (bounding box, depth, clothes colour, track id; dropped behind a wall or a nearer person). An overhead box is a
+table top the 2D lidar cannot see: it is in `/depth_cloud` (frame `camera_link`) and blocks the robot. `/nav_sim/actors` (PoseArray) and
+`/nav_sim/contacts` (Int32, touches so far) are the ground truth the tests read. Scenarios: `crossing`, `door_crowd`, `overhead`, `follow`.
+
+Tests (each its own DDS domain; simulation only):
+```
+python3 tools/integration/follow_sim_test.py          # FollowTarget behind a walking operator, a person cutting in, search on/off control
+python3 tools/integration/nav_dynamic_test.py crossing|door_crowd|overhead|overhead_off
+```
+
+## Following a person (`FollowTarget`)
+Reactive pursuit on the camera, not a planned route (`pid_extension/follow.py`, no ROS imports, unit tested):
+- **who**: with `lock` the first person's track id; if the tracker gives them a new id after an occlusion, the candidate with the same
+  clothes colour near the last depth position (or last bearing without depth) is taken. A different colour is never adopted.
+- **gone**: it drives to where they were last seen (up to `goto_sec`, straight, stopping for anything the lidar sees), then sweeps toward
+  the side they left on (about 90 degrees, then through the rear to the other side, `search_sec`), then fails with `target lost`.
+  `search:=false` or missing odometry: stand still for `lost_sec`, then fail (the old behaviour).
+- **near things**: speed eases to zero over `slow_ramp` metres above `stop_distance` toward anything ahead; an obstacle that is not the
+  person makes it turn toward the freer side, and after `blocked_give_up_sec` it fails.
+Limits: it does not plan round walls, predict where a person is going, or tell two similarly dressed people apart; the camera's field of
+view (69 degrees) is assumed.
+
+## Recoveries and people in the way
+`bt_navigator` uses `nav2_trees/navigate_to_pose_patient.xml`: Nav2's replanning tree without `BackUp` (the lidar is blind to the rear)
+and with 8 retries around a 5 s Wait, so a crowd in a doorway has time to move before the goal is aborted. An ABORTED goal still goes to
+the BT layer's `RecoveryPolicy`.
+
+## Depth obstacles at the robot's full height (`depth_obstacles:=true`)
+The lidar sees one slice at ~14 cm; the robot is ~0.9 m tall with the arm folded. `navigation.launch.py depth_obstacles:=true` starts
+`depth_cloud_node` (RealSense depth -> thin `/depth_cloud`, every 4th pixel) and loads `param/nav2_depth.yaml`: both costmaps mark depth
+points 0.10-0.95 m above the floor (a second source with the floor included only clears), and `collision_monitor` gets a point-cloud
+source with the same height band. Because `collision_monitor` stops on a silent source, a dead camera stops the robot. Default is off
+(nav_sim has no camera). Camera mount: `param/navigation.yaml` `base_to_camera` (hand-measured, tilt assumed level; check with
+`tools/camera/floor_plane.py`); geometry in `notes/ROBOT_GEOMETRY.md`. Verified: cloud from the live RealSense (7399 points, optical
+frame), unit tests, nav_sim brings both costmaps and the collision monitor up with the overlay. NOT verified: that obstacles appear in
+the costmap in the right place, clearing behaviour, CPU cost, the real robot.
+
 ## Choosing the global planner
 `planner:=navfn` (default) or `planner:=dstar_lite` on `navigation.launch.py` / `nav_sim.launch.py`.
 `dstar_lite` is `src/dstar_lite_planner`: an incremental D* Lite (8-connected, costmap-aware) ported

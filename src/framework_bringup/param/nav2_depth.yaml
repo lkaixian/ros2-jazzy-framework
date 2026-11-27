@@ -1,0 +1,66 @@
+# Overlay on nav2_params.yaml, loaded by navigation.launch.py only with  depth_obstacles:=true  (needs the RealSense:
+# sensors.launch.py, which navigation.launch.py's depth_cloud_node reads). Adds the RealSense depth as an obstacle source so
+# the costmaps and collision_monitor see the robot's whole height, not only the lidar's slice at ~14 cm.
+# Heights are metres above the floor (base_footprint and base sit on it): the robot is ~0.90 m tall with the arm folded
+# (notes/ROBOT_GEOMETRY.md), so mark 0.10 .. 0.95 m. 0.10 keeps the floor out (a 1 deg camera tilt is ~5 cm at 3 m: measure it
+# with tools/camera/floor_plane.py and set pitch in navigation.yaml). Not tested on the real robot.
+# collision_monitor stops the robot when a source has no fresh data (source_timeout), so a dead camera = stopped, by design.
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      obstacle_layer:
+        observation_sources: scan depth depth_clear
+        depth:
+          topic: /depth_cloud
+          data_type: PointCloud2
+          marking: true
+          clearing: false
+          min_obstacle_height: 0.10
+          max_obstacle_height: 0.95
+          obstacle_min_range: 0.3
+          obstacle_max_range: 2.5
+        depth_clear:       # floor points too, so cells the camera sees empty get cleared (obstacles still seen are re-marked the same cycle)
+          topic: /depth_cloud
+          data_type: PointCloud2
+          marking: false
+          clearing: true
+          min_obstacle_height: -0.2
+          max_obstacle_height: 0.95
+          raytrace_min_range: 0.3
+          raytrace_max_range: 3.0
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      obstacle_layer:
+        observation_sources: scan depth depth_clear
+        depth:
+          topic: /depth_cloud
+          data_type: PointCloud2
+          marking: true
+          clearing: false
+          min_obstacle_height: 0.10
+          max_obstacle_height: 0.95
+          obstacle_min_range: 0.3
+          obstacle_max_range: 2.5
+        depth_clear:       # floor points too, so cells the camera sees empty get cleared (obstacles still seen are re-marked the same cycle)
+          topic: /depth_cloud
+          data_type: PointCloud2
+          marking: false
+          clearing: true
+          min_obstacle_height: -0.2
+          max_obstacle_height: 0.95
+          raytrace_min_range: 0.3
+          raytrace_max_range: 3.0
+
+collision_monitor:
+  ros__parameters:
+    observation_sources: [scan, depth]
+    depth:
+      type: pointcloud
+      topic: depth_cloud
+      min_height: 0.10
+      max_height: 0.95
+      min_range: 0.3
+      enabled: true

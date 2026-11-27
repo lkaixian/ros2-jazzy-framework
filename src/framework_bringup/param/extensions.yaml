@@ -27,6 +27,8 @@ cmd_vel_mux_node:
     cliff_topic: events/cliff
     bump_recovery_enabled: true   # bumper-only latch: back off bump_back_dist, turn away (side) or 90 deg (centre/both = wall); latch stays set. Unverified: backs up blind
     bump_back_dist: 0.10          # m, timed open loop at 0.1 m/s
+    estop_topic: estop            # std_msgs/Bool from tools/estop/estop_node.py (ESP32 button). True/silent = stopped (fail-closed); empty = not watched
+    estop_timeout_sec: 1.0
 
 odom_extension_node:
   ros__parameters:
@@ -53,7 +55,7 @@ pid_extension_node:
     odom_topic: odom
     persons_topic: persons
     cmd_vel_topic: pid_extension/cmd_vel
-    max_linear: 0.15
+    max_linear: 0.3             # = the mux clamp: at 0.15 a person walking at 0.2 m/s out-walks FollowTarget and is lost (follow_sim_test, help_me_carry_sim_test)
     max_angular: 0.6
     stale_sec: 0.5
     lost_sec: 1.0
@@ -91,8 +93,29 @@ arm_extension_node:         # guarded arm (src/arm_control): moves nothing while
     rate: 0.03              # rad/s of the furthest joint: the speed the park was validated at
     objects_topic: /arm_eye/objects
     depth_topic: /arm_cam/stereo/image_raw
+    # Where the pick finds the object. arm_eye = the OAK on the gripper (blind inside ~0.36 m). base_camera = the RealSense bolted next to the
+    # arm base: set objects_topic: /objects, depth_topic: /camera/camera/aligned_depth_to_color/image_raw,
+    # fixed_cam_info_topic: /camera/camera/aligned_depth_to_color/camera_info, target_source: base_camera. Its image must be upright and look
+    # forward (parallel to the arm's rest direction). UNVERIFIED: compare its point with the OAK's at >= 0.45 m before any live pick.
+    # Look-track-look: the pick first needs `track_cycles` steady looks (Kalman filter, pinned object id 1). A missed look coasts on the
+    # prediction; after `track_scan_after` misses in a row the eye-in-hand camera turns (joint 1 only) toward the predicted point inside
+    # workspace_min/max, `scan_fov_rad` per step; after `track_give_up` misses it refuses.
+    track_cycles: 4
+    track_max_cycles: 20
+    track_period_sec: 0.4
+    track_scan_after: 3
+    track_give_up: 12
+    track_max_sigma_m: 0.02
+    scan_fov_rad: 0.5
+    target_source: arm_eye
+    fixed_cam_xyz: [0.0, -0.08, -0.02]   # RealSense lens in the arm frame (x fwd, y left, z up), m. HAND-ESTIMATED 2026-11-26, not ruler-checked
+    fixed_cam_info_topic: ''
+    base_to_arm_x: 0.16     # arm joint-1 axis ahead of the Kobuki centre (m, best effort): FaceObject turns the base about ITS centre
+    face_max_turn_rad: 0.6  # FaceObject refuses a turn bigger than this (about 34 deg)
     approach_m: 0.06
-    grasp_pitch_deg: 0.0    # finger angle above horizontal
+    grasp_pitch_deg: -30.0  # finger angle above horizontal (negative = pointing down). Level fingers cannot reach the pre-grasp pose (approach_m
+                            # nearer the base) for an object ~0.2-0.26 m out at the arm's height; -20 or steeper can, -30 leaves margin on joint 4.
+                            # Made the first real pick work 2026-11-27 (empty plastic bottle, RealSense source).
     grasp_depth_offset_m: 0.03   # ESTIMATE: front surface -> object middle
     workspace_min: [0.05, -0.4, -0.3]   # arm base frame, metres. ESTIMATE: the free-space map is the real limit
     workspace_max: [0.45, 0.4, 0.4]

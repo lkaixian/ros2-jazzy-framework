@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot setup for ros2-jazzy-robocup-fw: system + ROS + Python packages, llama.cpp (LLM
+# One-shot setup for ros2-jazzy-framework: system + ROS + Python packages, llama.cpp (LLM
 # runtime), the LLM, STT and TTS models you pick for this computer (menus, with "other") and the SLM base (LFM2.5-230M-Base), then the build.
 #
 #   ./setup.sh                      # everything, asks before starting

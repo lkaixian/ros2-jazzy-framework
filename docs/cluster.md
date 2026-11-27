@@ -145,7 +145,7 @@ leader election: run exactly one; a second one is detected and logged but not pr
 6. RMW: tested on the Jazzy default. Large messages and many participants behave differently per RMW
    (Cyclone vs Fast DDS); if discovery is slow with many nodes, a discovery server helps.
 7. Run the agent as a service on every machine, e.g. systemd `Restart=always` with
-   `ExecStart=/bin/bash -lc 'source ~/ros2-jazzy-robocup-fw/env.sh && ros2 launch framework_bringup cluster.launch.py role:=agent host_id:=pi roles:=core tags:=camera,audio'`.
+   `ExecStart=/bin/bash -lc 'source ~/ros2-jazzy-framework/env.sh && ros2 launch framework_bringup cluster.launch.py role:=agent host_id:=pi roles:=core tags:=camera,audio'`.
 
 Changing the catalog: edit it on **every** machine, then restart agents (they read it at start) and
 the scheduler. Machines with an old catalog are excluded until they are updated. Restarting an agent

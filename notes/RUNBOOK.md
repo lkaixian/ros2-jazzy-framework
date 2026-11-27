@@ -2,7 +2,7 @@
 
 ## Every terminal
 ```
-source ~/ros2-jazzy-robocup-fw/env.sh     # created by ./setup.sh --only build; puts /usr/bin first, sources ROS + workspace
+source ~/ros2-jazzy-framework/env.sh     # created by ./setup.sh --only build; puts /usr/bin first, sources ROS + workspace
 # or by hand:  export PATH=/usr/bin:$PATH; source /opt/ros/jazzy/setup.bash; source install/setup.bash
 ```
 (`~/pyvenv.cfg` makes `~/bin/python3` hide system packages; always put `/usr/bin` first.)

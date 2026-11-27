@@ -1,17 +1,19 @@
 """Arm BT nodes on the guarded stack (arm_control): every motion is checked against the taught free-space map first, runs at a fixed slow
 rate, and freezes on cancel. No MoveIt. Moves nothing unless the `live` parameter is true (dry-run plans and checks only)."""
 import json
+import math
 import threading
 import time
 
 import numpy as np
+from arm_control.face import turn_to_face
 from arm_control.free_map import JOINTS, FreeMap
 from arm_control.gripper import joint_m_for_gap
 from arm_control.ik import map_limits, solve
 from arm_control.motion import RATE, Refused, plan_route, schedule
 from arm_control.omx_fk import Arm
 from arm_control.path_check import default_map
-from arm_control.pick import approach_poses, grasp_poses
+from arm_control.pick import approach_poses, grasp_from_point
 from bt_common.executor_node import ExtensionExecutor, call_action, call_service, port_float, port_str, run_executor
 from builtin_interfaces.msg import Duration
 from control_msgs.action import FollowJointTrajectory, GripperCommand
@@ -20,7 +22,7 @@ from dynamixel_interfaces.srv import GetDataFromDxl
 from object_detection_msgr.msg import ObjectArray
 from rclpy.action import ActionClient
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from sensor_msgs.msg import Image, JointState
+from sensor_msgs.msg import CameraInfo, Image, JointState
 from std_msgs.msg import String
 from trajectory_msgs.msg import JointTrajectoryPoint
 
@@ -43,6 +45,9 @@ class ArmExtension(ExtensionExecutor):
                          gripper_action='/gripper_controller/gripper_cmd', dxl_get='/dynamixel_hardware_interface/get_dxl_data',
                          joint_topic='/joint_states', state_topic='/arm_controller/controller_state',
                          objects_topic='/arm_eye/objects', depth_topic='/arm_cam/stereo/image_raw', max_age_sec=1.0,
+                         track_cycles=4, track_max_cycles=20, track_period_sec=0.4, track_scan_after=3, track_give_up=12,
+                         track_max_sigma_m=0.02, scan_fov_rad=0.5, target_source='arm_eye', fixed_cam_xyz=[0.0, -0.08, -0.02], fixed_cam_info_topic='',
+                         base_to_arm_x=0.16, face_max_turn_rad=0.6,
                          approach_m=0.06, grasp_pitch_deg=0.0, grasp_depth_offset_m=0.03,
                          workspace_min=[0.05, -0.4, -0.3], workspace_max=[0.45, 0.4, 0.4],
                          gripper_open_gap_mm=60.0, gripper_max_gap_mm=72.0, gripper_max_effort=20.0, goal_current_cap=250,
@@ -58,16 +63,22 @@ class ArmExtension(ExtensionExecutor):
         self.create_subscription(JointTrajectoryControllerState, self.p('state_topic'), self._on_state, 10)
         self.create_subscription(ObjectArray, self.p('objects_topic'), self._on_objs, qos_profile_sensor_data)
         self.create_subscription(Image, self.p('depth_topic'), self._on_depth, qos_profile_sensor_data)
+        self.fixed_k = None
+        if self.p('target_source') == 'base_camera':
+            self.create_subscription(CameraInfo, self.p('fixed_cam_info_topic'), self._on_info, qos_profile_sensor_data)
         self.health, self.health_t = None, 0.0
         self.create_subscription(String, 'arm/health', self._on_health, QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self._fk = self._fmap = None
         self.handlers = {'ArmPark': self._park, 'MoveArmToPose': self._move, 'OpenGripper': self._open,
-                         'CloseGripper': self._close, 'PickObject': self._pick, 'PlaceObject': self._place}
+                         'CloseGripper': self._close, 'PickObject': self._pick, 'PlaceObject': self._place,
+                         'FaceObject': self._face}
 
     # ---- sensors
     def _on_js(self, m):
-        self.js, self.js_t = dict(zip(m.name, m.position)), time.monotonic()
+        d = dict(zip(m.name, m.position))
+        if all(j in d for j in JOINTS):      # the Kobuki driver publishes wheel-only /joint_states on the same topic
+            self.js, self.js_t = d, time.monotonic()
 
     def _on_state(self, m):
         e = max(abs(x) for x in m.error.positions) if m.error.positions else 0.0
@@ -91,6 +102,9 @@ class ArmExtension(ExtensionExecutor):
     def _on_depth(self, m):
         if m.encoding in ('16UC1', 'mono16') and m.height * m.width * 2 == len(m.data):
             self.depth, self.depth_t = np.frombuffer(bytes(m.data), np.uint16).reshape(m.height, m.width), time.monotonic()
+
+    def _on_info(self, m):
+        self.fixed_k = (m.k[0], m.k[4], m.k[2], m.k[5])
 
     def _fresh(self, t):
         return time.monotonic() - t <= self.p('max_age_sec')
@@ -185,10 +199,16 @@ class ArmExtension(ExtensionExecutor):
 
     # ---- gripper
     def _check_current(self, ctl):
-        r, err = call_service(self.dxl, GetDataFromDxl.Request(id=GRIPPER_ID, item_name='Goal Current', timeout_sec=1.0), ctl, 3.0)
-        cap = self.p('goal_current_cap')
+        """Refuse to touch the gripper unless its Goal Current register is readable and under the cap. A read the busy bus drops is retried twice."""
+        cap, r, err = self.p('goal_current_cap'), None, ''
+        for attempt in range(3):
+            r, err = call_service(self.dxl, GetDataFromDxl.Request(id=GRIPPER_ID, item_name='Goal Current', timeout_sec=1.0), ctl, 3.0)
+            if r is not None and r.result:
+                break
+            if attempt < 2:
+                ctl.sleep(0.4)
         if r is None or not r.result:
-            raise ArmError(f'cannot read the gripper Goal Current ({err or "driver refused"}): not moving it')
+            raise ArmError(f'cannot read the gripper Goal Current ({err or "driver refused"}) after 3 tries: not moving it')
         if r.item_data > cap:
             raise ArmError(f'gripper Goal Current is {r.item_data} (cap {cap}): set it lower first '
                            '(a power cycle resets it to the 3.2 A maximum)')
@@ -245,23 +265,78 @@ class ArmExtension(ExtensionExecutor):
             if item.startswith(label + ':') and float(item.split(':')[1]) > self.p('gripper_max_gap_mm'):
                 raise ArmError(f'{label} is {item.split(":")[1]} mm wide: wider than the {self.p("gripper_max_gap_mm"):.0f} mm gripper')
 
-    def _target(self, label):
+    def _points(self, label, arm, cur):
+        """Front-surface point (arm base frame) of every `label` detection, with its confidence. Raises ArmError when none is usable."""
         if self.objs is None or not self._fresh(self.objs_t) or self.depth is None or not self._fresh(self.depth_t):
-            raise ArmError('no fresh detections or depth from the arm camera')
+            raise ArmError('no fresh detections or depth from the camera')
         hits = [o for o in self.objs.objects if o.label == label]
         if not hits:
-            raise ArmError(f'{label} not seen by the arm camera')
-        o = max(hits, key=lambda x: x.confidence)
-        u, v = (o.x_min + o.x_max) / 2, (o.y_min + o.y_max) / 2
-        from arm_control.hand_eye import raw_pixel, load
-        ur, vr = raw_pixel(u, v, self.objs.image_width, self.objs.image_height, load()[2])
-        h, w = self.depth.shape
-        x, y = int(ur * w / self.objs.image_width), int(vr * h / self.objs.image_height)
-        win = self.depth[max(0, y - 3):y + 4, max(0, x - 3):x + 4]
-        win = win[(win > 0) & (win < 20000)]
-        if win.size < 10:
-            raise ArmError(f'no valid depth at the {label}')
-        return u, v, float(np.median(win)) / 1000.0, self.objs.image_width, self.objs.image_height
+            raise ArmError(f'{label} not seen by the camera')
+        from arm_control.hand_eye import box_depth_m, clipped_at_side, fixed_cam_point, load, upright_pixel_to_arm
+        fixed = self.p('target_source') == 'base_camera'
+        w, h = self.objs.image_width, self.objs.image_height
+        out, cut = [], 0
+        for o in hits:
+            if clipped_at_side((o.x_min, o.y_min, o.x_max, o.y_max), w):
+                cut += 1
+                continue
+            d = box_depth_m(self.depth, (o.x_min, o.y_min, o.x_max, o.y_max), w, h, 0 if fixed else load()[2])   # a fixed camera is upright
+            if d is None:
+                continue
+            u, v = (o.x_min + o.x_max) / 2, (o.y_min + o.y_max) / 2
+            if fixed:
+                if self.fixed_k is None:
+                    raise ArmError(f"no camera_info on {self.p('fixed_cam_info_topic')}")
+                out.append((fixed_cam_point(u, v, d, self.fixed_k, self.p('fixed_cam_xyz')), o.confidence))
+            else:
+                out.append((np.array(upright_pixel_to_arm(arm, cur, u, v, d, w, h), float), o.confidence))
+        if not out:
+            raise ArmError(f'the {label} is cut off at the side of the picture: turn the robot toward it' if cut else f'no valid depth at the {label}')
+        return out
+
+    def _track_target(self, label, arm, fmap, ctl):
+        """Look, filter, look again until the pinned target (id 1) is steady; returns (front-surface point, text).
+
+        Detections go through a Kalman filter (arm_control.track). A missed look coasts on the prediction; after `track_scan_after` misses in
+        a row the eye-in-hand camera is turned (joint 1 only, checked like any other move) toward the predicted point, clipped to the workable
+        box; after `track_give_up` misses it refuses. A camera fixed to the robot cannot be turned, so it only coasts.
+        """
+        from arm_control.track import Track, scan_yaws
+        need, cap, period = int(self.p('track_cycles')), int(self.p('track_max_cycles')), self.p('track_period_sec')
+        scan_after, give_up = int(self.p('track_scan_after')), int(self.p('track_give_up'))
+        tr, scans, why = None, [], ''
+        for _ in range(cap):
+            if ctl.cancelled:
+                raise ArmError('cancelled')
+            cur, t = self._joints(), time.monotonic()
+            try:
+                cands = self._points(label, arm, cur)
+            except ArmError as e:
+                cands, why = [], str(e)
+            if tr is None:
+                if cands:
+                    tr = Track(max(cands, key=lambda c: c[1])[0], t)       # first look: the most confident one is pinned as id 1
+            else:
+                tr.step(t, [c[0] for c in cands])
+            if tr is not None and tr.seen >= need and tr.missed == 0 and tr.sigma <= self.p('track_max_sigma_m'):
+                note = (f'{tr.seen} looks, sigma {tr.sigma * 100:.1f} cm' + (f', coasted through {tr.coasted} missed' if tr.coasted else '') +
+                        (f', {len(scans)} scan(s)' if scans else ''))
+                return tr.pos, note
+            if tr is not None and tr.missed >= give_up:
+                raise ArmError(f'lost the {label} ({why or "not matching the pinned object"}) after {tr.missed} looks, last at {np.round(tr.pos, 3).tolist()}')
+            if tr is not None and tr.missed >= scan_after and self.p('target_source') != 'base_camera':
+                j1 = map_limits(fmap)['joint1']
+                yaws = scan_yaws(tr.pos, self.p('workspace_min'), self.p('workspace_max'), j1[0], j1[1], self.p('scan_fov_rad'),
+                                 len(scans) + 2)
+                nxt = yaws[len(scans)] if len(scans) < len(yaws) else None
+                if nxt is None:
+                    raise ArmError(f'lost the {label}: nothing left to scan toward {np.round(tr.pos, 3).tolist()}')
+                scans.append(nxt)
+                self._go([{**cur, 'joint1': nxt}], ctl, 'scan')       # moves only when live; checked against the free-space map either way
+                if self.p('live'):
+                    self._still(ctl)
+            ctl.sleep(period)
+        raise ArmError(f'the {label} never held steady in {cap} looks' + (f': {why}' if why else ''))
 
     def _pick(self, ports, ctl):
         import math
@@ -271,13 +346,16 @@ class ArmExtension(ExtensionExecutor):
             arm, fmap = self._models()
             self._still(ctl)
             cur = self._joints()
-            u, v, depth, w, h = self._target(label)
-            g = grasp_poses(arm, cur, u, v, depth, w, h, map_limits(fmap), self.p('workspace_min'), self.p('workspace_max'),
-                            self.p('grasp_depth_offset_m'), self.p('approach_m'), math.radians(self.p('grasp_pitch_deg')))
+            point, tnote = self._track_target(label, arm, fmap, ctl)
+            cur = self._joints()
+            lim, off, app, pit = map_limits(fmap), self.p('grasp_depth_offset_m'), self.p('approach_m'), math.radians(self.p('grasp_pitch_deg'))
+            g = grasp_from_point(arm, cur, point, lim, self.p('workspace_min'), self.p('workspace_max'), off, app, pit)
             legs = self._legs(cur, [g['pre'], g['grasp'], g['pre']])
             secs = sum(schedule(p, self.p('rate'))[-1][1] for p in legs)
             if not self.p('live'):
-                return True, f'DRY: {label} at {np.round(g["point"], 3).tolist()} m, 3 legs checked, would take {secs:.0f} s + gripper'
+                return True, (f'DRY: {label} at {np.round(g["point"], 3).tolist()} m ({tnote}; source {self.p("target_source")}' +
+                              (f', fixed_cam_xyz {self.p("fixed_cam_xyz")}' if self.p('target_source') == 'base_camera' else '') +
+                              f'), 3 legs checked, would take {secs:.0f} s + gripper')
             ok, msg = self._gripper(self.p('gripper_open_gap_mm'), self.p('gripper_max_effort'), ctl)
             if not ok:
                 return False, f'could not open the gripper: {msg}'
@@ -289,6 +367,40 @@ class ArmExtension(ExtensionExecutor):
             self._drive(legs[2], ctl)
             return True, f'holding {label}'
         except (ArmError, Refused) as e:
+            return False, str(e)
+
+    def _face(self, ports, ctl):
+        """How far to turn the base so the object sits in the middle of the fixed camera's view (where the arm can also reach it). Moves nothing:
+        the turn comes back in out_radians (left positive) for RotateBy. Only for target_source: base_camera."""
+        label = port_str(ports, 'label')
+        try:
+            if self.p('target_source') != 'base_camera':
+                raise ArmError('FaceObject needs target_source: base_camera (a camera that stays on the base)')
+            if self.objs is None or not self._fresh(self.objs_t) or self.depth is None or not self._fresh(self.depth_t):
+                raise ArmError('no fresh detections or depth from the camera')
+            hits = [o for o in self.objs.objects if o.label == label]
+            if not hits:
+                raise ArmError(f'{label} not seen by the camera')
+            from arm_control.hand_eye import box_depth_m, clipped_at_side, fixed_cam_point
+            o = max(hits, key=lambda x: x.confidence)
+            w, h = self.objs.image_width, self.objs.image_height
+            box = (o.x_min, o.y_min, o.x_max, o.y_max)
+            side = clipped_at_side(box, w)
+            if side:                                            # cut off at a side: nudge toward that side and look again
+                a = 0.2 if side == 'left' else -0.2
+                return True, f'the {label} is cut off at the {side} edge: turn {math.degrees(abs(a)):.0f} deg {side} and look again', {'out_radians': a}
+            if self.fixed_k is None:
+                raise ArmError(f"no camera_info on {self.p('fixed_cam_info_topic')}")
+            d = box_depth_m(self.depth, box, w, h, 0)
+            if d is None:
+                raise ArmError(f'no valid depth at the {label}')
+            p = fixed_cam_point((o.x_min + o.x_max) / 2, (o.y_min + o.y_max) / 2, d, self.fixed_k, self.p('fixed_cam_xyz'))
+            a = turn_to_face(p[0], p[1], self.p('fixed_cam_xyz')[1], self.p('base_to_arm_x'), self.p('face_max_turn_rad'))
+            if a is None:
+                raise ArmError(f'the {label} at {np.round(p, 3).tolist()} needs more than {math.degrees(self.p("face_max_turn_rad")):.0f} deg of turn')
+            where = 'already well placed' if a == 0.0 else f'turn {math.degrees(abs(a)):.0f} deg {"left" if a > 0 else "right"}'
+            return True, f'{label} at {np.round(p, 3).tolist()}: {where}', {'out_radians': round(a, 3)}
+        except ArmError as e:
             return False, str(e)
 
     def _place(self, ports, ctl):

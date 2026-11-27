@@ -30,10 +30,10 @@ static_tf:
   base_to_camera:                 # RealSense camera_link (published by realsense2_camera)
     parent: base
     child: camera_link
-    x: 0.10                       # PLACEHOLDER
-    y: 0.00                       # PLACEHOLDER
-    z: 0.30                       # PLACEHOLDER
-    roll: 0.0
+    x: 0.16                       # hand-measured 2026-11-26 (notes/ROBOT_GEOMETRY.md): lens beside the arm base, 0.16 m ahead of the centre
+    y: -0.08                      # 8 cm to the RIGHT of the arm axis (one old note says left: check)
+    z: 0.755                      # lens centre; "above the Kobuki base" taken as the floor plane like base_to_laser. CHECK with tools/camera/floor_plane.py
+    roll: 0.0                     # tilt NOT measured: level assumed; floor_plane.py gives pitch/roll
     pitch: 0.0
     yaw: 0.0
 

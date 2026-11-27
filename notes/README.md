@@ -17,7 +17,7 @@ Read in this order (10 minutes):
 User-facing docs live in `../docs/`: `operator-guide.md` (commands while running the robot), `task-spec-grammar.md` (what the LLM writes),
 `macros.md` (generated reference, kept fresh by a test), `cluster.md`, `navigation.md`.
 
-Repo: `~/ros2-jazzy-robocup-fw` (ROS 2 Jazzy, Ubuntu 24.04), remote
+Repo: `~/ros2-jazzy-framework` (ROS 2 Jazzy, Ubuntu 24.04), remote
 `https://github.com/lkaixian/ros2-jazzy-framework.git`, branch `main`. The user's older robot
 workspace is `~/ros2_ws` (Kobuki driver, RPLIDAR, audio_common, voskros, UR7e examples): refer to
 it, do not modify it unless asked.

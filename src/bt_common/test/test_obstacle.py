@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from bt_common.obstacle import min_range_in_sector, ScanGuard
 
 # 8 beams, 45 degrees apart, from -180 deg: index 4 is straight ahead (0 rad), index 0 straight behind
@@ -67,3 +69,17 @@ def test_freer_side_turns_toward_the_side_with_more_room():
     assert g.freer_side() == 1
     now[0] = 1.0                                        # stale
     assert g.freer_side() == 0
+
+
+def test_slow_factor_eases_from_full_speed_to_stop_and_clearance_ignores_the_stop_distance():
+    from types import SimpleNamespace as NS
+    clock = [0.0]
+    g = ScanGuard(stop_distance=0.4, half_width_deg=35.0, stale_sec=0.5, clock=lambda: clock[0])
+    assert g.clearance(0.1) is None and g.slow_factor(0.1) == 1.0                 # no scan yet, not required: no opinion
+    n = 36
+    g.update(NS(ranges=[0.55] * n, angle_min=-3.14, angle_increment=6.28 / n, range_min=0.05, range_max=12.0))
+    assert g.clearance(0.1) == 0.55 and g.blocked(0.1) is None
+    assert g.slow_factor(0.1, ramp=0.3) == pytest.approx(0.5)
+    g.update(NS(ranges=[0.3] * n, angle_min=-3.14, angle_increment=6.28 / n, range_min=0.05, range_max=12.0))
+    assert g.slow_factor(0.1) == 0.0 and g.blocked(0.1) == 0.3
+    assert g.slow_factor(0.0) == 1.0                                              # not moving: nothing to ease

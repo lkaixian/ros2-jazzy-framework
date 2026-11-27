@@ -1,0 +1,5 @@
+# Help Me Carry in miniature (maps/test_room, robot at 1.0, 2.9 facing +x): the operator walks east through the door and turns north,
+# a second person (blue) cuts between them and the robot once (hiding the operator for a moment). Used by tools/integration/follow_sim_test.py.
+actors:
+  - {name: operator, id: 1, colour: red,  radius: 0.22, speed: 0.2, start_after: 2.0, path: [[2.2, 2.9], [7.0, 2.9], [7.0, 5.6]]}
+  - {name: passer,   id: 2, colour: blue, radius: 0.22, speed: 0.3, start_after: 4.0, path: [[3.5, 5.0], [3.5, 0.8]]}

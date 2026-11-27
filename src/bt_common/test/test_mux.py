@@ -1,4 +1,4 @@
-from bt_common.cmd_vel_mux import BumpRecovery, CENTER, LEFT, RIGHT, StopLatch, clamp, select, slew
+from bt_common.cmd_vel_mux import BumpRecovery, CENTER, LEFT, RIGHT, StopLatch, clamp, estop_hit, select, slew
 
 
 def test_clamp():
@@ -111,3 +111,15 @@ def test_slew_ramps_and_lands_exactly():
     assert v == 0.2 and steps == 7                    # 6 full steps, then the remainder
     assert abs(slew(0.2, 0.0, 0.03) - 0.17) < 1e-9
     assert slew(0.1, 0.11, 0.03) == 0.11
+
+
+def test_estop_is_fail_closed_and_reset_waits_for_release():
+    assert estop_hit(False, None, 5.0, 1.0)[0]            # never heard: stopped
+    assert estop_hit(False, 5.0, 5.5, 1.0) == (False, 'e-stop pressed')   # fresh and released: ok
+    assert estop_hit(True, 5.0, 5.5, 1.0)[0]              # pressed
+    assert estop_hit(False, 5.0, 6.5, 1.0)[0]             # reader went silent: stopped
+    st = StopLatch()
+    st.event('estop', True, 'e-stop pressed')
+    assert not st.reset()[0]                              # still pressed: refused
+    st.event('estop', False)
+    assert st.reset()[0]                                  # released: a human resets

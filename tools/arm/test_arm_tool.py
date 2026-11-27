@@ -313,3 +313,53 @@ def test_touch_test_marker_detection_and_depth_window():
     big_hole[190:210, 390:410] = 0                                       # no valid pixel in the whole window: no reading
     assert depth_at(big_hole, 399, 199) is None
     assert abs(depth_at(depth, 399, 199) - 0.52) < 1e-9 and depth_at(np.zeros((480, 640), np.uint16), 100, 100) is None
+
+
+def test_box_depth_takes_the_nearest_dense_band_not_a_percentile():
+    import numpy as np
+    from hand_eye import box_depth_m
+    d = np.zeros((720, 1280), np.uint16)
+    d[200:260, 600:700] = 3000                    # the wall seen through a clear bottle (raw frame; the box below is turned 180 deg)
+    d[220:224, 640:660] = 450                     # ~80 px: the bottle surface is a small minority and below min_pixels...
+    d[230:240, 640:660] = 450                     # ...with this, 280 px in total
+    d[210, 650:655] = 300                         # 5 px of speckle nearer than the bottle
+    box = (1279 - 700, 719 - 260, 1279 - 600, 719 - 200)
+    assert box_depth_m(d, box, 1280, 720, 180) == 0.45
+    assert box_depth_m(np.zeros((720, 1280), np.uint16), box, 1280, 720, 180) is None
+
+
+def test_box_depth_threshold_scales_with_the_depth_image_size():
+    import numpy as np
+    from hand_eye import box_depth_m
+    d = np.zeros((400, 640), np.uint16)           # half-size depth: a quarter of the pixels
+    d[111:144, 300:350] = 3000                    # the box (raw rows 200-260 of 720) lands on rows 111-144 of 400
+    d[120:130, 310:330] = 450                     # 200 px: under 150 would pass anyway, but 150 unscaled would also pass; 41 is what must hold
+    box = (1279 - 700, 719 - 260, 1279 - 600, 719 - 200)
+    assert box_depth_m(d, box, 1280, 720, 180) == 0.45
+
+
+def test_fixed_camera_point_is_ahead_right_pixels_go_negative_y_and_down_pixels_go_negative_z():
+    from hand_eye import fixed_cam_point
+    k, xyz = (600.0, 600.0, 320.0, 240.0), (0.0, -0.08, -0.02)
+    assert [round(float(x), 3) for x in fixed_cam_point(320, 240, 0.5, k, xyz)] == [0.5, -0.08, -0.02]
+    p = fixed_cam_point(420, 340, 0.6, k, xyz)         # 100 px right and 100 px down at 0.6 m = 0.1 m each way
+    assert [round(float(x), 3) for x in p] == [0.6, -0.18, -0.12]
+
+
+def test_only_a_side_cut_off_box_is_unusable_top_and_bottom_are_fine():
+    from hand_eye import clipped_at_side
+    assert clipped_at_side((200, 100, 300, 400), 640) == ''
+    assert clipped_at_side((0, 100, 80, 400), 640) == 'left' and clipped_at_side((560, 100, 639, 400), 640) == 'right'
+    assert clipped_at_side((200, 0, 300, 479), 640) == ''          # a tall bottle at close range fills the 42 deg vertical view
+
+
+def test_arm_parameter_page_gathers_the_files_and_the_code_constants():
+    import importlib.util
+    import os
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
+    spec = importlib.util.spec_from_file_location('gen_arm_params', os.path.join(root, 'tools', 'gen_arm_params.py'))
+    g = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(g)
+    text = g.page()
+    for needle in ('live:', 'require_health', 'fixed_cam_xyz', 'image_rotate_deg', '`CURRENT_CAP`', '`V_MIN`', '`CLOSED_TICKS`', '`TRACK_ERR`'):
+        assert needle in text, needle

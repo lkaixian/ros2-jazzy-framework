@@ -185,21 +185,39 @@ def callable_macros(lib, whitelist):
     return lib if whitelist is None else {k: v for k, v in lib.items() if k in whitelist}
 
 
-def spec_schema(nodes, lib):
+# Which macro args / node ports hold a map place, an arm place or a detector label (constrained to the known values when given).
+_NAV_ARGS = {'place', 'first', 'second', 'from_place', 'to_place', 'table_place', 'living_place'}
+_KIND = {('put_down', 'place'): 'arm', ('PlaceObject', 'place'): 'arm', ('move_object', 'put_place'): 'arm', ('DetectObject', 'label'): 'label'}
+
+
+def _kind(owner, arg):
+    if (owner, arg) in _KIND:
+        return _KIND[(owner, arg)]
+    return 'nav' if arg in _NAV_ARGS else 'label' if arg == 'label' else None
+
+
+def spec_schema(nodes, lib, enums=None):
     """JSON schema of a task_spec for llama-server `response_format: json_schema`. Constrained decoding can only emit
     allowed node/macro names with their real port/arg names (string values), so call-syntax slips, invented names and
-    invented ports are impossible. nodes: NodeSpec list (leaf Actions/Conditions); lib: the callable macros."""
-    def obj(names, required):
+    invented ports are impossible. nodes: NodeSpec list (leaf Actions/Conditions); lib: the callable macros.
+    enums: {'nav': [map places], 'arm': [arm places], 'label': [detector labels]}; a non-empty list restricts those values too."""
+    enums = {k: sorted(v) for k, v in (enums or {}).items() if v}
+
+    def slot(owner, n):
+        vals = enums.get(_kind(owner, n))
+        return {'enum': vals} if vals else {'type': 'string'}
+
+    def obj(names, required, owner=''):
         return {'type': 'object', 'additionalProperties': False, 'required': sorted(required),
-                'properties': {n: {'type': 'string'} for n in names}}
+                'properties': {n: slot(owner, n) for n in names}}
     leaf = [{'type': 'object', 'required': ['node'] + (['ports'] if n.required else []), 'additionalProperties': False,
-             'properties': {'node': {'const': n.id}, 'ports': obj(n.required + n.optional, n.required)}}
+             'properties': {'node': {'const': n.id}, 'ports': obj(n.required + n.optional, n.required, n.id)}}
             for n in nodes if n.category in ('Action', 'Condition')]
     mac = []
     for name, m in sorted(lib.items()):
         req = [p for p, d in m['params'].items() if (d or {}).get('required', 'default' not in (d or {}))]
         mac.append({'type': 'object', 'required': ['macro'] + (['args'] if req else []), 'additionalProperties': False,
-                    'properties': {'macro': {'const': name}, 'args': obj(list(m['params']), req)}})
+                    'properties': {'macro': {'const': name}, 'args': obj(list(m['params']), req, name)}})
     group = {'type': 'object', 'required': ['group', 'steps'], 'additionalProperties': False,
              'properties': {'group': {'enum': ['Sequence', 'Fallback', 'ReactiveSequence', 'ReactiveFallback', 'Parallel']},
                             'retry': {'type': 'integer'}, 'repeat': {'type': 'integer'},

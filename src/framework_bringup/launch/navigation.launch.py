@@ -136,21 +136,30 @@ PLANNERS = {'navfn': 'nav2_navfn_planner::NavfnPlanner',
 
 
 def _nav2(context, sim):
-    params = [param_path(context, 'nav2_params.yaml'), {'use_sim_time': sim}]
+    params = [param_path(context, 'nav2_params.yaml')]
+    if flag(context, 'depth_obstacles'):      # RealSense depth in both costmaps + collision_monitor (nav2_depth.yaml)
+        params.append(param_path(context, 'nav2_depth.yaml'))
+    params.append({'use_sim_time': sim})
     to_nav = [('cmd_vel', 'cmd_vel_nav')]
     planner = given(context, 'planner')
     if planner is not None and planner not in PLANNERS:
         raise ValueError(f'planner:={planner!r}: choose one of {sorted(PLANNERS)}')
 
+    # recoveries without BackUp (blind rear arc) and patient with people in the way: nav2_trees/navigate_to_pose_patient.xml
+    patient = {'default_nav_to_pose_bt_xml': os.path.join(share('framework_bringup'), 'nav2_trees', 'navigate_to_pose_patient.xml')}
+
     def n(pkg, exe, name, remap=()):
         p = params + ([{'GridBased.plugin': PLANNERS[planner]}]
                       if name == 'planner_server' and planner else [])
+        p += [patient] if name == 'bt_navigator' else []
         return Node(package=pkg, executable=exe, name=name, output='screen', parameters=p,
                     remappings=list(remap))
     return [
         # /scan without the beams that hit the robot's own body: costmaps and collision_monitor read /scan_filtered
         Node(package='bt_common', executable='scan_mask_node', name='scan_mask_node', output='screen',
              parameters=[{'use_sim_time': sim}]),
+        *([Node(package='bt_common', executable='depth_cloud_node', name='depth_cloud_node', output='screen',
+                parameters=[{'use_sim_time': sim}])] if flag(context, 'depth_obstacles') and flag(context, 'depth_cloud_node') else []),
         n('nav2_controller', 'controller_server', 'controller_server', to_nav),
         n('nav2_smoother', 'smoother_server', 'smoother_server'),
         n('nav2_planner', 'planner_server', 'planner_server'),
@@ -205,6 +214,11 @@ def generate_launch_description():
         DeclareLaunchArgument('navigation', default_value='true',
                               description='false = SLAM/localization only, no planner/controller'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
+        DeclareLaunchArgument('depth_obstacles', default_value='false',
+                              description='real robot: RealSense depth as an obstacle source (param/nav2_depth.yaml); '
+                                          'collision_monitor then stops when the camera is silent'),
+        DeclareLaunchArgument('depth_cloud_node', default_value='true',
+                              description='depth_obstacles:=true: start the RealSense depth -> /depth_cloud node (nav_sim publishes its own)'),
         DeclareLaunchArgument('publish_static_tf', default_value='true',
                               description='base->laser and base->camera_link from navigation.yaml'),
         DeclareLaunchArgument('rtabmap_new_map', default_value='true',

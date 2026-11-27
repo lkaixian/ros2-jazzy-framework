@@ -3,9 +3,9 @@ Description=RoboCup LLM server (llama.cpp, Gemma 4 E2B)
 After=network.target
 
 [Service]
-# %h = the user's home; the repo is expected at %h/ros2-jazzy-robocup-fw (edit WorkingDirectory/-m if it lives elsewhere)
-WorkingDirectory=%h/ros2-jazzy-robocup-fw
-ExecStart=%h/.local/bin/llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 6144 -np 1 -ngl 99 --reasoning off
+# %h = the user's home; the repo is expected at /home/ubuntu/ros2-jazzy-framework (edit WorkingDirectory/-m if it lives elsewhere)
+WorkingDirectory=/home/ubuntu/ros2-jazzy-framework
+ExecStart=%h/.local/bin/llama-server -m models/llm/gemma-4-E2B-it-Q4_0.gguf --host 127.0.0.1 --port 8081 -c 32768 -np 1 -ngl 99 --reasoning off
 Restart=always
 RestartSec=5
 

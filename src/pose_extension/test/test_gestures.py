@@ -76,3 +76,17 @@ def test_seat_place_says_which_side():
     assert seat_place('chair', -0.6) == 'chair on my left'
     assert seat_place('couch', 0.6) == 'couch on my right'
     assert seat_place('bench', 0.1) == 'bench straight ahead'
+
+
+def test_extreme_object_and_colour_count():
+    from types import SimpleNamespace as N
+
+    from pose_extension.pose_extension_node import count_confident, extreme_object
+    big, small, thin = (N(label=n, confidence=0.9, x_min=0, y_min=0, x_max=w, y_max=h) for n, w, h in (('big', 100, 80), ('small', 20, 20), ('thin', 90, 5)))
+    objs = [big, small, thin, N(label='ghost', confidence=0.1, x_min=0, y_min=0, x_max=500, y_max=500)]
+    assert extreme_object(objs, 'biggest').label == 'big' and extreme_object(objs, 'smallest').label == 'small'
+    assert extreme_object(objs, 'thinnest').label == 'thin' and extreme_object([], 'biggest') is None
+    people = [N(confidence=0.9, clothes_colour='red'), N(confidence=0.9, clothes_colour='blue'), N(confidence=0.2, clothes_colour='red')]
+    assert count_confident(people, 0.5) == 2 and count_confident(people, 0.5, colour='red') == 1
+    people.append(N(confidence=0.9, clothes_colour='grey'))
+    assert count_confident(people, 0.5, colour='Gray') == 1

@@ -1,0 +1,7 @@
+# Three people stand shoulder to shoulder in the doorway (x 5.0, y 2.2 .. 3.6 in maps/test_room), then walk off after 25 s, none of them
+# to the test's goal (7.0, 2.9). The robot must wait/clear/retry, not push through, and still arrive.
+# Used by tools/integration/nav_dynamic_test.py door_crowd.
+actors:
+  - {name: a, id: 1, colour: red,   radius: 0.22, speed: 0.4, start_after: 25.0, path: [[5.05, 2.45], [6.2, 0.6]]}
+  - {name: b, id: 2, colour: green, radius: 0.22, speed: 0.4, start_after: 26.0, path: [[5.05, 2.90], [6.3, 2.9], [6.3, 0.3]]}
+  - {name: c, id: 3, colour: white, radius: 0.22, speed: 0.4, start_after: 27.0, path: [[5.05, 3.35], [6.2, 5.5]]}
