@@ -77,7 +77,7 @@ class PoseExtension(ExtensionExecutor):
         self.last = {}     # 'persons'/'objects' -> (monotonic time, message)
         self.create_subscription(ObjectArray, self.get_parameter('objects_topic').value,
                                  lambda m: self.last.__setitem__('objects', (time.monotonic(), m)), 10)
-        self._cat, self._last_obj = None, ''
+        self._objcat, self._last_obj = None, ''
         self.create_subscription(ObjectArray, self.get_parameter('candidates_topic').value,
                                  lambda m: self.last.__setitem__('arm_objects', (time.monotonic(), m)), 10)
         self.parser = attributes.FaceParser(self.get_parameter('face_parsing_model').value)
@@ -380,15 +380,15 @@ class PoseExtension(ExtensionExecutor):
         """The next object the arm eye sees that this task handles, and where it goes (param/object_categories.yaml)."""
         task = port_str(ports, 'task')
         try:
-            if self._cat is None:
+            if self._objcat is None:
                 path = self.get_parameter('categories_file').value or os.path.join(
                     get_package_share_directory('framework_bringup'), 'param', 'object_categories.yaml')
-                self._cat = load_table(path)
+                self._objcat = load_table(path)
         except (ValueError, PackageNotFoundError) as e:
             return False, str(e)
-        rows = self._cat.get(task)
+        rows = self._objcat.get(task)
         if not rows:
-            return False, f'no objects configured for task {task!r} (known: {", ".join(sorted(self._cat))})'
+            return False, f'no objects configured for task {task!r} (known: {", ".join(sorted(self._objcat))})'
         m = self._fresh('arm_objects')
         if m is None:
             return False, 'no recent arm-eye object detections (tools/arm/arm_eye.sh)'

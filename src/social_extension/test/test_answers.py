@@ -97,3 +97,9 @@ def test_the_drink_is_the_drink_not_the_verb_phrase_round_it():
     drinks = ['milk', 'root beer', 'tea', 'sparkling water', 'water']
     assert extract_drink('I like to drink milk.', drinks) == 'milk' and extract_drink('um sparkling water please', drinks) == 'sparkling water'
     assert extract_drink('I really love kombucha', drinks) == 'really love kombucha' or extract_drink('I really love kombucha', drinks) == 'kombucha'
+
+
+def test_a_sentence_that_is_not_a_name_gives_no_name():
+    from social_extension.answers import extract_name
+    assert extract_name("I'm not sure what it is.") == ''
+    assert extract_name("I'm sorry") == '' and extract_name('Hi, my name is Liam.') == 'liam'

@@ -7,7 +7,8 @@ _NAME = [r"\b(?:my name is|my name's|name is)\s+([a-z][a-z'-]*)", r"\bcall me\s+
 _DRINK = [r"\b(?:my )?favou?rite drink is\s+(.+)", r"\bi (?:would|'d) like\s+(.+)",
           r"\bi (?:really |just |usually |always |also |would )?(?:like|love|prefer|drink)\s+(.+)", r"\bi want\s+(.+)", r"\bbring me\s+(.+)"]
 _FILLER = {'a', 'an', 'the', 'some', 'um', 'uh', 'please', 'hello', 'hi', 'hey', 'well', 'just', 'so', 'there',
-           'you', 'thanks', 'thank', 'okay', 'ok', 'yes', 'yeah', 'sure'}
+           'you', 'thanks', 'thank', 'okay', 'ok', 'yes', 'yeah', 'sure', 'not', 'what', 'it', 'this', 'that', 'here', 'fine', 'good', 'great',
+           'sorry', "i'm", 'im', 'i', 'am', 'is', 'are', 'was', 'be', 'to', 'of', 'and', 'but', 'still', 'going', 'back', 'trying', 'looking', 'afraid', 'glad', 'happy'}     # "I'm not sure what it is" is not the name "not"
 
 
 def _clean(text):

@@ -42,7 +42,7 @@ stt_node:
     language: en            # the competition language; "" lets Whisper guess per utterance and it heard Malay, Russian subtitles and "waah waah" in a noisy room
     device: cpu             # cuda needs CUDA 12 cuBLAS + cuDNN 9; the node falls back to cpu/int8 if they are missing
     compute_type: int8
-    min_confidence: 0.0
+    min_confidence: 0.5     # live: ambient noise and the robot's own voice came out as "I'm not sure what it is." (0.30), "You are lovely, yeah." (0.49); real answers were 0.83-0.86
 
 transcript_to_task_node:
   ros__parameters:
