@@ -22,7 +22,7 @@ check `robot_radius` (0.18 m is a guess) in `param/nav2_params.yaml`.
 ## Run it on the robot
 ```
 export PATH=/usr/bin:$PATH; source env.sh                              # system Python first
-ros2 launch kobuki_node kobuki_node-launch.py                          # from ~/ros2_ws: odom -> base, commands/velocity
+tools/start.sh base --list   # prints the Kobuki command: it names /dev/kobuki (the stock launch file opens /dev/ttyUSB0, the lidar here)
 ros2 launch framework_bringup sensors.launch.py                        # RPLIDAR (sllidar_ros2) + RealSense
 ros2 launch framework_bringup extensions.launch.py cmd_vel_topic:=commands/velocity \
     enable_arm:=false enable_pose:=false enable_social:=false          # mux -> Kobuki, nav_extension

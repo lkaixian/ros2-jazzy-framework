@@ -36,7 +36,8 @@ NAMES=() CMDS=() NOTES=()
 add() { NAMES+=("$1"); CMDS+=("$2"); }
 base() {
   add estop "python3 tools/estop/estop_node.py --port $(estop_port)"
-  add kobuki "ros2 launch kobuki_node kobuki_node-launch.py"
+  # the stock launch file opens /dev/ttyUSB0, which is the RPLIDAR on this robot (udev names: /dev/kobuki, /dev/rplidar): name the port
+  add kobuki "ros2 run kobuki_node kobuki_ros_node --ros-args --params-file $HOME/ros2_ws/install/kobuki_node/share/kobuki_node/config/kobuki_node_params.yaml -p device_port:=${KOBUKI_PORT:-/dev/kobuki}"
 }
 case $mode in
   base) base ;;
