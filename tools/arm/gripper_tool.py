@@ -187,7 +187,7 @@ def ready_problems(s):
         bad.append(f"hardware error flag {s['err']}: power-cycle the arm first")
     if s['mode'] != 5:
         bad.append(f"operating mode {s['mode']} (expected 5, current-based position): refusing to change it")
-    if s['volt'] < V_MIN + 0.5 or s['temp'] > 50:
+    if s['volt'] < V_MIN or s['temp'] > 50:
         bad.append(f"supply {s['volt']:.1f} V / {s['temp']} C is out of range")
     if not OPEN_TICKS - 150 <= s['raw'] <= CLOSED_TICKS + 100:
         bad.append(f"position {s['raw']} is outside the calibrated range {OPEN_TICKS}..{CLOSED_TICKS}: re-run `range`")

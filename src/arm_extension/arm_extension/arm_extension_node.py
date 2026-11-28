@@ -13,6 +13,7 @@ from arm_control.ik import map_limits, solve
 from arm_control.motion import RATE, Refused, plan_route, schedule
 from arm_control.omx_fk import Arm
 from arm_control.path_check import default_map
+from arm_control.point import find_pose
 from arm_control.pick import approach_poses, grasp_from_point
 from bt_common.executor_node import ExtensionExecutor, call_action, call_service, port_float, port_str, run_executor
 from builtin_interfaces.msg import Duration
@@ -51,7 +52,8 @@ class ArmExtension(ExtensionExecutor):
                          approach_m=0.06, grasp_pitch_deg=0.0, grasp_depth_offset_m=0.03,
                          workspace_min=[0.05, -0.4, -0.3], workspace_max=[0.45, 0.4, 0.4],
                          gripper_open_gap_mm=60.0, gripper_max_gap_mm=72.0, gripper_max_effort=20.0, goal_current_cap=250,
-                         object_width_mm=[''], places=[''], track_err=0.3, track_sec=1.5, rest_pose=[0.0, -1.85, 1.52, 0.45]).items():
+                         object_width_mm=[''], places=[''], track_err=0.3, track_sec=1.5, rest_pose=[0.0, -1.85, 1.52, 0.45],
+                         point_rate=0.08, point_rate_max=0.25).items():
             self.declare_parameter(k, v)
         self.p = lambda k: self.get_parameter(k).value
         self.js, self.js_t, self.objs, self.objs_t, self.depth, self.depth_t = {}, 0.0, None, 0.0, None, 0.0
@@ -72,7 +74,7 @@ class ArmExtension(ExtensionExecutor):
         self._fk = self._fmap = None
         self.handlers = {'ArmPark': self._park, 'MoveArmToPose': self._move, 'OpenGripper': self._open,
                          'CloseGripper': self._close, 'PickObject': self._pick, 'PlaceObject': self._place,
-                         'FaceObject': self._face}
+                         'FaceObject': self._face, 'ArmPoint': self._point}
 
     # ---- sensors
     def _on_js(self, m):
@@ -140,9 +142,9 @@ class ArmExtension(ExtensionExecutor):
             cur = g
         return out
 
-    def _drive(self, points, ctl):
+    def _drive(self, points, ctl, rate=None):
         self._health_ok()
-        sched = schedule(points, self.p('rate'))
+        sched = schedule(points, rate or self.p('rate'))
         goal = FollowJointTrajectory.Goal()
         goal.trajectory.joint_names = list(JOINTS)
         for k, (pos, t) in enumerate(sched):
@@ -188,13 +190,13 @@ class ArmExtension(ExtensionExecutor):
         if res is None:
             raise ArmError(f'STOP NOT CONFIRMED ({err}): support the arm')
 
-    def _go(self, goals, ctl, label):
-        """Plan and check all legs, then (if live) drive them. Returns the planned time in seconds."""
+    def _go(self, goals, ctl, label, rate=None):
+        """Plan and check all legs, then (if live) drive them. Returns the planned time in seconds. `rate` (rad/s) replaces the default for this move."""
         legs = self._legs(self._joints(), goals)
-        secs = sum(schedule(p, self.p('rate'))[-1][1] for p in legs)
+        secs = sum(schedule(p, rate or self.p('rate'))[-1][1] for p in legs)
         if self.p('live'):
             for p in legs:
-                self._drive(p, ctl)
+                self._drive(p, ctl, rate)
         return secs
 
     # ---- gripper
@@ -235,12 +237,41 @@ class ArmExtension(ExtensionExecutor):
         return self._gripper(0.0, min(port_float(ports, 'force', mx, lo=0.0), mx), ctl)
 
     # ---- BT nodes
+    def _rate(self, ports):
+        """A move's speed: the `rate` port (rad/s of the furthest joint) up to point_rate_max, else the validated default."""
+        return min(port_float(ports, 'rate', 0.0, lo=0.0, hi=self.p('point_rate_max')), self.p('point_rate_max')) or None
+
     def _park(self, ports, ctl):
         try:
-            secs = self._go([dict(zip(JOINTS, self.p('rest_pose')))], ctl, 'park')
+            secs = self._go([dict(zip(JOINTS, self.p('rest_pose')))], ctl, 'park', self._rate(ports))
         except ArmError as e:
             return False, str(e)
         return True, ('parked' if self.p('live') else f'DRY: park checked, would take {secs:.0f} s')
+
+    def _point(self, ports, ctl):
+        """Point the gripper along a direction (radians left of the arm's forward; e.g. FindFreeSeat out_radians), at the nearest pose that is inside the taught joint range
+        and on a checked route (arm_control.point: less turn, shorter reach, other heights and pitches are tried; a pose the checks refuse is never used). Runs at
+        point_rate (default 0.08 rad/s, 2.7x the validated 0.03): raise it step by step on the real arm, the tracking-error watchdog still freezes a blocked or lagging arm."""
+        want = port_float(ports, 'radians', 0.0, lo=-1.6, hi=1.6)
+        try:
+            arm, fmap = self._models()
+            lim, cur = map_limits(fmap), self._joints()
+            seed = [tuple(cur.values())]
+
+            def route_ok(q):
+                try:
+                    self._legs(cur, [q])
+                    return True
+                except ArmError:
+                    return False
+            q, info = find_pose(want, lambda xyz, pitch: solve(arm, xyz, pitch, seeds=seed, limits=lim), route_ok)
+            if q is None:
+                return False, f'no pose inside the taught range and the free-space map points that way ({info["tries"]} tried): the arm stays where it is'
+            secs = self._go([q], ctl, 'point', self._rate(ports) or self.p('point_rate'))
+        except (ArmError, ValueError) as e:
+            return False, str(e)
+        got = f'{math.degrees(info["turn"]):.0f} of the {math.degrees(want):.0f} degrees'
+        return True, (f'pointing ({got})' if self.p('live') else f'DRY: point checked ({got}), would take {secs:.0f} s')
 
     def _move(self, ports, ctl):
         if any(float(ports.get(k) or 0) != 0 for k in ('roll', 'yaw')):

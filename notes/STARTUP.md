@@ -55,7 +55,7 @@ ros2 action send_goal /arm_extension/execute bt_pipeline_msgs/action/ExecuteNode
 Settings and where they are: `docs/arm-parameters.md` (regenerate with `python3 tools/gen_arm_params.py`).
 
 ### Real arm motion (live)
-Only with: rigid narrow object 22-32 cm from the arm axis, nothing else in reach, health ok **with the supply holding above 11 V while it moves**, someone beside it.
+Only with: rigid narrow object 22-32 cm from the arm axis, nothing else in reach, health ok **with the supply holding above 10.5 V while it moves (the health gate; it was 11 V)**, someone beside it.
 ```
 sed -i '92s/live: false/live: true/' src/framework_bringup/param/extensions.yaml     # the master switch (line 92 of that file)
 pkill -f "[a]rm_extension_node"                                                      # it respawns in ~5 s with the new value

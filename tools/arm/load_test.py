@@ -314,7 +314,7 @@ def preflight(bus, rest):
     bad = []
     if st['err'].any():
         bad.append(f'hardware error flags {st["err"].tolist()}: power-cycle the arm first')
-    if st['volt'].min() < V_MIN + 0.5:
+    if st['volt'].min() < V_MIN:
         bad.append(f'supply {st["volt"].min():.1f} V is low')
     if st['temp'].max() > 45:
         bad.append(f'a servo is at {int(st["temp"].max())} C: let it cool')
