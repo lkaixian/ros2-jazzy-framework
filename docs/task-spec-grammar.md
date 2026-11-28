@@ -31,7 +31,7 @@ blackboard when the XML names a variable: `{"node":"WaitForTranscript","ports":{
 no output is produced (the downstream port is just omitted).
 
 ## Limits and rules
-- Validator limits (`param/pipeline.yaml`): tree depth 12, 160 nodes (a macro such as `hric_round` expands to about 100).
+- Validator limits (`param/pipeline.yaml`): tree depth 12, 260 nodes (a macro such as `hric_round` expands to about 210).
 - An unknown node/macro, a missing required port, an empty `{...}`-less port, or a name the detector cannot produce is rejected with a message
   that is fed back to the LLM (up to `max_attempts`).
 - `Parallel` children that use the same extension action server conflict: an extension runs one Action at a time and rejects a second.

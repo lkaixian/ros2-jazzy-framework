@@ -50,7 +50,7 @@ Examples shipped in `framework_bringup/behavior_trees/`: `greet_person.xml` (det
 
 `param/macros.yaml` holds 37 named, parameterised step lists, all callable by the LLM (the `whitelist:`). A macro may call other macros but cannot use `foreach`. Add your own by adding an entry with `example_args` and a name in `whitelist:`; `test_macro_library.py` expands and validates it against the real catalog. The generated reference is [Macros](macros.md); the grammar is the [task spec grammar](task-spec-grammar.md).
 
-Some macros worth knowing: `go_to_place`, `go_and_say`, `announce_and_go` (speak while driving, a `Parallel`), `patrol`, `wander`, `follow_person`, `meet_guest`, `receive_guest`, `scout_room`, `report_object`, `describe_person`, `return_home`, `hric_round` (about 100 nodes after expansion, which is why the validator's `max_nodes` is 160).
+Some macros worth knowing: `go_to_place`, `go_and_say`, `announce_and_go` (speak while driving, a `Parallel`), `patrol`, `wander`, `follow_person`, `meet_guest`, `receive_guest`, `scout_room`, `report_object`, `describe_person`, `return_home`, `hric_round` (about 210 nodes after expansion, which is why the validator's `max_nodes` is 260).
 
 ## Task lifecycle
 
