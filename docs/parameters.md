@@ -49,8 +49,10 @@ bt_slm_node:
 bt_validator_node:
   ros__parameters:
     max_depth: 12
-    max_nodes: 160          # a macro like hric_round expands to ~100 nodes; LLM replies are bounded by the schema anyway
+    max_nodes: 260          # the Education round macros expand to 150-210 nodes (hric_round 201 with gaze, describing and the follow check); LLM replies are bounded by the schema anyway
     labels: ""             # comma-separated DetectObject labels to accept until a detector announces its own
+    places_file: ""        # "" = param/places.yaml: the place / first / second / from_place / to_place slots of the LLM schema only allow its names
+    extensions_file: ""    # "" = param/extensions.yaml: put_place / PlaceObject.place only allow the arm places taught in arm_extension_node.places (none taught = free text)
 
 orchestrator_node:
   ros__parameters:
@@ -206,6 +208,8 @@ cmd_vel_mux_node:
     cliff_topic: events/cliff
     bump_recovery_enabled: true   # bumper-only latch: back off bump_back_dist, turn away (side) or 90 deg (centre/both = wall); latch stays set. Unverified: backs up blind
     bump_back_dist: 0.10          # m, timed open loop at 0.1 m/s
+    estop_topic: estop            # std_msgs/Bool from tools/estop/estop_node.py (ESP32 button). True/silent = stopped (fail-closed); empty = not watched
+    estop_timeout_sec: 1.0
 
 odom_extension_node:
   ros__parameters:
@@ -232,7 +236,7 @@ pid_extension_node:
     odom_topic: odom
     persons_topic: persons
     cmd_vel_topic: pid_extension/cmd_vel
-    max_linear: 0.15
+    max_linear: 0.3             # = the mux clamp: at 0.15 a person walking at 0.2 m/s out-walks FollowTarget and is lost (follow_sim_test, help_me_carry_sim_test)
     max_angular: 0.6
     stale_sec: 0.5
     lost_sec: 1.0
@@ -245,6 +249,8 @@ pid_extension_node:
     scan_required: true         # no fresh scan = refuse to drive (real robot)
     scan_yaw_offset: 3.1416     # rad: lidar faces backwards on this robot (= base_to_laser yaw in navigation.yaml)
     blocked_give_up_sec: 3.0     # blocked this long -> the node fails instead of waiting forever
+    cam_height: 0.8              # m: RealSense lens above the floor (about, from memory, not measured); BackUpForFace uses it
+    vfov_deg: 42.0               # RealSense colour vertical field of view
     avoid_turn: 0.4              # rad/s: FollowTarget turns this fast toward the freer side when an obstacle (not the person) is ahead
 
 pose_extension_node:
@@ -266,12 +272,31 @@ arm_extension_node:         # guarded arm (src/arm_control): moves nothing while
     map_file: ''            # '' = the newest ~/arm_free_space*.npz (the baseline first)
     require_health: true    # live motion needs a recent, clean arm/health (fail closed)
     health_max_age_sec: 5.0
-    live: false             # true = really drive the arm (bt_executor dry_run:=false must also be set). Validate on hardware first.
+    live: true             # true = really drive the arm (bt_executor dry_run:=false must also be set). Validate on hardware first.
     rate: 0.03              # rad/s of the furthest joint: the speed the park was validated at
-    objects_topic: /arm_eye/objects
-    depth_topic: /arm_cam/stereo/image_raw
+    objects_topic: /objects                                              # LOCAL TEST: RealSense (was /arm_eye/objects)
+    depth_topic: /camera/camera/aligned_depth_to_color/image_raw         # LOCAL TEST (was /arm_cam/stereo/image_raw)
+    # Where the pick finds the object. arm_eye = the OAK on the gripper (blind inside ~0.36 m). base_camera = the RealSense bolted next to the
+    # arm base: set objects_topic: /objects, depth_topic: /camera/camera/aligned_depth_to_color/image_raw,
+    # fixed_cam_info_topic: /camera/camera/aligned_depth_to_color/camera_info, target_source: base_camera. Its image must be upright and look
+    # forward (parallel to the arm's rest direction). UNVERIFIED: compare its point with the OAK's at >= 0.45 m before any live pick.
+    # Look-track-look: the pick first needs `track_cycles` steady looks (Kalman filter, pinned object id 1). A missed look coasts on the
+    # prediction; after `track_scan_after` misses in a row the eye-in-hand camera turns (joint 1 only) toward the predicted point inside
+    # workspace_min/max, `scan_fov_rad` per step; after `track_give_up` misses it refuses.
+    track_cycles: 4
+    track_max_cycles: 20
+    track_period_sec: 0.4
+    track_scan_after: 3
+    track_give_up: 12
+    track_max_sigma_m: 0.02
+    scan_fov_rad: 0.5
+    target_source: base_camera      # LOCAL TEST (default arm_eye): do not commit
+    fixed_cam_xyz: [0.0, -0.08, -0.02]   # RealSense lens in the arm frame (x fwd, y left, z up), m. HAND-ESTIMATED 2026-11-26, not ruler-checked
+    fixed_cam_info_topic: /camera/camera/aligned_depth_to_color/camera_info   # LOCAL TEST (default '')
+    base_to_arm_x: 0.16     # arm joint-1 axis ahead of the Kobuki centre (m, best effort): FaceObject turns the base about ITS centre
+    face_max_turn_rad: 0.6  # FaceObject refuses a turn bigger than this (about 34 deg)
     approach_m: 0.06
-    grasp_pitch_deg: 0.0    # finger angle above horizontal
+    grasp_pitch_deg: -30.0   # finger angle above horizontal. LOCAL TEST (default 0.0): level fingers cannot reach the pre-grasp pose (6 cm nearer the base) for a bottle ~0.26 m out; -20 or steeper can
     grasp_depth_offset_m: 0.03   # ESTIMATE: front surface -> object middle
     workspace_min: [0.05, -0.4, -0.3]   # arm base frame, metres. ESTIMATE: the free-space map is the real limit
     workspace_max: [0.45, 0.4, 0.4]
@@ -372,6 +397,9 @@ transcript_to_task_node:
   ros__parameters:
     wake_word: robot        # "" = every transcript is a task; "robot, ..." or a bare "robot" then the task
     wake_window_sec: 8.0
+    start_phrase: ""        # a competition task that starts only on this spoken signal, e.g. "start the task,start task" (see the edu_* launch files); "" = off
+    start_spec: ""          # the task spec (JSON) published on bt/task_spec when the start phrase is heard; while set, no other speech becomes a task
+    start_cooldown_sec: 30.0
 
 tts_node:
   ros__parameters:
@@ -406,7 +434,7 @@ model: ""                 # local GGUF path; "" = download hf_repo below into ll
 hf_repo: ggml-org/gemma-4-E4B-it-GGUF:Q4_0   # E4B (RTX 3080 laptop). On a 4 GB GPU use ggml-org/gemma-4-E2B-it-GGUF (E4B Q4_0 is 4.28 GiB)
 port: 8080                # keep in step with llm_bridge_node.server_url (pipeline.yaml)
 # --reasoning off: Gemma 4 otherwise spends the 512-token reply budget on hidden "thinking" and the JSON is cut off
-extra_args: ["-ngl", "99", "-c", "8192", "-np", "1", "--reasoning", "off"]   # the planner prompt is ~4.3k tokens + 768 reply: 4096 rejected every request; -np 1: one request at a time gets the whole window
+extra_args: ["-ngl", "99", "-c", "32768", "-np", "1", "--reasoning", "off"]   # the planner prompt is ~4.3k tokens + 768 reply: 4096 rejected every request; -np 1: one request at a time gets the whole window
 ```
 
 ## `navigation.yaml`
@@ -444,10 +472,10 @@ static_tf:
   base_to_camera:                 # RealSense camera_link (published by realsense2_camera)
     parent: base
     child: camera_link
-    x: 0.10                       # PLACEHOLDER
-    y: 0.00                       # PLACEHOLDER
-    z: 0.30                       # PLACEHOLDER
-    roll: 0.0
+    x: 0.16                       # hand-measured 2026-11-26 (notes/ROBOT_GEOMETRY.md): lens beside the arm base, 0.16 m ahead of the centre
+    y: -0.08                      # 8 cm to the RIGHT of the arm axis (one old note says left: check)
+    z: 0.755                      # lens centre; "above the Kobuki base" taken as the floor plane like base_to_laser. CHECK with tools/camera/floor_plane.py
+    roll: 0.0                     # tilt NOT measured: level assumed; floor_plane.py gives pitch/roll
     pitch: 0.0
     yaw: 0.0
 
@@ -498,6 +526,8 @@ nav_sim_node:                 # 2D simulator for testing Nav2/SLAM without a rob
     max_lin_acc: 1.5
     max_ang_acc: 4.0
     odom_slip: 0.0            # heading drift factor, e.g. 0.03 to stress AMCL/SLAM
+    manual_start: false       # true: scenario people stand still until an Empty arrives on /nav_sim/scenario_start (tests use it: Nav2 needs a variable time to come up)
+    scenario: ""              # people walking + overhead boxes (scenarios/*.yaml, nav_sim/actors.py); "" = an empty room
 ```
 
 ## `cluster.yaml`
@@ -554,5 +584,23 @@ places:
   door: {x: 5.05, y: 2.9, yaw: 0.0}
   right_room: {x: 9.5, y: 5.5, yaw: 1.57}
   far_corner: {x: 9.5, y: 0.5, yaw: 3.14}
+
+# RoboCup@Home 2025 arena (robocupmalaysia/at-home-2025, maps/room_names.md + location_names.md; assumed the same for 2026).
+# POSES ARE PLACEHOLDERS inside the sample map: the real ones come from the venue map on the preparation day. Never run on them.
+# Rooms
+  bedroom: {x: 2.0, y: 6.5, yaw: 0.0}
+  kitchen: {x: 8.5, y: 6.5, yaw: 3.14}
+  office: {x: 2.0, y: 1.5, yaw: 0.0}
+  living_room: {x: 8.5, y: 1.5, yaw: 3.14}
+# Locations ("(p)" = objects are placed there; the category it holds in brackets)
+  bed: {x: 1.5, y: 7.0, yaw: 1.57}
+  shelves: {x: 7.5, y: 7.2, yaw: 1.57}                # (p) food
+  dishwasher: {x: 9.5, y: 6.0, yaw: 0.0}
+  dining_table: {x: 9.0, y: 4.5, yaw: 1.57}           # (p) tableware
+  coffee_table: {x: 9.5, y: 2.0, yaw: 3.14}           # (p) drinks
+  office_desk: {x: 1.0, y: 1.0, yaw: 3.14}
+  office_cabinet: {x: 3.0, y: 0.8, yaw: -1.57}        # (p) snacks
+  entrance: {x: 0.6, y: 3.0, yaw: 0.0}
+  exit: {x: 11.0, y: 3.0, yaw: 0.0}
 ```
 

@@ -164,6 +164,10 @@ float32[] keypoints_conf
 float32 distance_m
 # colour word of the clothes on the torso (red, blue, black, ...); empty when unknown
 string clothes_colour
+# colour word of the legs (hips to knees/ankles), empty when the hips or legs are not in view
+string legs_colour
+# appearance vector of the person crop (unit length) for re-identification; empty when embed_model is off
+float32[] embedding
 ```
 
 ### PersonArray (msg)
