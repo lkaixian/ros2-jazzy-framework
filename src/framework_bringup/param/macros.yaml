@@ -413,7 +413,10 @@ macros:
                 failure_count: 2
                 steps:
                   - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
-                  - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
+                  - group: Sequence          # never succeeds: only the answer ends the Parallel (a dry-run FollowTarget returns at once and must not cut the listening short)
+                    steps:
+                      - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
+                      - {node: AlwaysFailure}
               - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
           - {node: Speak, ports: {text: "Sorry, please say only your name"}}
       - {node: Speak, ports: {text: "Hi {person}, welcome!", person: "{${slot}_name}"}}
@@ -428,7 +431,10 @@ macros:
                 failure_count: 2
                 steps:
                   - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
-                  - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
+                  - group: Sequence          # never succeeds: only the answer ends the Parallel (a dry-run FollowTarget returns at once and must not cut the listening short)
+                    steps:
+                      - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
+                      - {node: AlwaysFailure}
               - {node: ExtractAnswer, ports: {kind: drink, text: "{${slot}_heard}", out_value: "{${slot}_drink}"}}
           - {node: Speak, ports: {text: "Sorry, please say only the drink"}}
       - {node: Speak, ports: {text: "Your favourite drink is {detail}.", detail: "{${slot}_drink}"}}
@@ -543,7 +549,10 @@ macros:
                 failure_count: 2
                 steps:
                   - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
-                  - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
+                  - group: Sequence          # never succeeds: only the answer ends the Parallel (a dry-run FollowTarget returns at once and must not cut the listening short)
+                    steps:
+                      - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
+                      - {node: AlwaysFailure}
               - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
           - {node: Speak, ports: {text: "Sorry, please say only your name"}}
       - {node: Speak, ports: {text: "Nice to meet you {person}", person: "{${slot}_name}"}}
@@ -803,23 +812,19 @@ macros:
       - {node: Speak, ports: {text: "Their favourite drink is {person}", person: "{${slot}_drink}"}}
 
   receive_guest:
-    description: "Go to the door and wait there for a guest to step up to the robot (within 2.5 m) or ring the bell (up to 3 minutes), welcome them, face them (backing away until the face shows), ask name and favourite drink (said back), remember how they look and, from the face, whether they are a man or a woman and about how old; slot = guest1, guest2 ..."
+    description: "Go to the door and wait there for a guest to step up to the robot (a person within 2.5 m, up to 3 minutes; the doorbell is not listened for), welcome them, face them (backing away until the face shows), ask name and favourite drink (said back), remember how they look and, from the face, whether they are a man or a woman and about how old; slot = guest1, guest2 ..."
     params: {slot: {default: guest1}}
     example_args: {slot: guest1}
     steps:
       - {macro: go_to_place, args: {place: door}}
-      - group: Parallel          # the door is open by default and the guest steps up to the robot; the bell only rings when it is closed
-        success_count: 1
+      - group: Fallback          # the door is open by default: the guest steps up to the robot (a person within 2.5 m). The doorbell detector is NOT used here: on the real robot it fired on
+        retry: 180               # voices every 30-70 s (344-533 Hz "tones"), so a person in front is the only trigger; macro wait_for_doorbell still exists for a closed door
         steps:
-          - {node: DetectSound, ports: {kind: doorbell, timeout_ms: "180000"}}
-          - group: Fallback
-            retry: 180
+          - {node: DetectPerson, ports: {max_distance: "2.5"}}
+          - group: Sequence
             steps:
-              - {node: DetectPerson, ports: {max_distance: "2.5"}}
-              - group: Sequence
-                steps:
-                  - {node: Sleep, ports: {msec: "1000"}}
-                  - {node: AlwaysFailure}
+              - {node: Sleep, ports: {msec: "1000"}}
+              - {node: AlwaysFailure}
       - {node: Speak, ports: {text: "Welcome, please come in"}}
       - group: Fallback
         steps:
