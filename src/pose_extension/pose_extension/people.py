@@ -7,6 +7,8 @@ standing from the keypoints, a name from a recognised face): nothing is guessed.
 import math
 from collections import Counter
 
+from bt_common.kalman import Kalman2D
+
 SEATS = ('chair', 'couch', 'bench', 'bed')
 LANDMARKS = ('tv', 'potted plant', 'dining table', 'refrigerator', 'oven', 'sink', 'bed', 'laptop', 'book', 'vase', 'clock', 'bottle', 'cup')
 BAGS = ('backpack', 'handbag', 'suitcase')
@@ -36,6 +38,7 @@ class Known:
         self.id, self.name, self.box, self.seen = pid, '', None, 0.0
         self.votes = {'top': Counter(), 'legs': Counter(), 'posture': Counter(), 'hair': Counter(), 'glasses': Counter()}
         self.extra = {}
+        self.kf = None      # Kalman filter of the person's position in the odom frame (needs depth and odometry)
 
     def vote(self, key, value, weight=1):
         if value:
@@ -57,8 +60,9 @@ class PeopleBook:
     def __init__(self, keep_sec=900.0):
         self.keep, self.people = keep_sec, {}
 
-    def update(self, persons, faces, now, width, height, fw=0, fh=0):
-        """persons: PersonArray.persons; faces: FaceArray.faces (their coordinates are in fw x fh pixels, the persons' in width x height)."""
+    def update(self, persons, faces, now, width, height, fw=0, fh=0, pose=None, hfov_deg=69.0):
+        """persons: PersonArray.persons; faces: FaceArray.faces (their coordinates are in fw x fh pixels, the persons' in width x height). pose = the robot's (x, y, yaw)
+        in the odom frame: with it every depth-ranged person gets a Kalman filter of their place, so they can still be pointed at while hidden for a moment."""
         for pid in [k for k, v in self.people.items() if now - v.seen > self.keep]:
             del self.people[pid]
         sx, sy = (width / fw if fw else 1.0), (height / fh if fh else 1.0)
@@ -67,6 +71,13 @@ class PeopleBook:
                 continue
             k = self.people.setdefault(p.track_id, Known(p.track_id))
             k.box, k.seen = (p.x_min, p.y_min, p.x_max, p.y_max), now
+            if pose is not None and p.distance_m > 0 and width:
+                b = -math.atan(((p.x_min + p.x_max) / 2.0 - width / 2.0) / (width / 2.0) * math.tan(math.radians(hfov_deg) / 2.0))
+                pos = (pose[0] + p.distance_m * math.cos(pose[2] + b), pose[1] + p.distance_m * math.sin(pose[2] + b))
+                if k.kf is None:
+                    k.kf = Kalman2D(pos, now)
+                else:
+                    k.kf.update(pos, now, 0.03 + 0.03 * p.distance_m)
             k.vote('top', p.clothes_colour)
             k.vote('legs', getattr(p, 'legs_colour', ''))
             if len(p.keypoints_x) == len(p.keypoints_y) == len(p.keypoints_conf) > 0:
@@ -94,6 +105,31 @@ class PeopleBook:
             elif value:
                 k.extra[key] = value
         return k.id
+
+    def bearing(self, k, pose, now, width, hfov_deg=69.0, fresh=0.4):
+        """(radians, direct) from the robot's forward (+ = left) to person k: straight from the box in the picture when they were seen within `fresh` s, else from the Kalman
+        prediction (at most 2 s past the last sighting) and the robot's current pose; None when neither is available."""
+        if k.box is not None and width and now - k.seen <= fresh:
+            return -math.atan(((k.box[0] + k.box[2]) / 2.0 - width / 2.0) / (width / 2.0) * math.tan(math.radians(hfov_deg) / 2.0)), True
+        if k.kf is not None and pose is not None and now - k.seen <= 2.0:
+            px, py = k.kf.position(now)
+            a = math.atan2(py - pose[1], px - pose[0]) - pose[2]
+            return math.atan2(math.sin(a), math.cos(a)), False
+        return None
+
+    def bearings(self, pose, now, width, hfov_deg=69.0, max_age=3.0):
+        """{'<name>' or '#<id>': {'rad', 'age', 'direct'}, 'nearest': {...}} for everyone seen within max_age s, for the arm to point at ('nearest' = the biggest box in view)."""
+        out = {}
+        for k in self.people.values():
+            b = self.bearing(k, pose, now, width, hfov_deg)
+            if b is not None and now - k.seen <= max_age:
+                out[k.name.lower() if k.name else f'#{k.id}'] = {'rad': round(b[0], 3), 'age': round(now - k.seen, 2), 'direct': b[1]}
+        near = self.nearest(now)
+        if near is not None:
+            b = self.bearing(near, pose, now, width, hfov_deg)
+            if b is not None:
+                out['nearest'] = {'rad': round(b[0], 3), 'age': round(now - near.seen, 2), 'direct': b[1]}
+        return out
 
     def by_name(self, name):
         for k in self.people.values():

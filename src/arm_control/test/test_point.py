@@ -24,3 +24,12 @@ def test_the_first_candidate_the_callers_checks_accept_is_taken_and_a_refused_po
     assert q2 is None and info2['tries'] > 0
     q3, info3 = find_pose(0.0, lambda xyz, pitch: None, lambda q: True, max_tries=7)
     assert q3 is None and info3['tries'] == 7
+
+
+def test_the_bearing_to_a_named_person_is_taken_from_the_published_dict_only_while_fresh():
+    from arm_control.point import pick_bearing
+    people = {'john': {'rad': 0.4, 'age': 0.2, 'direct': True}, 'nearest': {'rad': -0.3, 'age': 0.0, 'direct': True}, '#7': {'rad': 1.0, 'age': 2.9, 'direct': False}}
+    assert pick_bearing(people, 'John', 0.1) == (0.4, '') and pick_bearing(people, 'nearest', 0.1)[0] == -0.3
+    assert pick_bearing(people, 'mary', 0.1)[0] is None and 'john' in pick_bearing(people, 'mary', 0.1)[1]
+    assert pick_bearing(people, '#7', 0.5)[0] is None                    # seen 2.9 s ago + 0.5 s old message: too old to point at
+    assert pick_bearing(people, 'john', 5.0)[0] is None and pick_bearing(None, 'john', 0.0)[0] is None

@@ -1,3 +1,4 @@
+import json
 import math
 import os
 import time
@@ -12,7 +13,7 @@ from object_detection_msgr.msg import ObjectArray
 from person_detection_msgr.msg import PersonArray
 from rclpy.qos import DurabilityPolicy, qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32, String
 
 from pose_extension import attributes, gestures
 from pose_extension import vlm
@@ -83,6 +84,7 @@ class PoseExtension(ExtensionExecutor):
         self.genderage = GenderAge(self.get_parameter('genderage_model').value)
         # the stop gate: where the followed person is (odom + depth), whether a hand is up, what was said, and who the operator is (pid_extension's FollowTarget)
         self.gate, self.operator_id, self.odom = StopGate(), None, None
+        self.bearings_pub, self.bearings_t = self.create_publisher(String, 'people/bearings', 1), 0.0      # where everyone is, for ArmPoint who=<name>
         self.hands, self.hand_t = HandModel(), 0.0      # five-finger check on the operator's raised hand (models/hand/*.onnx; without them a raised hand is enough)
         self.create_subscription(Odometry, self.get_parameter('odom_topic').value, self._on_odom, 10)
         self.create_subscription(Transcript, 'stt/transcript', lambda m: m.is_final and self.gate.heard(m.text, time.monotonic()), 10)
@@ -116,7 +118,11 @@ class PoseExtension(ExtensionExecutor):
                     self.hand_t, fingers = now, self._five_fingers(kp)      # at most 5 times a second, only for the operator with a hand up
                 self.gate.see(p.track_id, pos, kp, now, fingers)
         f = self._fresh('faces')
-        self.book.update(m.persons, f.faces if f else [], now, m.image_width, m.image_height, f.image_width if f else 0, f.image_height if f else 0)
+        self.book.update(m.persons, f.faces if f else [], now, m.image_width, m.image_height, f.image_width if f else 0, f.image_height if f else 0,
+                         pose=self.odom, hfov_deg=self.get_parameter('hfov_deg').value)
+        if now - self.bearings_t >= 0.2:       # 5 Hz: the bearing (+ left of the robot's forward) of every known person, from the picture or the Kalman prediction
+            self.bearings_t = now
+            self.bearings_pub.publish(String(data=json.dumps(self.book.bearings(self.odom, now, max(1, m.image_width), self.get_parameter('hfov_deg').value))))
         for p in m.persons:
             if len(p.keypoints_x) == len(p.keypoints_y) == len(p.keypoints_conf) > 0:
                 kps = list(zip(p.keypoints_x, p.keypoints_y, p.keypoints_conf))

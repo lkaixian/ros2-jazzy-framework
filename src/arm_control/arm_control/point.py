@@ -28,3 +28,16 @@ def find_pose(want_rad, solve, route_ok, max_tries=400):
         if tries >= max_tries:
             break
     return None, {'tries': tries}
+
+
+def pick_bearing(people, who, received_age, max_age=3.0):
+    """(radians left of the robot's forward, '') for the person named `who` ('nearest', '#<track id>' or a name, any case) in the dict pose_extension publishes on
+    people/bearings ({key: {'rad', 'age', 'direct'}}); (None, reason) when the message is stale, the person is unknown, or was last seen more than `max_age` s ago."""
+    if people is None or received_age > max_age:
+        return None, 'no recent people/bearings (is pose_extension running with persons and odometry?)'
+    e = people.get(who.strip().lower())
+    if e is None:
+        return None, f'{who!r} is not in view (known: {", ".join(sorted(people)) or "nobody"})'
+    if e['age'] + received_age > max_age:
+        return None, f'{who!r} was last seen {e["age"] + received_age:.1f} s ago'
+    return float(e['rad']), ''

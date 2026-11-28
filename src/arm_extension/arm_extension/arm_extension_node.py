@@ -13,7 +13,9 @@ from arm_control.ik import map_limits, solve
 from arm_control.motion import RATE, Refused, plan_route, schedule
 from arm_control.omx_fk import Arm
 from arm_control.path_check import default_map
-from arm_control.point import find_pose
+import json
+
+from arm_control.point import find_pose, pick_bearing
 from arm_control.pick import approach_poses, grasp_from_point
 from bt_common.executor_node import ExtensionExecutor, call_action, call_service, port_float, port_str, run_executor
 from builtin_interfaces.msg import Duration
@@ -66,6 +68,8 @@ class ArmExtension(ExtensionExecutor):
         self.create_subscription(ObjectArray, self.p('objects_topic'), self._on_objs, qos_profile_sensor_data)
         self.create_subscription(Image, self.p('depth_topic'), self._on_depth, qos_profile_sensor_data)
         self.fixed_k = None
+        self.people, self.people_t = None, 0.0      # people/bearings from pose_extension: where each person is, for ArmPoint who=<name>
+        self.create_subscription(String, 'people/bearings', self._on_people, 1)
         if self.p('target_source') == 'base_camera':
             self.create_subscription(CameraInfo, self.p('fixed_cam_info_topic'), self._on_info, qos_profile_sensor_data)
         self.health, self.health_t = None, 0.0
@@ -77,6 +81,12 @@ class ArmExtension(ExtensionExecutor):
                          'FaceObject': self._face, 'ArmPoint': self._point}
 
     # ---- sensors
+    def _on_people(self, m):
+        try:
+            self.people, self.people_t = json.loads(m.data), time.monotonic()
+        except ValueError:
+            pass
+
     def _on_js(self, m):
         d = dict(zip(m.name, m.position))
         if all(j in d for j in JOINTS):      # the Kobuki driver publishes wheel-only /joint_states on the same topic
@@ -252,7 +262,14 @@ class ArmExtension(ExtensionExecutor):
         """Point the gripper along a direction (radians left of the arm's forward; e.g. FindFreeSeat out_radians), at the nearest pose that is inside the taught joint range
         and on a checked route (arm_control.point: less turn, shorter reach, other heights and pitches are tried; a pose the checks refuse is never used). Runs at
         point_rate (default 0.08 rad/s, 2.7x the validated 0.03): raise it step by step on the real arm, the tracking-error watchdog still freezes a blocked or lagging arm."""
-        want = port_float(ports, 'radians', 0.0, lo=-1.6, hi=1.6)
+        who = port_str(ports, 'who', '').strip()
+        if who:      # a person: pose_extension's bearing (the picture, or the Kalman prediction for a moment after they are hidden)
+            want, why = pick_bearing(self.people, who, time.monotonic() - self.people_t)
+            if want is None:
+                return False, why
+            want = max(-1.6, min(1.6, want))
+        else:
+            want = port_float(ports, 'radians', 0.0, lo=-1.6, hi=1.6)
         try:
             arm, fmap = self._models()
             lim, cur = map_limits(fmap), self._joints()
@@ -271,7 +288,7 @@ class ArmExtension(ExtensionExecutor):
         except (ArmError, ValueError) as e:
             return False, str(e)
         got = f'{math.degrees(info["turn"]):.0f} of the {math.degrees(want):.0f} degrees'
-        return True, (f'pointing ({got})' if self.p('live') else f'DRY: point checked ({got}), would take {secs:.0f} s')
+        return True, (f'pointing ({got})' if self.p('live') else f'DRY: point checked ({got}), would take {secs:.0f} s'), {'out_residual': f'{want - info["turn"]:.2f}'}
 
     def _move(self, ports, ctl):
         if any(float(ports.get(k) or 0) != 0 for k in ('roll', 'yaw')):

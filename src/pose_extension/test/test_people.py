@@ -125,3 +125,23 @@ def test_the_vlm_reply_is_parsed_voted_and_turned_into_a_sentence_without_invent
     assert sentence(combine([a, dict(a, age=31)])) == 'a man of about 31 wearing a black t-shirt, with short black hair and glasses'
     assert combine([a, dict(a, gender='woman')])['gender'] == ''                         # the looks disagree: no gender
     assert sentence(combine([parse('{"gender": null, "top_colour": null}')])) == '' and combine([]) == {}
+
+
+def test_a_person_can_be_pointed_at_from_the_picture_and_still_a_moment_after_they_are_hidden():
+    from pose_extension.people import PeopleBook
+    b = PeopleBook()
+    pose = (0.0, 0.0, 0.0)
+    for i in range(20):                                              # someone 2 m ahead walking left (+y) at 0.5 m/s: their box drifts across the picture
+        t = i * 0.1
+        y = 0.5 * t
+        cx = 320 - 320 * (y / 2.0) / 0.6745                         # the image offset of a point y m to the left at 2 m with a 69 degree lens
+        p = person(1, 'red', box=(cx - 50, 100, cx + 50, 400))
+        p.distance_m = 2.0
+        b.update([p], [], t, 640, 480, pose=pose)
+    rad, direct = b.bearing(b.people[1], pose, 1.9, 640)
+    assert direct and 0.3 < rad < 0.6                                # to the left, about atan(0.95 / 2)
+    rad2, direct2 = b.bearing(b.people[1], pose, 3.4, 640)            # 1.5 s later nobody is in view: the filter keeps walking them left
+    assert not direct2 and rad2 > rad
+    assert b.bearing(b.people[1], pose, 9.0, 640) is None             # long gone: nothing to point at
+    out = b.bearings(pose, 1.95, 640)
+    assert '#1' in out and out['nearest']['direct'] and abs(out['#1']['rad'] - rad) < 0.1
