@@ -82,6 +82,10 @@ class EstopNode(Node):
             self.buf += self.ser.read(256)
         except (serial.SerialException, OSError):
             self.get_logger().error('serial lost: e-stop reads as pressed')
+            try:
+                self.ser.close()
+            except Exception:  # noqa: BLE001
+                pass
             self.ser, self.buf = None, b''
             return
         *lines, self.buf = self.buf.split(b'\n')
@@ -121,13 +125,19 @@ def main():
     ap.add_argument('--port', required=True, help='use /dev/serial/by-id/..., not ttyUSB0 (numbers move)')
     args, ros = ap.parse_known_args()
     rclpy.init(args=ros)
-    node = EstopNode(args.port)
     try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
+        while rclpy.ok():           # never stays down: any crash restarts the watcher (the mux stops the robot meanwhile, it hears no signal)
+            node = EstopNode(args.port)
+            try:
+                rclpy.spin(node)
+            except KeyboardInterrupt:
+                break
+            except Exception as e:  # noqa: BLE001
+                print(f'estop_node crashed, restarting: {e!r}', flush=True)
+                time.sleep(0.5)
+            finally:
+                node.destroy_node()
     finally:
-        node.destroy_node()
         rclpy.try_shutdown()
 
 
