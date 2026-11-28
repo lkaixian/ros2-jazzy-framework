@@ -18,6 +18,7 @@ import time
 import rclpy
 from geometry_msgs.msg import Twist, TwistStamped
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rosidl_runtime_py.utilities import get_message
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
@@ -181,7 +182,8 @@ class CmdVelMux(Node):
         self.stop = StopLatch()
         self.recovery = BumpRecovery(back_dist=p('bump_back_dist'), log=self.get_logger().info)
         self.recovery_enabled = p('bump_recovery_enabled')
-        self.state_pub = self.create_publisher(String, 'safety/stop_state', 10)
+        self.state_pub = self.create_publisher(String, 'safety/stop_state', QoSProfile(      # latched: a reader that starts later (the e-stop node) still learns the mux is stopped
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_service(Trigger, 'safety_reset', self._reset)
         if p('safety_events_enabled'):
             # hit-state field and value that means "stop" for each Kobuki event message

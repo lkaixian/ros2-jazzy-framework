@@ -14,8 +14,14 @@ import time
 import rclpy
 import serial
 from rclpy.node import Node
-from std_msgs.msg import Bool
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
+
+
+def mux_wants_reset(text):
+    """True when the mux says it is stopped for the e-stop ('latched: e-stop: no signal ...' or '... pressed'): the button node must then reset it again once the button reads released."""
+    return text.startswith('latched') and 'e-stop' in text
 
 
 class EstopState:
@@ -50,6 +56,10 @@ class EstopNode(Node):
         self.pub = self.create_publisher(Bool, 'estop', 10)
         self.reset = self.create_client(Trigger, 'safety_reset')
         self.pending = None
+        # the mux latches 'e-stop: no signal' when it starts before this node has spoken, and keeps the latch after we have already reset an earlier one:
+        # hear its (latched) state and ask for a reset again whenever it is stopped for the e-stop and the button reads released
+        self.create_subscription(String, 'safety/stop_state', self._on_mux, QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_timer(0.05, self._tick)
         self.create_timer(0.1, self._publish)
         self.stopped = True
@@ -74,6 +84,10 @@ class EstopNode(Node):
         self.buf = self.buf[-16:]
         for ln in lines:
             self.state.feed(ln.strip().decode(errors='replace'), now)
+
+    def _on_mux(self, m):
+        if mux_wants_reset(m.data):
+            self.state.need_reset = True
 
     def _tick(self):
         now = time.monotonic()
