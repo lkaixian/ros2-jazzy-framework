@@ -42,7 +42,7 @@ def snap_word(heard, choices, cutoff=0.8):
     return best
 
 
-def extract_name(text, names=(), strict=False):
+def extract_name(text, names=(), strict=False, snap=True):
     """'My name is Alice.' -> 'alice'; a lone word ('Bob') is taken as the name; '' if nothing usable.
 
     With a `names` list (the venue's): a heard word that is on it wins wherever it is in the sentence, a near miss is snapped to it
@@ -65,14 +65,14 @@ def extract_name(text, names=(), strict=False):
         cand = re.sub(r"[^a-z]", '', words[0]) if len(words) == 1 else ''
     if not cand or not names:
         return cand
-    return snap_word(cand, [n.lower() for n in names]) or ('' if strict else cand)
+    return (snap_word(cand, [n.lower() for n in names]) if snap else '') or ('' if strict else cand)
 
 
-def extract_drink(text, drinks=()):
+def extract_drink(text, drinks=(), snap=True):
     """'I like orange juice please.' -> 'orange juice'; '' if no drink phrase; a short bare phrase counts as the drink.
     With a `drinks` list a near miss is snapped to it ('orange juse' -> 'orange juice'); a phrase that is not on it is kept as heard."""
     d = _extract_drink(text)
-    return (snap_word(d, [x.lower() for x in drinks]) or d) if d and drinks else d
+    return (snap_word(d, [x.lower() for x in drinks]) or d) if d and drinks and snap else d
 
 
 def _extract_drink(text):

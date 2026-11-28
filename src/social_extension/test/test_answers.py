@@ -71,3 +71,20 @@ def test_gender_from_the_words_a_guest_would_use_and_nothing_when_unclear():
     from social_extension.answers import extract_gender
     assert extract_gender('I am a woman') == 'woman' and extract_gender('male') == 'man' and extract_gender('She is a girl') == 'woman'
     assert extract_gender('hello') == '' and extract_gender('a man and a woman') == ''
+
+
+def test_a_public_persons_name_is_kept_as_heard_when_snapping_names_is_off():
+    from social_extension.answers import extract_name
+    names = ['liam', 'noah', 'laura']
+    assert extract_name('my name is lia', names, snap=False) == 'lia'                 # not turned into liam
+    assert extract_name('my name is lia', names, snap=True) == 'liam'                  # the old behaviour, when switched on
+    assert extract_name('uh noah please', names, snap=False) == 'noah'                 # a listed name is still taken exactly
+    assert extract_name('my name is zebedee', names, snap=False) == 'zebedee'          # any word is a name
+
+
+def test_the_default_vocabulary_has_the_listed_names_and_drinks_and_keeps_any_other_word():
+    import os
+    from social_extension.vocab import load_vocab
+    v = load_vocab(os.path.join(os.path.dirname(__file__), '..', '..', 'framework_bringup', 'param', 'vocab.yaml'))
+    assert 'liam' in v['names'] and 'isabella' in v['names'] and len(v['names']) == 15 and 'root beer' in v['drinks'] and len(v['drinks']) == 10
+    assert v['snap_names'] is False and v['strict_names'] is False

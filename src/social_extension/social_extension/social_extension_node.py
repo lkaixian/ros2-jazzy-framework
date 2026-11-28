@@ -143,7 +143,7 @@ class SocialExtension(ExtensionExecutor):
         if kind not in ('name', 'drink', 'place', 'age', 'gender'):
             return False, "kind must be 'name', 'drink', 'place', 'age', 'gender' or 'yes'"
         v = self.vocab
-        value = {'name': lambda t: extract_name(t, v['names'], v['strict_names']), 'drink': lambda t: extract_drink(t, v['drinks']),
+        value = {'name': lambda t: extract_name(t, v['names'], v['strict_names'], v['snap_names']), 'drink': lambda t: extract_drink(t, v['drinks'], v['snap_drinks']),
                  'place': extract_place, 'age': extract_age, 'gender': extract_gender}[kind](text)
         if not value:
             return False, f'no {kind} found in {text!r}'
