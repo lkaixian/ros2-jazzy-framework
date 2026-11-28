@@ -45,5 +45,5 @@ fi
 echo "teleop: w/a/s/d, slow, return to the start spot, then Ctrl-C to save"
 ros2 run framework_bringup teleop
 echo "saving ~/maps/$NAME ..."
-ros2 run nav2_map_server map_saver_cli -f "$HOME/maps/$NAME" || echo "SAVE FAILED"
+ros2 run nav2_map_server map_saver_cli -f "$HOME/maps/$NAME" || { sleep 2; ros2 run nav2_map_server map_saver_cli -f "$HOME/maps/$NAME" || echo "SAVE FAILED: run  ros2 run nav2_map_server map_saver_cli -f ~/maps/$NAME  while the stack is still up"; }
 tools/stop_all.sh

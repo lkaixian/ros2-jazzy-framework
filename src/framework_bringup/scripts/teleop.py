@@ -119,7 +119,10 @@ def main(argv=None):
     except KeyboardInterrupt:
         pass
     finally:
-        pub.publish(Twist())      # explicit zero; the mux watchdog would also stop within 0.5 s
+        try:
+            pub.publish(Twist())      # explicit zero; the mux watchdog would also stop within 0.5 s
+        except Exception:         # noqa: BLE001  Ctrl-C already shut the context down: the watchdog does it
+            pass
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
         node.destroy_node()
         rclpy.try_shutdown()
