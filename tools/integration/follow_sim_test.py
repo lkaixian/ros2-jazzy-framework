@@ -57,7 +57,7 @@ def run(search):
         while time.monotonic() < t_end and not (ac.server_is_ready() and st['robot'] and st['actors']):
             rclpy.spin_once(n, timeout_sec=0.1)
         ports = {'approach': 'true', 'distance': '1.0', 'until_cancelled': 'true', 'lock': 'true', 'timeout_ms': '120000',
-                 'search': 'true' if search else 'false'}
+                 'search': 'true' if search else 'false', 'trail': os.environ.get('FOLLOW_TRAIL', 'false')}   # FOLLOW_TRAIL=true: along the walked path
         fut = ac.send_goal_async(ExecuteNode.Goal(node_id='FollowTarget', port_names=list(ports), port_values=list(ports.values())))
         rclpy.spin_until_future_complete(n, fut, timeout_sec=5)
         gh = fut.result()
