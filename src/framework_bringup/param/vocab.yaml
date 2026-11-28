@@ -1,0 +1,8 @@
+# Words the speech recognition should expect and the answer parser should snap to. Edit this on the preparation day with the venue's lists.
+# names / drinks go into the Whisper prompt (stt_node, hint_names) and into ExtractAnswer kind=name|drink (social_extension, vocab_file):
+# a misheard word is snapped to the nearest entry ("jain" -> jane); a word that is nowhere near any name is kept as heard, or refused when
+# strict_names is true (then the robot asks again: a wrong name costs points, asking again does not).
+# The lists below are PLACEHOLDERS: the usual RoboCup@Home first names and common drinks, written from memory, NOT the venue's.
+names: [adel, angel, axel, charlie, jane, jules, morgan, paris, robin, simone]
+drinks: [coke, cola, sprite, fanta, milk, water, orange juice, apple juice, tea, coffee, lemonade, beer]
+strict_names: false

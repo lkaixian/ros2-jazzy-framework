@@ -42,7 +42,7 @@ bt_slm_node:
 bt_validator_node:
   ros__parameters:
     max_depth: 12
-    max_nodes: 160          # a macro like hric_round expands to ~100 nodes; LLM replies are bounded by the schema anyway
+    max_nodes: 260          # the Education round macros expand to 150-210 nodes (hric_round 201 with gaze, describing and the follow check); LLM replies are bounded by the schema anyway
     labels: ""             # comma-separated DetectObject labels to accept until a detector announces its own
     places_file: ""        # "" = param/places.yaml: the place / first / second / from_place / to_place slots of the LLM schema only allow its names
     extensions_file: ""    # "" = param/extensions.yaml: put_place / PlaceObject.place only allow the arm places taught in arm_extension_node.places (none taught = free text)

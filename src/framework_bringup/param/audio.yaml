@@ -48,6 +48,9 @@ transcript_to_task_node:
   ros__parameters:
     wake_word: robot        # "" = every transcript is a task; "robot, ..." or a bare "robot" then the task
     wake_window_sec: 8.0
+    start_phrase: ""        # a competition task that starts only on this spoken signal, e.g. "start the task,start task" (see the edu_* launch files); "" = off
+    start_spec: ""          # the task spec (JSON) published on bt/task_spec when the start phrase is heard; while set, no other speech becomes a task
+    start_cooldown_sec: 30.0
 
 tts_node:
   ros__parameters:
