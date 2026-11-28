@@ -408,7 +408,12 @@ macros:
           - group: Sequence
             steps:
               - {node: Speak, ports: {text: "Hi, may I know what is your name?"}}
-              - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+              - group: Parallel          # look at the person while they answer: the base turns to them; the answer ends it, and only both ending badly fails it
+                success_count: 1
+                failure_count: 2
+                steps:
+                  - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+                  - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
               - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
           - {node: Speak, ports: {text: "Sorry, please say only your name"}}
       - {node: Speak, ports: {text: "Hi {person}, welcome!", person: "{${slot}_name}"}}
@@ -418,7 +423,12 @@ macros:
           - group: Sequence
             steps:
               - {node: Speak, ports: {text: "What is your favourite drink?"}}
-              - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+              - group: Parallel          # look at the person while they answer: the base turns to them; the answer ends it, and only both ending badly fails it
+                success_count: 1
+                failure_count: 2
+                steps:
+                  - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+                  - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
               - {node: ExtractAnswer, ports: {kind: drink, text: "{${slot}_heard}", out_value: "{${slot}_drink}"}}
           - {node: Speak, ports: {text: "Sorry, please say only the drink"}}
       - {node: Speak, ports: {text: "Your favourite drink is {detail}.", detail: "{${slot}_drink}"}}
@@ -528,7 +538,12 @@ macros:
           - group: Sequence
             steps:
               - {node: Speak, ports: {text: "What is your name?"}}
-              - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+              - group: Parallel          # look at the person while they answer: the base turns to them; the answer ends it, and only both ending badly fails it
+                success_count: 1
+                failure_count: 2
+                steps:
+                  - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+                  - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
               - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
           - {node: Speak, ports: {text: "Sorry, please say only your name"}}
       - {node: Speak, ports: {text: "Nice to meet you {person}", person: "{${slot}_name}"}}
@@ -551,6 +566,7 @@ macros:
       - {macro: note_look, args: {slot: "${slot}"}}
       - group: Fallback          # man or woman from the face (and the age if the guest did not say it): said in the report
         steps:
+          - {node: DescribeWithVLM, ports: {out_gender: "{${slot}_gender}", out_text: "{${slot}_vlm}"}}
           - {node: EstimateGender, ports: {out_value: "{${slot}_gender}"}}
           - {node: AlwaysSuccess}
       - group: Fallback          # the stable id of this guest (to describe them later against everyone seen) and where they are
@@ -651,8 +667,15 @@ macros:
               - {node: OpenGripper}
           - {node: AlwaysSuccess}
       - {macro: say, args: {text: "You are welcome. Going back to the arena."}}
-      - group: Fallback          # bonus; the way back is Nav2 on the arena map and fails outside it
+      - group: Fallback          # bonus: back along the path the operator walked (no map outside the arena), then Nav2 on the arena map to the start
         steps:
+          - group: Sequence
+            steps:
+              - {node: RetraceTrail, ports: {speed: "0.2"}}
+              - group: Fallback
+                steps:
+                  - {macro: return_home}
+                  - {node: AlwaysSuccess}
           - {macro: return_home}
           - {node: AlwaysSuccess}
 
@@ -811,8 +834,9 @@ macros:
               - {node: Sleep, ports: {msec: "500"}}
           - {node: AlwaysSuccess}
       - {macro: meet_guest, args: {slot: "${slot}"}}
-      - group: Fallback          # he / she / they and the age for the introduction and the description (from the face; says they when unsure)
+      - group: Fallback          # he / she / they and the age for the introduction and the description (from a vision-language model, else the face model; says they when unsure)
         steps:
+          - {node: DescribeWithVLM, ports: {out_gender: "{${slot}_gender}", out_pronoun: "{${slot}_pron}", out_age: "{${slot}_age}"}}
           - {node: EstimateGender, ports: {out_value: "{${slot}_gender}", out_pronoun: "{${slot}_pron}", out_age: "{${slot}_age}"}}
           - {node: AlwaysSuccess}
       - {macro: note_look, args: {slot: "${slot}"}}

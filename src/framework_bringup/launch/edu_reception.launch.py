@@ -11,7 +11,7 @@ face them, ask name and drink, remember the look; lead to the living room, intro
 told how guest 1 looks).
 Flow (macro hric_round; host, host_drink, host_pron are the facts announced before the test, passed in start_spec): at the door it waits for a person within 2.5 m or the bell,
 backs away until the face shows, asks "Hi, may I know what is your name?", says "Hi <name>, welcome!", asks the favourite drink and says it back, enrols the face, reads he / she and
-the age from the face (EstimateGender, models/genderage/genderage.onnx), says "please follow me", checks by the lidar behind that the guest follows, then in the living room
+the age from a vision-language model on the planner's llama-server (DescribeWithVLM; Gemma 4 E4B has an mmproj; the face model EstimateGender is the fallback), says "please follow me", checks by the lidar behind that the guest follows, then in the living room
 looks at the host (the face enrolled under the host's name with the enroll_host macro, else the nearest person) and says "Hi <host>, this is <guest>, he/she likes to drink <drink>", "Hello everyone",
 then tells the guest who the host is and what the host likes; it faces the free seat (couch/bench: the free part beside whoever sits there), points at it with the arm when enable_arm is on
 (ArmPoint at point_rate, then ArmPark) and says which seat. Guest 2 is also introduced to guest 1 and the other way round, and guest 1 is described to guest 2 (colours of top and bottoms, hair, glasses,

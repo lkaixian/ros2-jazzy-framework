@@ -13,9 +13,9 @@ arrived / this is the car), give the bag back on "thank you", return_home (bonus
 Flow (macro luggage_round): "Which bag should I carry? Please point at it." -> PointedObject (the extended arm's line against backpack / handbag / suitcase boxes) -> "I will take the red backpack on my
 left" (type from the detector, colour from the bag's crop) -> optional handover -> "I am ready. Say follow me" -> only the phrase "follow me" starts the follow (after 90 s it starts anyway) -> follow_until_told with
 trail=true -> it stops only when the followed person says stop / we are here OR holds a hand up for a second AND stands still (WaitForStop in pose_extension): a stop from anyone else or while the operator walks is ignored.
-The hand sign is a raised hand, not five counted fingers (that needs a hand-landmark model: see docs/perception.md).
+The hand sign is five extended fingers on the raised hand (hand-landmark ONNX models in models/hand/, see docs/perception.md; a raised hand alone when the models are missing).
 GAPS (notes/EDU_PLAN.md): the operator still hands the handle over (no grasp from the floor), nothing carries the bag in a safe pose while driving, depth obstacles are off (camera tilt unmeasured), nothing waits
-for or asks a crowd to move, no retrace outside the map, no queue. None of it has run on the real base.
+for or asks a crowd to move, no queue. The way back is RetraceTrail (along the path the operator walked, odometry only, no map outside the arena) and then Nav2 to the start. None of it has run on the real base.
 """
 from bt_common.launch_utils import task_launch
 
