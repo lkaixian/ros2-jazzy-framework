@@ -157,7 +157,7 @@ def test_default_model_path_finds_the_repo_models_folder(tmp_path):
 
 @pytest.mark.parametrize('profile,low', [('heavy', 12), ('max', 30)])
 def test_heavy_profiles_make_long_valid_trees(cat, profile, low):
-    rows = list(dataset.generate(cat, 12, seed=3, repair_frac=0, profile=profile))
+    rows = list(dataset.generate(cat, 40, seed=3, repair_frac=0, profile=profile))   # 40 rows: the mean of 12 swung from 25 to 44 with the seed once the catalog grew
     sizes = [r['completion'].count('<') for r in rows]
     assert all(not validate_xml(r['completion'], cat) for r in rows)
     assert sum(sizes) / len(sizes) > low, sizes
