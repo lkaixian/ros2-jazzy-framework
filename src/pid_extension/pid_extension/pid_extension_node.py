@@ -3,6 +3,7 @@ import time
 
 from bt_common.executor_node import (ExtensionExecutor, port_bool, port_float,
                                      port_str, run_executor)
+from audio_msgr.srv import Speak
 from bt_common.obstacle import ScanGuard
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -14,6 +15,8 @@ from std_msgs.msg import Int32
 from pid_extension.trail import Trail, trail_error
 from pid_extension.follow import face_distance, face_visible, LostPolicy, Memory, select
 from pid_extension.target import TargetModel
+from pid_extension.excuse import other_person_near, should_excuse
+from pid_extension.retrace import forward_speed, retrace_step
 from pid_extension.pid import MIN_STANDOFF_M, PID, range_speed
 
 
@@ -30,7 +33,7 @@ class PidExtension(ExtensionExecutor):
                          scan_topic='scan', stop_distance=0.40, guard_half_width_deg=35.0, scan_stale_sec=0.5,
                          scan_required=False, scan_yaw_offset=0.0, blocked_give_up_sec=3.0, avoid_turn=0.4,
                          hfov_deg=69.0, goto_sec=6.0, search_sec=12.0, reid_radius=1.2, turn_clearance=0.22, slow_ramp=0.3, reid_sim=0.7, target_score=0.5,
-                         cam_height=0.8, vfov_deg=42.0).items():
+                         cam_height=0.8, vfov_deg=42.0, excuse_text='Excuse me, may I pass please?', speak_service='tts/speak').items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         ma, ml = p('max_angular'), p('max_linear')
@@ -44,12 +47,14 @@ class PidExtension(ExtensionExecutor):
         self.create_subscription(Odometry, p('odom_topic'), self._on_odom, 10)
         self.create_subscription(PersonArray, p('persons_topic'), self._on_persons, 10)
         self.pub = self.create_publisher(Twist, p('cmd_vel_topic'), 10)
+        self.speak = self.create_client(Speak, p('speak_service'))
+        self.last_excuse, self.last_trail = None, []     # last_trail: crumbs of the latest FollowTarget(trail=true), oldest first
         self.operator_id = None      # who FollowTarget follows, published on follow/operator for pose_extension's WaitForStop
         self.operator_pub = self.create_publisher(Int32, 'follow/operator', QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.handlers = {'SetPidGains': self._set_gains, 'HoldHeading': self._hold,
                          'FollowTarget': self._follow, 'BackUpForFace': self._back_for_face,
-                         'CheckBehind': self._check_behind}
+                         'CheckBehind': self._check_behind, 'RetraceTrail': self._retrace}
 
     def _on_odom(self, m):
         q = m.pose.pose.orientation
@@ -257,6 +262,9 @@ class PidExtension(ExtensionExecutor):
                         if not arrived:                   # an obstacle, not the person we came for: turn toward the freer side
                             w = self.guard.freer_side() * self.get_parameter('avoid_turn').value or w
                         blocked_since = blocked_since or now
+                        if not arrived and should_excuse(now - blocked_since, other_person_near(m.persons, person.track_id if tid is None else tid),
+                                                         None if self.last_excuse is None else now - self.last_excuse):
+                            self._excuse(now)
                         if now - blocked_since > self.get_parameter('blocked_give_up_sec').value:
                             return False, f'obstacle {near:.2f} m ahead: stopped'
                     else:
@@ -266,6 +274,58 @@ class PidExtension(ExtensionExecutor):
                     if ok_since and now - ok_since >= 0.5 and not keep:
                         return True, 'aligned'
                     self._cmd(v, w)
+                if now > end:
+                    return False, 'timeout'
+                ctl.sleep(dt)
+        finally:
+            if trail is not None:
+                self.last_trail = list(trail.history)
+            self._stop()
+
+    def _excuse(self, now):
+        """Ask once (rate-limited by the caller) to pass; fire and forget, the control loop never waits for the speech."""
+        self.last_excuse = now
+        if self.speak.service_is_ready():
+            self.speak.call_async(Speak.Request(text=self.get_parameter('excuse_text').value, voice='', blocking=False))
+
+    def _retrace(self, ports, ctl):
+        """Drive back along the path FollowTarget(trail=true) recorded, newest crumb to oldest (no map needed). Turns on the spot toward the
+        next crumb first (the robot arrives facing away from where it came from), stops for anything in the way."""
+        speed = port_float(ports, 'speed', 0.2, lo=0.05, hi=0.3)
+        arrive = port_float(ports, 'arrive_m', 0.4, lo=0.1, hi=2.0)
+        timeout = port_float(ports, 'timeout_ms', 120000.0, lo=1000.0, hi=900000.0) / 1000.0
+        path = self.last_trail[::-1]
+        if not path:
+            return False, 'no trail recorded (FollowTarget trail=true first)'
+        par, pid = self.get_parameter, self.pids['heading']
+        pid.reset()
+        dt = 1.0 / par('rate_hz').value
+        end, idx, blocked_since = time.monotonic() + timeout, 0, None
+        try:
+            while True:
+                if ctl.cancelled:
+                    return False, 'cancelled'
+                pose, now = self._pose(), time.monotonic()
+                if pose is None:
+                    return False, 'odometry missing or stale'
+                idx, target, err, done = retrace_step(pose, path, idx, arrive_m=arrive)
+                if done:
+                    return True, 'back at the start of the trail'
+                v = min(forward_speed(err, speed), par('max_linear').value)
+                if v > 0.0:
+                    near = self.guard.blocked(v)
+                    v *= self.guard.slow_factor(v, par('slow_ramp').value)
+                else:
+                    near = self.guard.too_close(par('turn_clearance').value)     # turning on the spot sweeps the footprint
+                w = pid.update(0.0, 0.0, dt, err=err)
+                if near is not None:
+                    v, w = 0.0, 0.0
+                    blocked_since = blocked_since or now
+                    if now - blocked_since > par('blocked_give_up_sec').value:
+                        return False, f'obstacle {near:.2f} m in the way: stopped'
+                else:
+                    blocked_since = None
+                self._cmd(v, w)
                 if now > end:
                     return False, 'timeout'
                 ctl.sleep(dt)

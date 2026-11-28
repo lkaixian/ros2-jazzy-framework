@@ -10,11 +10,14 @@ class Trail:
     def __init__(self, spacing=0.25, max_len=400):
         self.spacing, self.max_len = spacing, max_len
         self.crumbs = []
+        self.history = []      # every crumb ever added (target() drops passed ones from crumbs): RetraceTrail walks this back
 
     def add(self, pos):
         """pos = (x, y) of the person; kept only when at least `spacing` m from the previous crumb."""
         if not self.crumbs or math.hypot(pos[0] - self.crumbs[-1][0], pos[1] - self.crumbs[-1][1]) >= self.spacing:
             self.crumbs.append((float(pos[0]), float(pos[1])))
+            self.history.append(self.crumbs[-1])
+            del self.history[:-2000]
             del self.crumbs[:-self.max_len]
 
     def target(self, robot_xy, lookahead=0.8):

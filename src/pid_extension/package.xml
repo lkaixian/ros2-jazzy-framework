@@ -7,6 +7,7 @@
   <license>Apache-2.0</license>
 
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>audio_msgr</exec_depend>
   <exec_depend>bt_common</exec_depend>
   <exec_depend>bt_pipeline_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
