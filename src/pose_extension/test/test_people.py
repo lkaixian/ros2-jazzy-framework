@@ -1,0 +1,92 @@
+from types import SimpleNamespace as N
+
+from pose_extension.people import PeopleBook, location_phrase, pointed_object, posture, unique_description
+
+
+def kps(**pts):
+    out = [(0.0, 0.0, 0.0)] * 17
+    idx = dict(l_sh=5, r_sh=6, l_el=7, r_el=8, l_wr=9, r_wr=10, l_hip=11, r_hip=12, l_knee=13, r_knee=14)
+    for name, (x, y) in pts.items():
+        out[idx[name]] = (x, y, 0.9)
+    return out
+
+
+def person(tid, top, legs='', box=(0, 0, 100, 300), k=None):
+    k = k or []
+    return N(track_id=tid, clothes_colour=top, legs_colour=legs, x_min=box[0], y_min=box[1], x_max=box[2], y_max=box[3],
+             keypoints_x=[p[0] for p in k], keypoints_y=[p[1] for p in k], keypoints_conf=[p[2] for p in k])
+
+
+def test_posture_from_the_knee_height_relative_to_the_hips():
+    sitting = kps(l_sh=(40, 100), r_sh=(80, 100), l_hip=(45, 200), r_hip=(75, 200), l_knee=(40, 215), r_knee=(80, 215))
+    standing = kps(l_sh=(40, 100), r_sh=(80, 100), l_hip=(45, 200), r_hip=(75, 200), l_knee=(45, 300), r_knee=(75, 300))
+    assert posture(sitting) == 'sitting' and posture(standing) == 'standing'
+    assert posture(kps(l_sh=(40, 100), r_sh=(80, 100))) is None                        # no hips: not claimed
+
+
+def book_of(*rows, repeat=3):
+    """A book where every (tid, top, legs, extras) has been seen `repeat` frames."""
+    b = PeopleBook()
+    for t in range(repeat):
+        b.update([person(tid, top, legs, box=(i * 120, 0, i * 120 + 100, 300)) for i, (tid, top, legs, _) in enumerate(rows)], [], float(t), 640, 480)
+    for i, (tid, _, _, extra) in enumerate(rows):
+        b.remember_at((i * 120 + 50, 100), **extra)
+    return b
+
+
+def test_one_odd_frame_is_not_a_fact_and_a_name_comes_from_the_face_inside_the_box():
+    b = PeopleBook()
+    b.update([person(1, 'red')], [], 0.0, 640, 480)
+    assert b.people[1].features() == {}                                                  # a single look: not yet
+    b.update([person(1, 'red')], [N(identity='alice', similarity=0.8, x_min=30, y_min=10, x_max=70, y_max=60)], 1.0, 640, 480)
+    assert b.people[1].features() == {'top': 'red'} and b.by_name('Alice').id == 1
+    b.update([person(1, 'red')], [N(identity='unknown', similarity=0.9, x_min=30, y_min=10, x_max=70, y_max=60)], 2.0, 640, 480)
+    assert b.people[1].name == 'alice'                                                   # an unknown face never renames anyone
+
+
+def test_unique_description_uses_only_features_nobody_else_shares_and_says_when_it_cannot():
+    b = book_of((1, 'blue', 'black', {'hair': 'brown'}), (2, 'blue', 'grey', {'hair': 'black', 'glasses': 'yes'}), (3, 'red', 'black', {'hair': 'black'}))
+    text, unique = unique_description(b, 1)
+    assert unique and text.index('brown hair') > 0 and 'black hair' not in text         # brown hair is rare; the second feature pads it to two; unique overall
+    text, unique = unique_description(b, 2)
+    assert unique and 'glasses' in text
+    twins = book_of((1, 'blue', 'black', {}), (2, 'blue', 'black', {}))
+    text, unique = unique_description(twins, 1)
+    assert not unique and 'blue top' in text                                              # identical clothes: it still says what it sees, but not "unique"
+
+
+def test_where_a_person_is_only_from_objects_that_are_really_there():
+    couch, tv = ('couch', (0, 100, 300, 300)), ('tv', (500, 50, 640, 150))
+    assert location_phrase((100, 50, 200, 280), [couch, tv], 'sitting') == 'sitting on the couch'
+    assert location_phrase((100, 50, 200, 280), [couch], 'standing') == 'standing in front of the couch'
+    assert location_phrase((400, 50, 480, 300), [couch, tv], None) == 'next to the tv'
+    assert location_phrase((100, 50, 140, 280), [], None) == '' and location_phrase((0, 0, 40, 40), [('tv', (600, 0, 640, 40))], None) == ''
+
+
+def test_the_bag_the_arm_points_at_is_the_one_on_the_ray():
+    k = kps(l_sh=(300, 200), l_el=(250, 205), l_wr=(200, 210))                           # the arm out to the image left
+    left, right = ('backpack', (20, 180, 120, 260)), ('handbag', (500, 180, 600, 260))
+    assert pointed_object(k, [left, right]) == left
+    assert pointed_object(k, [right]) is None and pointed_object(k, [('cup', (20, 180, 120, 260))]) is None
+    assert pointed_object(kps(l_sh=(300, 200)), [left]) is None
+
+
+def test_gender_age_decoding_and_voting_say_nothing_when_unsure():
+    import numpy as np
+    from pose_extension.genderage import decode, face_square, vote
+    g, margin, age = decode(np.array([[-0.7, 0.7, 0.34]]))
+    assert (g, age) == ('man', 34) and margin > 0.99 and decode(np.array([[0.9, -0.5, 0.2]]))[0] == 'woman'
+    assert face_square((100, 100, 140, 160), 640, 480)[2] - face_square((100, 100, 140, 160), 640, 480)[0] == 90      # a square 1.5 x the longer side
+    assert vote([('man', 0.9, 30), ('man', 0.8, 34), ('man', 0.7, 40)]) == ('man', 34)
+    assert vote([('man', 0.9, 30), ('woman', 0.8, 34), ('man', 0.7, 40)])[0] == ''                       # 2 of 3 is not enough
+    assert vote([('man', 0.05, 30), ('woman', 0.04, 34)])[0] == '' and vote([]) == ('', 0)
+
+
+def test_a_bags_colour_is_the_middle_of_its_box_not_the_strap_or_floor():
+    import numpy as np
+    from pose_extension.people import dominant_colour
+    img = np.full((100, 60, 3), (90, 90, 90), np.uint8)                  # grey floor around the bag
+    img[15:85, 10:50] = (0, 0, 200)                                      # a red bag
+    img[:, :4] = (255, 255, 255)                                         # a white strap at the edge
+    assert dominant_colour(img) == 'red' and dominant_colour(np.zeros((100, 60, 3), np.uint8)) == 'black'
+    assert dominant_colour(np.zeros((4, 4, 3), np.uint8)) == ''

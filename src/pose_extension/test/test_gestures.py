@@ -57,18 +57,30 @@ def test_count_confident():
     assert count_confident([], 0.5) == 0
 
 
-def test_free_seats_skips_taken_and_unconfident_ones():
-    from types import SimpleNamespace as N
-    from pose_extension.pose_extension_node import free_seats
-    chair_taken = N(label='chair', confidence=0.9, x_min=0, y_min=0, x_max=100, y_max=100)
-    chair_free_small = N(label='chair', confidence=0.8, x_min=300, y_min=0, x_max=350, y_max=50)
-    couch_free = N(label='couch', confidence=0.7, x_min=400, y_min=0, x_max=600, y_max=100)
-    dim_chair = N(label='chair', confidence=0.2, x_min=700, y_min=0, x_max=800, y_max=100)
-    table = N(label='dining table', confidence=0.9, x_min=0, y_min=0, x_max=900, y_max=100)
-    person = N(x_min=10, y_min=0, x_max=90, y_max=100)           # sits on the first chair
-    got = free_seats([chair_taken, chair_free_small, couch_free, dim_chair, table], [person])
-    assert got == [couch_free, chair_free_small]                    # biggest first; taken/dim/non-seat dropped
-    assert free_seats([chair_taken], []) == [chair_taken]          # nobody in view: free
+def test_free_spots_chairs_whole_and_a_couch_by_the_room_beside_the_people_on_it():
+    from pose_extension.people import free_spots
+    chair_taken, chair_free = ('chair', (0, 0, 100, 100), 0.9), ('chair', (300, 0, 350, 50), 0.8)
+    dim, table = ('chair', (700, 0, 800, 100), 0.2), ('dining table', (0, 0, 900, 100), 0.9)
+    person = (10, 0, 90, 100)                                           # sits on the first chair
+    got = free_spots([chair_taken, chair_free, dim, table], [person])
+    assert [g[0] for g in got] == ['chair'] and got[0][1] == 325 and not got[0][3]      # only the free chair: taken, dim and non-seats dropped
+    assert free_spots([chair_taken], [])[0][1] == 50                                    # nobody in view: free
+    couch = ('couch', (200, 0, 600, 100), 0.7)                          # a 400 px sofa, three people wide
+    assert free_spots([couch], []) == [('couch', 400, 400, False, (200, 0, 600, 100))]  # empty: the whole thing, centre
+    one_end = [(210, 20, 300, 100)]                                    # one person (90 px) at the left end: the sofa seats 4 of them
+    spots = free_spots([couch], one_end)
+    assert len(spots) == 3 and all(sp[3] for sp in spots) and min(sp[1] for sp in spots) > 300      # three free seats, all to the right, all "shared"
+    full = [(200, 20, 290, 100), (300, 20, 390, 100), (400, 20, 490, 100), (505, 20, 595, 100)]
+    assert free_spots([couch], full) == []                              # every seat taken: no free place
+    assert free_spots([couch], [(380, 0, 440, 25)])[0][3] is False      # a person standing in front, not reaching into the seat: not sitting on it
+
+
+def test_a_three_seat_sofa_with_the_host_in_the_middle_offers_both_ends_and_a_wide_host_leaves_nothing():
+    from pose_extension.people import free_spots
+    sofa = ('couch', (100, 0, 400, 100), 0.8)                          # 300 px: three people of 100 px
+    spots = free_spots([sofa], [(190, 20, 290, 100)])                  # the host in the middle, 100 px wide
+    assert len(spots) == 2 and sorted(sp[1] for sp in spots)[0] < 190 and sorted(sp[1] for sp in spots)[1] > 290     # a free seat on each side
+    assert free_spots([sofa], [(160, 20, 340, 100)]) == []             # a 180 px host (arms out) on a 300 px sofa: it counts as a two-seater and both are taken
 
 
 def test_seat_place_says_which_side():
@@ -90,3 +102,12 @@ def test_extreme_object_and_colour_count():
     assert count_confident(people, 0.5) == 2 and count_confident(people, 0.5, colour='red') == 1
     people.append(N(confidence=0.9, clothes_colour='grey'))
     assert count_confident(people, 0.5, colour='Gray') == 1
+
+
+def test_describe_adds_the_legs_only_when_their_colour_is_known():
+    from types import SimpleNamespace as N
+    from pose_extension.pose_extension_node import describe
+    p = N(confidence=0.9, clothes_colour='blue', legs_colour='black', track_id=1, x_min=0, x_max=10, y_min=0, y_max=20)
+    assert describe([p]) == 'a person wearing a blue top and black bottoms'
+    p.legs_colour = ''
+    assert describe([p]) == 'a person wearing a blue top'
