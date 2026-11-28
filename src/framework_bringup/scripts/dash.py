@@ -269,7 +269,7 @@ class Dash:
         self.halt = node.create_client(Trigger, 'bt_executor/halt')
         node.create_subscription(Log, '/rosout', self._log, 100)
         # the mux's "STOP latched" ERROR is history once it publishes armed: do not keep the node red for ERR_WINDOW
-        node.create_subscription(String, 'safety/stop_state', lambda m: m.data == 'armed' and self.err.pop('cmd_vel_mux_node', None), 10)
+        node.create_subscription(String, 'safety/stop_state', lambda m: m.data == 'armed' and self.err.pop('cmd_vel_mux_node', None), TL)
         node.create_subscription(String, 'llm/status', lambda m: self._js('llm', m), TL)
         node.create_subscription(String, 'bt/status', lambda m: self._js('bt', m), 10)
         node.create_subscription(String, 'task/state', lambda m: self._js('task', m), TL)

@@ -31,7 +31,8 @@ class RobotModeNode(Node):
                 continue
             topic, typ, qos = SIGNALS[name]            # an unknown name stops the node: a typo must not silently skip a check
             self.create_subscription(typ, topic, lambda _m, n=name: self.fsm.heard(n), qos)
-        self.create_subscription(String, 'safety/stop_state', lambda m: self.fsm.on_stop_state(m.data), 10)
+        self.create_subscription(String, 'safety/stop_state', lambda m: self.fsm.on_stop_state(m.data),
+                                 QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))   # latched by the mux: a late start still learns it
         self.create_subscription(String, 'safety/battery', self._on_battery, 10)
         self.create_subscription(Twist, 'teleop/cmd_vel', lambda _m: self.fsm.on_teleop(self.now()), 10)
         self.create_subscription(String, 'task/state', self._on_task, LATCHED)

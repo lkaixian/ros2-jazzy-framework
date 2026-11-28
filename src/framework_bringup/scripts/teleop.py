@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bmn/python3
 """teleop: drive the robot by keyboard, taking over from any running plan (manual override, B-07).
 
   ros2 run framework_bringup teleop
@@ -18,6 +18,7 @@ import time
 import tty
 
 import rclpy
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from bt_common.cmd_vel_mux import slew
 from geometry_msgs.msg import Twist
 from std_msgs.msg import String
@@ -78,7 +79,8 @@ def main(argv=None):
     halt = node.create_client(Trigger, 'bt_executor/halt')
     reset = node.create_client(Trigger, 'safety_reset')       # cmd_vel_mux: clears the bumper/cliff stop latch
     node.create_subscription(String, 'safety/stop_state', lambda m: print(
-        f'!! mux {m.data}  (release the sensor, then press r)' if m.data.startswith('latched') else f'mux {m.data}'), 10)
+        f'!! mux {m.data}  (release the sensor, then press r)' if m.data.startswith('latched') else f'mux {m.data}'),
+        QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
     old = termios.tcgetattr(sys.stdin)
     halted = False
     drive, dt, last_pub = Drive(), 1.0 / RATE, 0.0
