@@ -76,7 +76,18 @@ Tested on one public photo (grey hair, no glasses: right; a bald, turned face: "
 - **`EstimateGender`** (pose_extension): man / woman, he / she and about how old, from the biggest face, voted over three looks; says nothing when the looks disagree. The model is InsightFace's `genderage.onnx`
   (1.3 MB, `models/genderage/genderage.onnx`, downloaded from `huggingface.co/public-data/insightface/resolve/main/models/buffalo_l/genderage.onnx`; the weights are for NON-COMMERCIAL research use). Accuracy on this camera is
   unmeasured; the face is cropped as a square 1.5x its box, not landmark-aligned. Used by `receive_guest` (introductions say he / she, the description says gender and age) and `mates_visit`.
-- **Stop sign:** `WaitForStop` counts a raised hand (wrist more than half a shoulder width above the shoulder) held for a second, while the followed person stands still. It does NOT count fingers: body keypoints only give the wrist.
-  For a real five-finger check the usable route is the OpenCV zoo's MediaPipe hand models in ONNX (`opencv/palm_detection_mediapipe` and `opencv/handpose_estimation_mediapipe` on Hugging Face; palm detection, then 21 hand
-  landmarks; a finger is extended when its tip is further from the wrist than its knuckle). Not wired in yet.
+- **Stop sign:** `WaitForStop sign=five` (the default when the models are present) needs FIVE extended fingers on the raised hand of the followed operator, held for a second while they stand still. The robot crops around the
+  operator's raised wrist (from the body keypoints), finds the palm and the 21 hand landmarks with two ONNX models from the OpenCV zoo (`palm_detection_mediapipe_2023feb.onnx`, `handpose_estimation_mediapipe_2023feb.onnx`, Apache-2.0, 4 MB each,
+  `huggingface.co/opencv/palm_detection_mediapipe` and `.../handpose_estimation_mediapipe`; put both in `models/hand/`) and calls a finger extended when its tip is clearly further from the wrist than its middle joint. Only a hand whose
+  wrist lies on the operator's own raised arm counts (the palm detector also fires on faces: on 137 person crops it found 23 "hands", several of them faces). `sign=raised` (any hand above the shoulder) is the fallback when the models are missing.
+  Checked: it finds real hands (on a lap, round a phone, held in front of a face) and gives plausible skeletons; NOT checked: finger counts on a hand held up at 1-2 m from the robot. Run `python3 tools/hand/check.py` with the camera up and
+  hold up five, three and no fingers before relying on it; the voice stop still works while the operator stands still.
 - **Bags:** type = the detector class (backpack, handbag, suitcase; a grocery bag with handles usually comes out as handbag); colour = `dominant_colour` of the middle of the bag's box.
+
+## Describing people with the vision-language model (2026-11-28)
+`DescribeWithVLM` (pose_extension) sends a crop of the person to a vision endpoint and gets back one JSON: clothes colour and type, hair colour and style, glasses, man or woman, about how old. **Gemma 4 E4B accepts
+images**: `ggml-org/gemma-4-E4B-it-GGUF` ships `mmproj-gemma-4-E4B-it-Q8_0.gguf`, `llama-server -hf ...` loads it ("loaded multimodal model" in its log; the planner server on port 8080 therefore already answers image
+requests), the cost is about 4 GB of GPU memory and **about 1.2 s per look** on the RTX 3080 laptop (measured on 3 person crops; the answers matched what is in the pictures: black t-shirt and straight black hair, yellow t-shirt
+with glasses, blue shirt). With `-np 1` an image request waits for a planner request and the other way round. The node takes 2 looks (the gender must agree), keeps the detector's clothes colour, writes hair and glasses into the people
+book, and says nothing when the model is unsure. Parameters `vlm_url` (default `http://127.0.0.1:8080`), `vlm_timeout_sec`. Used by `receive_guest` (he / she, age) and `mates_visit` (gender, description) before the face model
+(`EstimateGender`, a non-commercial research model) which stays as the fallback. The model can state things that are not there: it is for descriptions, never for names or drinks.

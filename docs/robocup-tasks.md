@@ -41,7 +41,8 @@ Names, drinks and the Whisper hint prompt come from `param/vocab.yaml` (placehol
 Checked: the macros validate and fit the 260-node limit (`hric_round` 210, `mates_round` ~190; raised from 160 for the gaze, describing and follow-check steps: the limit bounds plan size, it is not a safety latch), the start gate through a launched node (ordinary speech and "stop the task" start nothing), `DetectPerson max_distance` in gtest.
 Later the same day: `PointedObject` (which bag), `trail=true` on the follower (`follow_sim_test` passes with and without it, `help_me_carry_sim_test` passes through the macro), `PeopleBook` in `pose_extension`
 (`FindPerson who=<name>`, `DescribeUnique`, `DescribeLocation`), `CheckBehind` (is the guest behind the robot: rear lidar), `FindFreeSeat out_radians` (turn to face the seat), macros `look_at_guest`, `describe_guest`.
-Not built: depth obstacles on (needs the camera tilt measured), crowd manners, looking at the speaker while listening, grasping a bag, retrace and queue.
+Built after that: looking at the person while they answer (a Parallel of the question and FollowTarget in meet_guest / mates_visit), "Excuse me, may I pass please?" when blocked by another person (FollowTarget), `RetraceTrail` (back along the walked path, no map; in luggage_round before return_home), a vision-language model for descriptions, stable ids on by default. Names and drinks come from `param/vocab.yaml` (Liam ... Isabella, Hot Chocolate ... Root Beer) as hints only: any other word is accepted as a name or a drink.
+Not built: depth obstacles on (needs the camera tilt measured), grasping a bag, joining the queue.
 Not checked: any of it on the robot, a real microphone, or the real STT hearing "start the task" over room noise.
 
 ## Main rulebook (robocupmalaysia/at-home-2025 `at-home-robocup-my-2025.pdf`, section 3.1 Carry My Luggage and 3.3 Receptionist; 3.2 is GPSR, a different task)
