@@ -11,17 +11,20 @@ from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
 from face_recognition.gallery import valid_name
-from social_extension.answers import extract_drink, extract_name, extract_place, heard_any, is_yes
+from social_extension.answers import extract_age, extract_drink, extract_gender, extract_name, extract_place, heard_any, is_yes
+from social_extension.vocab import load_vocab
 
 MAX_TEXT = 300
 
 
-def render_text(text, person='', detail=''):
-    """Substitute {person} (an unknown/empty name becomes "there") and {detail}. Bounded length."""
+def render_text(text, person='', detail='', pron=''):
+    """Substitute {person} (an unknown/empty name becomes "there"), {detail} and {pron} (he / she; empty = they, and "{pron} likes" becomes "they like"). Bounded length."""
     person = (person or '').strip()
     if person.lower() in ('', 'unknown'):
         person = 'there'
-    out = text.replace('{person}', person).replace('{detail}', (detail or '').strip()).strip()
+    pron = (pron or '').strip().lower()
+    text = text.replace('{pron} likes', 'they like') if pron not in ('he', 'she') else text
+    out = text.replace('{pron}', pron or 'they').replace('{person}', person).replace('{detail}', (detail or '').strip()).strip()
     if not out:
         raise PortError('text is empty')
     if len(out) > MAX_TEXT:
@@ -34,9 +37,11 @@ class SocialExtension(ExtensionExecutor):
         super().__init__('social_extension')
         for k, v in {'speak_service': 'tts/speak', 'stop_service': 'tts/stop',
                      'enroll_service': 'face/enroll', 'speak_timeout_sec': 30.0,
-                     'enroll_timeout_sec': 10.0, 'transcript_topic': 'stt/transcript', 'events_topic': 'audio/events'}.items():
+                     'enroll_timeout_sec': 10.0, 'transcript_topic': 'stt/transcript', 'events_topic': 'audio/events',
+                     'vocab_file': ''}.items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
+        self.vocab = load_vocab(p('vocab_file'))      # '' = param/vocab.yaml of framework_bringup: names and drinks to snap what was heard to
         self.speak = self.create_client(Speak, p('speak_service'))
         self.stop = self.create_client(Trigger, p('stop_service'))
         self.enroll = self.create_client(Enroll, p('enroll_service'))
@@ -59,7 +64,7 @@ class SocialExtension(ExtensionExecutor):
             if ('{person}' in raw and ports.get('person', '').strip().lower() in ('', 'unknown')) or \
                     ('{detail}' in raw and not ports.get('detail', '').strip()):
                 return True, 'nothing to say'
-        text = render_text(port_str(ports, 'text'), ports.get('person', ''), ports.get('detail', ''))
+        text = render_text(port_str(ports, 'text'), ports.get('person', ''), ports.get('detail', ''), ports.get('pron', ''))
         req = Speak.Request(text=text, voice=ports.get('voice', ''),
                             blocking=port_bool(ports, 'wait', True))
         res, err = call_service(self.speak, req, ctl, self.get_parameter('speak_timeout_sec').value)
@@ -135,9 +140,11 @@ class SocialExtension(ExtensionExecutor):
         kind, text = port_str(ports, 'kind'), port_str(ports, 'text')
         if kind == 'yes':      # a yes/no question: succeeds on an affirmative answer, fails on no or anything unclear
             return (True, 'yes', {'out_value': 'yes'}) if is_yes(text) else (False, f'not a yes: {text!r}')
-        if kind not in ('name', 'drink', 'place'):
-            return False, "kind must be 'name', 'drink', 'place' or 'yes'"
-        value = {'name': extract_name, 'drink': extract_drink, 'place': extract_place}[kind](text)
+        if kind not in ('name', 'drink', 'place', 'age', 'gender'):
+            return False, "kind must be 'name', 'drink', 'place', 'age', 'gender' or 'yes'"
+        v = self.vocab
+        value = {'name': lambda t: extract_name(t, v['names'], v['strict_names']), 'drink': lambda t: extract_drink(t, v['drinks']),
+                 'place': extract_place, 'age': extract_age, 'gender': extract_gender}[kind](text)
         if not value:
             return False, f'no {kind} found in {text!r}'
         return True, f'{kind}: {value}', {'out_value': value}
