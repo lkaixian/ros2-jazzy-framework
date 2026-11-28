@@ -1,4 +1,6 @@
 """Person re-identification embeddings: an OSNet-AIN ONNX model (tools/reid/export_osnet.py) on person crops."""
+import os
+
 import cv2
 import numpy as np
 
@@ -6,6 +8,21 @@ from person_detection.parts import colour_similarity
 
 MEAN = np.array([0.485, 0.456, 0.406], np.float32)
 STD = np.array([0.229, 0.224, 0.225], np.float32)
+
+
+def find_model(path='auto'):
+    """The OSNet ONNX to use: 'auto' = the nearest models/reid/osnet_ain_x1_0.onnx above this file; a path = that file; '' = none. '' when the file is not there."""
+    if path and path != 'auto':
+        return path if os.path.isfile(path) else ''
+    if not path:
+        return ''
+    d = os.path.dirname(os.path.realpath(__file__))
+    for _ in range(8):
+        p = os.path.join(d, 'models', 'reid', 'osnet_ain_x1_0.onnx')
+        if os.path.isfile(p):
+            return p
+        d = os.path.dirname(d)
+    return ''
 
 
 def preprocess(crops):

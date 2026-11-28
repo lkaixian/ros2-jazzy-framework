@@ -242,3 +242,12 @@ def test_a_near_miss_is_taken_back_only_if_it_stays_a_clear_winner_over_its_fram
     both = known()
     out = [both.assign([(1, a, B1), (9, d, B2)], 5.0 + 0.1 * i) for i in range(3)]
     assert out[-1] == [1, 2]                                          # in view at the same time as person 1: someone else
+
+
+def test_find_model_auto_looks_for_the_repository_model_and_a_given_path_or_empty_is_respected(tmp_path):
+    from person_detection.reid import find_model
+    f = tmp_path / 'm.onnx'
+    f.write_bytes(b'x')
+    assert find_model(str(f)) == str(f) and find_model(str(tmp_path / 'missing.onnx')) == '' and find_model('') == ''
+    auto = find_model('auto')
+    assert auto == '' or auto.endswith(os.path.join('models', 'reid', 'osnet_ain_x1_0.onnx'))

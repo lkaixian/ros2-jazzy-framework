@@ -9,7 +9,7 @@ from yolo11_common.base_node import Yolo11Node, bgr_to_image, run
 
 from person_detection.colour import clothes_colour, legs_box
 from person_detection.parts import part_histograms
-from person_detection.reid import UPPER, IdentityBook, Reid, board, is_cut, usable
+from person_detection.reid import find_model, UPPER, IdentityBook, Reid, board, is_cut, usable
 from person_detection_msgr.msg import Person, PersonArray
 
 
@@ -20,10 +20,12 @@ class PersonDetectionNode(Yolo11Node):
         super().__init__('person_detection_node', 'yolo26s-pose.pt', task='pose')
         self.declare_parameter('track', True)
         self.track = self.get_parameter('track').value
-        self.declare_parameter('reid_model', '')   # path of the OSNet ONNX (models/reid/osnet_ain_x1_0.onnx); empty = no appearance vector
-        path = self.get_parameter('reid_model').value
+        self.declare_parameter('reid_model', 'auto')   # OSNet ONNX: 'auto' = models/reid/osnet_ain_x1_0.onnx, a path, or '' for none (no appearance vector, no stable ids)
+        path = find_model(self.get_parameter('reid_model').value)
         self.reid = Reid(path) if path else None
-        self.declare_parameter('reid_sim', 0.70)         # cosine similarity at which a new tracker id is taken for a person seen before
+        if self.reid is None and self.get_parameter('reid_model').value:
+            self.get_logger().warn('re-identification is OFF: no OSNet model found (models/reid/osnet_ain_x1_0.onnx, tools/reid/export_osnet.py)')
+        self.declare_parameter('reid_sim', 0.64)         # cosine similarity at which a new tracker id is taken for a person seen before
         self.declare_parameter('reid_keep_sec', 900.0)   # how long an unseen person's appearance is remembered
         self.declare_parameter('blur_ratio', 0.6)   # a frame sharper than this x recent sharpness is used for identity; blurrier ones only hold links
         self.sharp = []
