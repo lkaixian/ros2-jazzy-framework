@@ -3,7 +3,7 @@
 #   tools/start.sh base                    e-stop reader + Kobuki driver
 #   tools/start.sh arm [--oak]             RealSense + object detector + arm extension (+ the OAK eye with --oak)
 #                                          the arm DRIVER is not in here: run tools/arm/arm_up.sh in its own terminal first (Ctrl+C there parks the arm)
-#   tools/start.sh task NAME [--move]      base + one task launch; NAME = gpsr egpsr inspection receptionist restaurant help_me_carry
+#   tools/start.sh task NAME [--move]      base + one task launch; NAME = gpsr egpsr inspection receptionist restaurant help_me_carry edu_luggage edu_mates edu_reception
 #                                          storing_groceries clean_the_table give_me_a_hand robocup
 #   tools/start.sh stop                    stop everything this project started (tools/stop_all.sh)
 # --list on any of them prints the commands and starts nothing.
@@ -21,7 +21,7 @@ LIST="" MOVE="" OAK=""
 for a in "$@"; do
   case $a in --list) LIST=1 ;; --move) MOVE=1 ;; --oak) OAK=1 ;; *) echo "unknown option: $a" >&2; exit 2 ;; esac
 done
-TASKS="gpsr egpsr inspection receptionist restaurant help_me_carry storing_groceries clean_the_table give_me_a_hand robocup"
+TASKS="gpsr egpsr inspection receptionist restaurant help_me_carry storing_groceries clean_the_table give_me_a_hand robocup edu_luggage edu_mates edu_reception"
 ARM_TASKS="egpsr storing_groceries clean_the_table give_me_a_hand robocup"
 
 if [ "$mode" = stop ]; then exec "$here/stop_all.sh"; fi
