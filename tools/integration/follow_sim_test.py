@@ -37,7 +37,7 @@ def kill(p):
             pass
 
 
-def run(search):
+def run(search, retrace=False):
     quiet = dict(start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     procs = [
         subprocess.Popen(['ros2', 'run', 'nav_sim', 'nav_sim_node', '--ros-args', '-p', f'scenario:={SCENARIO}', '-p', 'start_x:=1.0',
@@ -57,7 +57,7 @@ def run(search):
         while time.monotonic() < t_end and not (ac.server_is_ready() and st['robot'] and st['actors']):
             rclpy.spin_once(n, timeout_sec=0.1)
         ports = {'approach': 'true', 'distance': '1.0', 'until_cancelled': 'true', 'lock': 'true', 'timeout_ms': '120000',
-                 'search': 'true' if search else 'false', 'trail': os.environ.get('FOLLOW_TRAIL', 'false')}   # FOLLOW_TRAIL=true: along the walked path
+                 'search': 'true' if search else 'false', 'trail': 'true' if retrace else os.environ.get('FOLLOW_TRAIL', 'false')}   # FOLLOW_TRAIL=true: along the walked path
         fut = ac.send_goal_async(ExecuteNode.Goal(node_id='FollowTarget', port_names=list(ports), port_values=list(ports.values())))
         rclpy.spin_until_future_complete(n, fut, timeout_sec=5)
         gh = fut.result()
@@ -79,6 +79,18 @@ def run(search):
             t1 = time.monotonic()
             while not rf.done() and time.monotonic() - t1 < 3:
                 rclpy.spin_once(n, timeout_sec=0.05)
+        if retrace:                                              # then drive back along the path that was walked (no map, no Nav2)
+            rports = {'speed': '0.2', 'timeout_ms': '150000', 'arrive_m': '0.6'}
+            rfut = ac.send_goal_async(ExecuteNode.Goal(node_id='RetraceTrail', port_names=list(rports), port_values=list(rports.values())))
+            rclpy.spin_until_future_complete(n, rfut, timeout_sec=5)
+            rres = rfut.result().get_result_async()
+            t2 = time.monotonic()
+            while not rres.done() and time.monotonic() - t2 < 160:
+                rclpy.spin_once(n, timeout_sec=0.05)
+                out['contacts'] = max(out['contacts'], st['contacts'])
+            out['retrace'] = rres.result().result.message if rres.done() else 'still driving'
+            out['retrace_ok'] = bool(rres.done() and rres.result().result.success)
+            out['home_err'] = math.dist(st['robot'], (2.2, 2.9)) if st['robot'] else None      # the operator was first seen about here
     finally:
         n.destroy_node()
         rclpy.try_shutdown()
@@ -96,6 +108,12 @@ def main():
     res['search: never more than 3 m from the operator'] = with_search['max_gap'] < 3.0
     res['search: went through the door'] = with_search['door']
     res['search: ends close behind the operator'] = with_search['final_gap'] is not None and 0.5 <= with_search['final_gap'] <= 2.5
+    if os.environ.get('FOLLOW_RETRACE'):
+        time.sleep(2)
+        back = run(True, retrace=True)
+        print('follow then retrace:', back)
+        res['retrace: succeeded and ended near where the operator was first seen'] = back.get('retrace_ok') and back.get('home_err') is not None and back['home_err'] < 1.0
+        res['retrace: touched nobody'] = back['contacts'] == 0
     time.sleep(2)
     control = run(False)
     print('search off:', control)
