@@ -85,7 +85,8 @@ Pass the day's facts on the command line (`start_spec` replaces the default; not
 # dry run: robot does not move, it speaks and decides (host facts as announced 2 h before the test: name, drink, he/she)
 ros2 launch framework_bringup edu_reception.launch.py start_spec:='{"goal":"edu reception task","steps":[{"macro":"hric_round","args":{"host":"John","host_drink":"milk","host_pron":"he","living_place":"living_room"}}]}'
 # live (floor clear, e-stop in hand): same command + dry_run:=false, or tools/start.sh task edu_reception --move  (type go)
-# arm pointing at the seat (optional): start the arm first (see below) and add enable_arm:=true
+# arm_extension runs in this launch (live: false = it only plans, prints DRY:): the plan names arm nodes and the validator refuses a plan whose nodes nobody advertises.
+# The seat pointing needs the arm driver too (see below) and extensions.yaml live: true
 # then say: "start the task"; a volunteer steps up to the robot at the door; answer the name and drink questions; follow the robot
 ```
 **Find My Mates**
@@ -95,7 +96,7 @@ ros2 launch framework_bringup edu_mates.launch.py start_spec:='{"goal":"edu mate
 ```
 **Carry My Luggage**
 ```bash
-ros2 launch framework_bringup edu_luggage.launch.py            # dry run (add dry_run:=false for live; enable_arm:=true for the bag handover)
+ros2 launch framework_bringup edu_luggage.launch.py            # dry run (add dry_run:=false for live; the bag handover needs the arm driver and live: true)
 # say "start the task"; point at a bag; hand it the handle (arm) or skip; say "follow me"; walk; stand still and say "stop" (or hold a hand up) at the car
 ```
 Arm (only for the bag handover or seat pointing; never while someone stands within reach):

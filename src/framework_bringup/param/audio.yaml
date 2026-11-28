@@ -6,7 +6,7 @@
 audio_capture_node:
   ros__parameters:
     source: arecord         # arecord | file
-    device: "plughw:3,0"    # ALSA device (arecord -l). Laptop DMIC now; swap for the real mic, or "" = default
+    device: pipewire        # through PipeWire: its default source (the Unitek Y-247A adapter on this robot). A raw "plughw:N,M" is "busy" while PipeWire holds the card
     file: ""                # 16 kHz mono 16-bit WAV when source: file
     loop: false
     sample_rate: 16000
@@ -39,7 +39,7 @@ stt_node:
   ros__parameters:
     engine: faster_whisper  # faster_whisper | vosk | mock
     model: base.en          # portable default (downloads on first use); setup.sh writes the model chosen for this computer to models/local.yaml, which overrides this
-    language: ""
+    language: en            # the competition language; "" lets Whisper guess per utterance and it heard Malay, Russian subtitles and "waah waah" in a noisy room
     device: cpu             # cuda needs CUDA 12 cuBLAS + cuDNN 9; the node falls back to cpu/int8 if they are missing
     compute_type: int8
     min_confidence: 0.0

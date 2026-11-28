@@ -5,8 +5,8 @@ outside to the luggage area through four obstacles (small object, hard-to-see ob
   say "start the task"                                            # the only thing that starts it (spoken, any time after the launch)
   ros2 launch ... start_spec:='{"goal":"edu luggage task","steps":[{"macro":"luggage_round","args":{"distance":"1.2"}}]}'   # other arguments
 
-Starts: audio (microphone + STT + TTS), lidar + RealSense, Nav2, objects, person + pose + depth, odom/PID/nav/social extensions. No faces. The arm is OFF: add
-enable_arm:=true (arm driver running, `tools/arm/arm_up.sh`) for the bag handover. While the start phrase is configured nothing the operator says becomes a task
+Starts: audio (microphone + STT + TTS), lidar + RealSense, Nav2, objects, person + pose + depth, odom/PID/nav/social extensions. No faces. arm_extension runs (extensions.yaml live: false = it only plans and prints DRY:) because the plan names arm nodes (OpenGripper, CloseGripper) and the validator refuses a plan whose
+nodes no running extension advertises; the arm driver (`tools/arm/arm_up.sh`) and live: true are what make it move. While the start phrase is configured nothing the operator says becomes a task
 (transcript_to_task_node); the spoken phrase publishes the task spec directly (no LLM) and the plan runs at once (auto_run; dry_run still keeps the hardware still).
 Plan: macro luggage_round = say, optional bag handover (skipped when the arm or the handover fails), follow_until_told (stop words stop / we are here / we have
 arrived / this is the car), give the bag back on "thank you", return_home (bonus, fails outside the map without ending the task).
@@ -35,7 +35,7 @@ def generate_launch_description():
         'enable_pid': 'true',
         'enable_nav': 'true',
         'enable_social': 'true',
-        'enable_arm': 'false',
+        'enable_arm': 'true',
         'enable_oak': 'false',
         'persons_topic': 'persons_ranged',
         'max_runtime_sec': '420',
