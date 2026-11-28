@@ -68,6 +68,8 @@ pid_extension_node:
     scan_required: true         # no fresh scan = refuse to drive (real robot)
     scan_yaw_offset: 3.1416     # rad: lidar faces backwards on this robot (= base_to_laser yaw in navigation.yaml)
     blocked_give_up_sec: 3.0     # blocked this long -> the node fails instead of waiting forever
+    cam_height: 0.8              # m: RealSense lens above the floor (about, from memory, not measured); BackUpForFace uses it
+    vfov_deg: 42.0               # RealSense colour vertical field of view
     avoid_turn: 0.4              # rad/s: FollowTarget turns this fast toward the freer side when an obstacle (not the person) is ahead
 
 pose_extension_node:

@@ -6,6 +6,8 @@ seen (drive there, then sweep), not routed to. Upgrade to Nav2 goals at the last
 """
 import math
 
+import numpy as np
+
 
 def wrap(a):
     return math.atan2(math.sin(a), math.cos(a))
@@ -14,6 +16,20 @@ def wrap(a):
 def bearing_from_image(ex, hfov_deg):
     """Bearing (rad, + left) of a pixel at normalised horizontal offset ex (-1 left edge .. +1 right edge of the image)."""
     return -math.atan(ex * math.tan(math.radians(hfov_deg) / 2.0))
+
+
+def face_visible(p, height, conf=0.5, margin=0.03):
+    """The nose and at least one eye (COCO 0, 1, 2) are seen and not cut off by the top of the image of `height` px."""
+    k, y = p.keypoints_conf, p.keypoints_y
+    if len(k) < 3 or len(y) != len(k):
+        return False
+    return k[0] >= conf and max(k[1], k[2]) >= conf and min(y[0], y[1], y[2]) >= margin * height
+
+
+def face_distance(cam_h, face_h, vfov_deg, margin=0.85):
+    """Range (m) at which a camera `cam_h` m up sees a face `face_h` m up: the top ray is vfov/2 above the horizontal, scaled by
+    `margin` so the face is inside the image and not on its edge. shortcut: camera assumed level, upgrade when it is tilted."""
+    return max(0.0, (face_h - cam_h) / math.tan(math.radians(vfov_deg) / 2.0 * margin))
 
 
 class Memory:
@@ -26,12 +42,19 @@ class Memory:
         self.world_bearing = None  # heading from the robot to them when last seen, rad (always known once seen)
         self.rel_bearing = 0.0     # the same relative to the robot's heading then: which side they left on
         self.seen_t = None
+        self.emb = None            # unit appearance vector of the followed person (running mean), when the detector gives one
 
     def update(self, person, pose, now, hfov_deg, width):
         ex = ((person.x_min + person.x_max) / 2.0 - width / 2.0) / (width / 2.0)
         b = bearing_from_image(ex, hfov_deg)
         self.track_id = person.track_id if person.track_id >= 0 else self.track_id
         self.colour = person.clothes_colour or self.colour
+        e = getattr(person, 'embedding', None)
+        if len(e or ()):
+            e = np.asarray(e, float)
+            e = e / (np.linalg.norm(e) + 1e-9)
+            m = e if self.emb is None else 0.9 * self.emb + 0.1 * e
+            self.emb = m / (np.linalg.norm(m) + 1e-9)
         self.rel_bearing, self.world_bearing, self.seen_t = b, wrap(pose[2] + b), now
         if person.distance_m > 0:
             self.pos = (pose[0] + person.distance_m * math.cos(self.world_bearing),
@@ -39,13 +62,14 @@ class Memory:
         return ex, b
 
 
-def select(persons, mem, pose, hfov_deg, width, tid=None, lock=False, reid_radius=1.2, reid_bearing=0.5):
+def select(persons, mem, pose, hfov_deg, width, tid=None, lock=False, reid_radius=1.2, reid_bearing=0.5, reid_sim=0.7, model=None):
     """The person to follow, or None.
 
     tid given or locked (mem.track_id): that track id. If it is absent (the tracker gave the same person a new id after an
     occlusion) take the one that fits where they were: the same clothes colour when both are known, within reid_radius of the
     last depth position, or within reid_bearing of the last bearing when there was no depth. Otherwise the biggest box.
-    A different clothes colour is never adopted; two equally good candidates pick the nearer to the last position.
+    With an appearance vector on both sides (mem.emb and the candidate's embedding) the vector decides instead: the most similar
+    candidate at or above reid_sim, wherever they are. A different clothes colour is never adopted; two equally good candidates pick the nearer to the last position.
     """
     want = tid if tid is not None else (mem.track_id if lock else None)
     if want is None:
@@ -54,8 +78,22 @@ def select(persons, mem, pose, hfov_deg, width, tid=None, lock=False, reid_radiu
         if q.track_id == want:
             return q
     best, best_d = None, None
+    if model is not None:
+        model.begin()
     for q in persons:
         if q.track_id < 0 or (q.clothes_colour and mem.colour and q.clothes_colour != mem.colour):
+            continue
+        e = getattr(q, 'embedding', None)
+        if model is not None and model.ready and len(e or ()):          # the learned classifier: above its own threshold on `frames` frames in a row
+            sc = model.score(np.asarray(e, float))
+            if model.vote(q.track_id, sc >= model.reid) >= model.frames and (best_d is None or -sc < best_d):
+                best, best_d = q, -sc
+            continue
+        if mem.emb is not None and len(e or ()):
+            e = np.asarray(e, float)
+            sim = float(mem.emb @ e / (np.linalg.norm(e) + 1e-9))
+            if sim >= reid_sim and (best_d is None or -sim < best_d):
+                best, best_d = q, -sim
             continue
         ex = ((q.x_min + q.x_max) / 2.0 - width / 2.0) / (width / 2.0)
         wb = wrap(pose[2] + bearing_from_image(ex, hfov_deg))

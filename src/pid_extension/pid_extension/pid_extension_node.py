@@ -7,10 +7,13 @@ from bt_common.obstacle import ScanGuard
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from person_detection_msgr.msg import PersonArray
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import DurabilityPolicy, qos_profile_sensor_data, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Int32
 
-from pid_extension.follow import LostPolicy, Memory, select
+from pid_extension.trail import Trail, trail_error
+from pid_extension.follow import face_distance, face_visible, LostPolicy, Memory, select
+from pid_extension.target import TargetModel
 from pid_extension.pid import MIN_STANDOFF_M, PID, range_speed
 
 
@@ -26,7 +29,8 @@ class PidExtension(ExtensionExecutor):
                          max_angular=0.6, stale_sec=0.5, lost_sec=1.0, rate_hz=20.0,
                          scan_topic='scan', stop_distance=0.40, guard_half_width_deg=35.0, scan_stale_sec=0.5,
                          scan_required=False, scan_yaw_offset=0.0, blocked_give_up_sec=3.0, avoid_turn=0.4,
-                         hfov_deg=69.0, goto_sec=6.0, search_sec=12.0, reid_radius=1.2, turn_clearance=0.22, slow_ramp=0.3).items():
+                         hfov_deg=69.0, goto_sec=6.0, search_sec=12.0, reid_radius=1.2, turn_clearance=0.22, slow_ramp=0.3, reid_sim=0.7, target_score=0.5,
+                         cam_height=0.8, vfov_deg=42.0).items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
         ma, ml = p('max_angular'), p('max_linear')
@@ -40,8 +44,12 @@ class PidExtension(ExtensionExecutor):
         self.create_subscription(Odometry, p('odom_topic'), self._on_odom, 10)
         self.create_subscription(PersonArray, p('persons_topic'), self._on_persons, 10)
         self.pub = self.create_publisher(Twist, p('cmd_vel_topic'), 10)
+        self.operator_id = None      # who FollowTarget follows, published on follow/operator for pose_extension's WaitForStop
+        self.operator_pub = self.create_publisher(Int32, 'follow/operator', QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.handlers = {'SetPidGains': self._set_gains, 'HoldHeading': self._hold,
-                         'FollowTarget': self._follow}
+                         'FollowTarget': self._follow, 'BackUpForFace': self._back_for_face,
+                         'CheckBehind': self._check_behind}
 
     def _on_odom(self, m):
         q = m.pose.pose.orientation
@@ -103,12 +111,73 @@ class PidExtension(ExtensionExecutor):
             return None
         return self.x, self.y, self.yaw
 
-    def _pick(self, track_id, mem, lock):
+    def _pick(self, track_id, mem, lock, model=None):
         m = self.persons
         if m is None or time.monotonic() - self.persons_t > self.get_parameter('stale_sec').value:
             return None, None
         return select(m.persons, mem, self._pose() or (0.0, 0.0, 0.0), self.get_parameter('hfov_deg').value, max(1, m.image_width),
-                      track_id, lock, self.get_parameter('reid_radius').value), m
+                      track_id, lock, self.get_parameter('reid_radius').value, reid_sim=self.get_parameter('reid_sim').value, model=model), m
+
+    def _check_behind(self, ports, ctl):
+        """Is something at least min_distance and at most max_distance (m) behind the robot? The lidar faces backwards on this robot, so a guest
+        following it shows up there. A wall counts as well (the lidar cannot tell): use it to wait for a guest, not to prove one."""
+        far = port_float(ports, 'max_distance', 2.5, lo=0.3, hi=6.0)
+        near = port_float(ports, 'min_distance', 0.3, lo=0.1, hi=3.0)
+        d = self.guard.clearance(-1.0)
+        if d is None or d <= 0.0:
+            return False, 'no lidar reading behind'
+        return (True, f'something {d:.2f} m behind') if near <= d <= far else (False, f'nothing within {far:.1f} m behind (nearest {d:.2f} m)')
+
+    def _back_for_face(self, ports, ctl):
+        """The camera is low (cam_height), so a person close by shows only the torso: back away slowly, keeping them centred, until
+        the nose and an eye are in the image. Speed follows the trig range at which the camera sees face_height."""
+        tid = int(port_float(ports, 'track_id')) if ports.get('track_id') else None
+        face_h = port_float(ports, 'face_height', 1.6, lo=1.0, hi=2.2)
+        max_back = port_float(ports, 'max_back', 1.5, lo=0.1, hi=3.0)
+        timeout = port_float(ports, 'timeout_ms', 15000.0, lo=1000.0, hi=120000.0) / 1000.0
+        par, turn = self.get_parameter, self.pids['follow_turn']
+        need = face_distance(par('cam_height').value, face_h, par('vfov_deg').value)
+        turn.reset()
+        dt, lost_sec = 1.0 / par('rate_hz').value, par('lost_sec').value
+        mem, now = Memory(), time.monotonic()
+        end, last_seen, backed, seen_face, blocked_since = now + timeout, now, 0.0, 0, None
+        try:
+            while True:
+                if ctl.cancelled:
+                    return False, 'cancelled'
+                person, m = self._pick(tid, mem, False)
+                now = time.monotonic()
+                if person is None:
+                    if now - last_seen > lost_sec:
+                        return False, 'person lost'
+                    self._cmd(0.0, 0.0)
+                else:
+                    last_seen = now
+                    if person.track_id >= 0:
+                        tid = person.track_id
+                    seen_face = seen_face + 1 if face_visible(person, max(1, m.image_height)) else 0
+                    if seen_face >= 3:
+                        return True, f'face in view after backing {backed:.2f} m'
+                    d = person.distance_m
+                    if d > need + 0.5 or backed >= max_back:
+                        return False, f'no face after backing {backed:.2f} m (person at {d:.1f} m, needs about {need:.1f} m): turned away?'
+                    ex, _ = mem.update(person, self._pose() or (self.x, self.y, 0.0), now, par('hfov_deg').value, max(1, m.image_width))
+                    v = -min(0.15, max(0.05, 0.5 * (need - d))) if d > 0 else -0.1     # slower the nearer to the right range
+                    near = self.guard.blocked(v)
+                    if near is not None:
+                        v = 0.0
+                        blocked_since = blocked_since or now
+                        if now - blocked_since > par('blocked_give_up_sec').value:
+                            return False, f'obstacle {near:.2f} m behind: stopped'
+                    else:
+                        blocked_since = None
+                    backed += -v * dt
+                    self._cmd(v, -turn.update(0.0, 0.0, dt, err=ex))
+                if now > end:
+                    return False, 'timeout'
+                ctl.sleep(dt)
+        finally:
+            self._stop()
 
     def _follow(self, ports, ctl):
         tid = int(port_float(ports, 'track_id')) if ports.get('track_id') else None
@@ -119,6 +188,7 @@ class PidExtension(ExtensionExecutor):
         target_d = (port_float(ports, 'distance', lo=MIN_STANDOFF_M, hi=8.0)
                     if ports.get('distance') else 0.0)
         search = port_bool(ports, 'search', True)            # a lost person: drive to where they were last seen, then sweep (needs odometry)
+        trail = Trail() if port_bool(ports, 'trail', False) else None      # steer along the path the person walked, not straight at them
         keep = port_bool(ports, 'until_cancelled', False)    # follow on after arriving: only a cancel, a lost target or the timeout ends it
         lock = port_bool(ports, 'lock', False)               # stay with the first person seen (their track id), not whoever is biggest
         timeout = port_float(ports, 'timeout_ms', 10000.0, lo=100.0, hi=900000.0) / 1000.0
@@ -129,16 +199,20 @@ class PidExtension(ExtensionExecutor):
         end, last_seen, ok_since = time.monotonic() + timeout, time.monotonic(), None
         blocked_since = None
         mem, par = Memory(), self.get_parameter
+        model = TargetModel(reid=par('target_score').value)
         mem.track_id = tid
         lost = LostPolicy(par('goto_sec').value, par('search_sec').value, wait_sec=lost_sec)
         try:
             while True:
                 if ctl.cancelled:
                     return False, 'cancelled'
-                person, m = self._pick(tid, mem, lock)
+                person, m = self._pick(tid, mem, lock, model)
                 now = time.monotonic()
                 if person is not None and lock and tid is None and person.track_id >= 0:
                     tid = person.track_id
+                if tid is not None and tid != self.operator_id:
+                    self.operator_id = tid
+                    self.operator_pub.publish(Int32(data=int(tid)))
                 if person is None:
                     pose = self._pose()
                     if mem.seen_t is None or not search or pose is None:     # never saw anyone / no odometry: stand still, then give up
@@ -154,10 +228,18 @@ class PidExtension(ExtensionExecutor):
                 else:
                     last_seen = now
                     lost.reset()
+                    if tid is not None and len(getattr(person, 'embedding', ())):      # learn the followed person against those around them
+                        model.update(person.embedding, [q.embedding for q in m.persons if q is not person and len(q.embedding)])
                     W, H = max(1, m.image_width), max(1, m.image_height)
                     if tid is not None and person.track_id >= 0 and person.track_id != tid:
                         tid = person.track_id                     # the tracker renamed the person we follow: carry on with the new id
                     ex, _ = mem.update(person, self._pose() or (self.x, self.y, 0.0), now, par('hfov_deg').value, W)
+                    pose = self._pose()
+                    if trail is not None and pose is not None and mem.pos is not None and person.distance_m > 0:
+                        trail.add(mem.pos)
+                        wp = trail.target(pose[:2])
+                        if wp is not None:
+                            ex = trail_error(pose, wp, par('hfov_deg').value)
                     h = (person.y_max - person.y_min) / H
                     w = -turn.update(0.0, 0.0, dt, err=ex)       # target right -> turn right (cw)
                     if approach and target_d > 0 and person.distance_m > 0:
