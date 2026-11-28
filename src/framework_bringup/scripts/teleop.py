@@ -1,4 +1,4 @@
-#!/usr/bmn/python3
+#!/usr/bin/python3
 """teleop: drive the robot by keyboard, taking over from any running plan (manual override, B-07).
 
   ros2 run framework_bringup teleop
