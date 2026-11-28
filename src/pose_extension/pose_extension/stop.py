@@ -3,7 +3,8 @@
 Anyone in the room can say "stop", and the operator may wave at a crowd while walking: neither is an order. The robot stops for the word "stop" (or one of the given
 phrases) or for a raised hand held up for `sign_sec`, but only when the tracked operator has hardly moved for `still_sec`. Without a known operator the voice stop
 is accepted (a robot that cannot be stopped is worse).
-shortcut: the voice cannot be tied to a speaker; the hand sign is "a hand held above the shoulder", not five counted fingers (that needs a hand-landmark model).
+shortcut: the voice cannot be tied to a speaker. The hand sign is five extended fingers on a raised hand (sign='five', from the hand-landmark model in hands.py) or, without that
+model or when asked (sign='raised'), just a hand held above the shoulder.
 """
 import math
 import re
@@ -26,12 +27,15 @@ def hand_raised(kps, min_conf=0.4):
 
 
 class StopGate:
-    def __init__(self, words=('stop',), still_sec=1.5, still_m=0.3, sign_sec=1.0, voice_window=2.0):
-        self.words, self.still_sec, self.still_m, self.sign_sec, self.voice_window = list(words), still_sec, still_m, sign_sec, voice_window
+    def __init__(self, words=('stop',), still_sec=1.5, still_m=0.3, sign_sec=1.0, voice_window=2.0, grace=0.6):
+        self.words, self.still_sec, self.still_m, self.sign_sec, self.voice_window, self.grace = list(words), still_sec, still_m, sign_sec, voice_window, grace
         self.pos, self.raised, self.voice_t, self.ignored = {}, {}, None, 0
+        self.five, self.five_last = {}, {}      # when five extended fingers were first seen in a row, and last seen
+        self.sign = 'raised'                    # 'five' | 'raised' | 'off': what counts as the hand sign
 
-    def see(self, pid, pos, kps, now):
-        """One frame of one person: pos = (x, y) in the odom frame or None; kps = their keypoints (may be empty)."""
+    def see(self, pid, pos, kps, now, fingers=None):
+        """One frame of one person: pos = (x, y) in the odom frame or None; kps = their keypoints (may be empty); fingers = True when five extended fingers were
+        seen on their raised hand in this frame, False/None when not (or not looked at))."""
         if pos is not None:
             h = self.pos.setdefault(pid, deque())
             h.append((now, pos[0], pos[1]))
@@ -41,6 +45,11 @@ class StopGate:
             self.raised.setdefault(pid, now)
         else:
             self.raised.pop(pid, None)
+        if fingers:
+            self.five.setdefault(pid, now)
+            self.five_last[pid] = now
+        elif now - self.five_last.get(pid, -9.0) > self.grace:
+            self.five.pop(pid, None)
 
     def heard(self, text, now):
         t = re.sub(r"[^a-z' ]", ' ', text.lower())
@@ -63,6 +72,7 @@ class StopGate:
         if heard:
             self.ignored += 1            # said while the operator was walking: not an order (counted, so a test or log can see it)
             self.voice_t = None
-        if pid is not None and pid in self.raised and now - self.raised[pid] >= self.sign_sec and self.still(pid, now):
+        since = {'five': self.five, 'raised': self.raised}.get(self.sign, {}).get(pid)
+        if pid is not None and since is not None and now - since >= self.sign_sec and self.still(pid, now):
             return 'sign'
         return ''

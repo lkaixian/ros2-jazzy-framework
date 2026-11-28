@@ -57,3 +57,26 @@ def test_without_a_known_operator_a_stop_word_is_accepted_and_other_people_never
         g.see(7, (0, 0), kps(True), t)
     assert g.check(1, 2.0) == ''                                                # person 7 holds a hand up, but the operator is 1
     assert g.check(7, 2.0) == 'sign'
+
+
+def test_the_five_finger_sign_needs_five_fingers_in_a_row_not_just_a_raised_hand():
+    g = StopGate(words=['stop'])
+    g.sign = 'five'
+    t = 0.0
+    while t <= 2.0:                                                     # the hand is up and the operator still, but only 3 fingers are ever seen
+        g.see(1, (0.0, 0.0), kps(True), t, fingers=False)
+        t += 0.2
+    assert g.check(1, 2.0) == ''
+    t = 2.0
+    while t <= 3.2:                                                     # now five fingers, every 0.2 s
+        g.see(1, (0.0, 0.0), kps(True), t, fingers=True)
+        t += 0.2
+    assert g.check(1, 3.2) == 'sign'
+    g.see(1, (0.0, 0.0), kps(True), 3.4, fingers=False)                 # one missed frame inside the grace: the streak holds
+    assert g.check(1, 3.4) == 'sign'
+    g.see(1, (0.0, 0.0), kps(True), 4.3, fingers=None)                  # not seen for longer than the grace: starts over
+    assert g.check(1, 4.3) == ''
+    g.sign = 'raised'
+    for t in (4.3, 4.6, 5.0, 5.4, 5.8):
+        g.see(1, (0.0, 0.0), kps(True), t)
+    assert g.check(1, 5.8) == 'sign'                                    # the old rule: a raised hand is enough

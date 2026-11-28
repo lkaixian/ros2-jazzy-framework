@@ -15,8 +15,10 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Int32
 
 from pose_extension import attributes, gestures
+from pose_extension import vlm
 from pose_extension.genderage import face_square, GenderAge, vote
-from pose_extension.stop import StopGate
+from pose_extension.hands import five_fingers, HandModel
+from pose_extension.stop import hand_raised, StopGate
 from pose_extension.people import BAGS, dominant_colour, free_spots, location_phrase, PeopleBook, pointed_object, unique_description
 from pose_extension.categories import load_table, pick_next
 
@@ -65,7 +67,7 @@ class PoseExtension(ExtensionExecutor):
         super().__init__('pose_extension')
         for k, v in dict(persons_topic='persons', objects_topic='objects', window_sec=1.5, max_age_sec=0.7,
                          faces_topic='faces', image_topic='/camera/image_raw', face_parsing_model='',
-                         min_face_px=attributes.MIN_FACE_PX, candidates_topic='/arm_eye/objects', categories_file='', hfov_deg=69.0, genderage_model='', odom_topic='odom').items():
+                         min_face_px=attributes.MIN_FACE_PX, candidates_topic='/arm_eye/objects', categories_file='', hfov_deg=69.0, genderage_model='', odom_topic='odom', vlm_url='http://127.0.0.1:8080', vlm_timeout_sec=20.0).items():
             self.declare_parameter(k, v)
         self.hist = defaultdict(lambda: deque(maxlen=120))   # track_id -> [(t, kps)]
         self.book = PeopleBook()    # who is in the room and what each looks like (stable ids), for unique descriptions, locations and names
@@ -81,6 +83,7 @@ class PoseExtension(ExtensionExecutor):
         self.genderage = GenderAge(self.get_parameter('genderage_model').value)
         # the stop gate: where the followed person is (odom + depth), whether a hand is up, what was said, and who the operator is (pid_extension's FollowTarget)
         self.gate, self.operator_id, self.odom = StopGate(), None, None
+        self.hands, self.hand_t = HandModel(), 0.0      # five-finger check on the operator's raised hand (models/hand/*.onnx; without them a raised hand is enough)
         self.create_subscription(Odometry, self.get_parameter('odom_topic').value, self._on_odom, 10)
         self.create_subscription(Transcript, 'stt/transcript', lambda m: m.is_final and self.gate.heard(m.text, time.monotonic()), 10)
         self.create_subscription(Int32, 'follow/operator', lambda m: setattr(self, 'operator_id', m.data),
@@ -94,7 +97,8 @@ class PoseExtension(ExtensionExecutor):
                          'CountObjects': self._count_objects, 'FindExtremeObject': self._extreme_object, 'FindFreeSeat': self._find_seat,
                          'DescribePerson': self._describe, 'DescribeAttributes': self._attributes, 'NextObject': self._next_object,
                          'FindPerson': self._find_person, 'DescribeUnique': self._describe_unique, 'DescribeLocation': self._describe_location,
-                         'PointedObject': self._pointed_object, 'EstimateGender': self._estimate_gender, 'WaitForStop': self._wait_stop}
+                         'PointedObject': self._pointed_object, 'EstimateGender': self._estimate_gender, 'WaitForStop': self._wait_stop,
+                         'DescribeWithVLM': self._describe_vlm}
 
     def _on_persons(self, m):
         now = time.monotonic()
@@ -107,7 +111,10 @@ class PoseExtension(ExtensionExecutor):
                     b = -math.atan(ex * math.tan(math.radians(self.get_parameter('hfov_deg').value) / 2.0))
                     pos = (self.odom[0] + p.distance_m * math.cos(self.odom[2] + b), self.odom[1] + p.distance_m * math.sin(self.odom[2] + b))
                 kp = list(zip(p.keypoints_x, p.keypoints_y, p.keypoints_conf)) if len(p.keypoints_x) >= 11 else []
-                self.gate.see(p.track_id, pos, kp, now)
+                fingers = None
+                if self.gate.sign == 'five' and p.track_id == self.operator_id and kp and hand_raised(kp) and now - self.hand_t >= 0.2:
+                    self.hand_t, fingers = now, self._five_fingers(kp)      # at most 5 times a second, only for the operator with a hand up
+                self.gate.see(p.track_id, pos, kp, now, fingers)
         f = self._fresh('faces')
         self.book.update(m.persons, f.faces if f else [], now, m.image_width, m.image_height, f.image_width if f else 0, f.image_height if f else 0)
         for p in m.persons:
@@ -201,6 +208,10 @@ class PoseExtension(ExtensionExecutor):
         operator being followed (follow/operator from FollowTarget) stands still. Anyone else's "stop", or one said while the operator walks, is ignored. Use in a
         Parallel next to FollowTarget. The hand sign is a raised hand, not counted fingers."""
         self.gate.words = [w for w in port_str(ports, 'words', 'stop').split(',') if w.strip()]
+        sign = port_str(ports, 'sign', 'five' if self.hands.available else 'raised')
+        if sign not in ('five', 'raised', 'off'):
+            return False, "sign must be 'five', 'raised' or 'off'"
+        self.gate.sign = 'raised' if sign == 'five' and not self.hands.available else sign      # no hand models: a raised hand is enough
         self.gate.still_sec = port_float(ports, 'still_sec', 1.5, lo=0.5, hi=10.0)
         self.gate.voice_t = None
         end = time.monotonic() + port_float(ports, 'timeout_ms', 900000.0, lo=1000.0, hi=3600000.0) / 1000.0
@@ -213,6 +224,21 @@ class PoseExtension(ExtensionExecutor):
             if time.monotonic() > end:
                 return False, 'timeout'
             ctl.sleep(0.1)
+
+    def _five_fingers(self, kp):
+        """True / False / None: five extended fingers on the operator's raised hand, from the latest camera frame (hands.py)."""
+        from yolo11_common.base_node import image_to_bgr
+        img, pm = self._fresh('image'), self._fresh('persons')
+        if img is None or pm is None:
+            return None
+        frame = image_to_bgr(img)
+        sx, sy = frame.shape[1] / pm.image_width, frame.shape[0] / pm.image_height
+        try:
+            return five_fingers(self.hands, frame, [(x * sx, y * sy, c) for x, y, c in kp])
+        except RuntimeError as e:
+            self.get_logger().warn(str(e), throttle_duration_sec=30.0)
+            self.gate.sign = 'raised'
+            return None
 
     def _person_scale(self):
         """Factor from the camera frame's pixels to the person detector's pixels (1 when they are the same image)."""
@@ -279,6 +305,43 @@ class PoseExtension(ExtensionExecutor):
             colour = dominant_colour(frame[max(0, int(y1 * fy)):int(y2 * fy), max(0, int(x1 * fx)):int(x2 * fx)])
         place = seat_place(f'{colour} {label}' if colour else label, bearing)        # as the robot sees it: 'red backpack on my left'
         return True, f'pointing at the {place}', {'out_label': label, 'out_colour': colour, 'out_place': place, 'out_bbox': f'{x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}', 'out_bearing': f'{bearing:.2f}'}
+
+    def _describe_vlm(self, ports, ctl):
+        """Describe the nearest person (or track_id) with the vision-language model: clothes, hair, glasses, gender, age, in one JSON per look, voted over `looks` looks
+        (default 2, 0.3 s apart; the gender must agree). The detectors' clothes colour wins over the model's when both exist. Hair and glasses go into the people book for
+        unique descriptions. The server is vlm_url (llama-server with Gemma 4 E4B + mmproj)."""
+        from yolo11_common.base_node import image_to_bgr
+        looks_n = int(port_float(ports, 'looks', 2, lo=1, hi=4))
+        results = []
+        for k in range(looks_n):
+            kn, img, pm = self._known(ports), self._fresh('image'), self._fresh('persons')
+            if kn is None or kn.box is None or img is None or pm is None:
+                return False, 'no person or no recent camera frame'
+            frame = image_to_bgr(img)
+            sx, sy = frame.shape[1] / max(1, pm.image_width), frame.shape[0] / max(1, pm.image_height)
+            x1, y1, x2, y2 = kn.box
+            pad_x, pad_y = 0.05 * (x2 - x1), 0.05 * (y2 - y1)
+            crop = frame[max(0, int((y1 - pad_y) * sy)):int((y2 + pad_y) * sy), max(0, int((x1 - pad_x) * sx)):int((x2 + pad_x) * sx)]
+            if crop.size == 0:
+                return False, 'the person is outside the picture'
+            try:
+                results.append(vlm.parse(vlm.ask(self.get_parameter('vlm_url').value, crop, self.get_parameter('vlm_timeout_sec').value)))
+            except RuntimeError as e:
+                return False, str(e)
+            if k < looks_n - 1:
+                ctl.sleep(0.3)
+        a = vlm.combine(results)
+        if not a:
+            return False, 'the model gave no description'
+        top = kn.features().get('top') or a['top']              # the clothes colour from the detector when it has one
+        a['top'] = top
+        self.book.remember_at(((kn.box[0] + kn.box[2]) / 2, (kn.box[1] + kn.box[3]) / 2), hair=a['hair'], glasses='yes' if a['glasses'] == 'yes' else '')
+        text = vlm.sentence(a)
+        if not text:
+            return False, 'nothing certain about this person'
+        out = {'out_text': text, 'out_gender': a['gender'], 'out_pronoun': {'man': 'he', 'woman': 'she'}.get(a['gender'], ''), 'out_age': str(a['age'] or ''),
+               'out_hair': a['hair'], 'out_glasses': a['glasses'], 'out_top': top}
+        return True, text, out
 
     def _estimate_gender(self, ports, ctl):
         """Man or woman, he or she, and about how old, from the biggest face in view: three looks 0.3 s apart, voted; fails when the looks disagree or no

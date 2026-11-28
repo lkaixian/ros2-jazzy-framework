@@ -90,3 +90,38 @@ def test_a_bags_colour_is_the_middle_of_its_box_not_the_strap_or_floor():
     img[:, :4] = (255, 255, 255)                                         # a white strap at the edge
     assert dominant_colour(img) == 'red' and dominant_colour(np.zeros((100, 60, 3), np.uint8)) == 'black'
     assert dominant_colour(np.zeros((4, 4, 3), np.uint8)) == ''
+
+
+def test_finger_counting_from_landmarks_and_the_crop_around_a_raised_wrist():
+    import numpy as np
+    from pose_extension.hands import anchors, extended_fingers, wrist_crop
+    open_hand = np.zeros((21, 3))                                   # a flat hand, fingers up: tips far above their middle joints
+    open_hand[0] = (50, 100, 0)                                      # wrist
+    for base, x in ((5, 40), (9, 50), (13, 60), (17, 70)):
+        for k, y in enumerate((60, 45, 32, 20)):
+            open_hand[base + k - 0] = (x, y, 0) if k else open_hand[base]
+        open_hand[base] = (x, 60, 0)
+        open_hand[base + 1], open_hand[base + 2], open_hand[base + 3] = (x, 45, 0), (x, 32, 0), (x, 20, 0)
+    open_hand[1], open_hand[2], open_hand[3], open_hand[4] = (35, 90, 0), (25, 80, 0), (15, 70, 0), (5, 62, 0)      # the thumb out to the side
+    assert extended_fingers(open_hand) == [True] * 5
+    fist = open_hand.copy()
+    for tip, joint in ((8, 6), (12, 10), (16, 14), (20, 18)):
+        fist[tip] = fist[joint] + (0, 30, 0)                         # the tip folded back down past the middle joint
+    assert extended_fingers(fist)[1:] == [False] * 4
+    assert anchors().shape == (2016, 2) and abs(anchors()[0][0] - 0.0208333) < 1e-6
+    kp = [(0.0, 0.0, 0.0)] * 17
+    kp[5], kp[7], kp[9] = (300.0, 300.0, 0.9), (300.0, 230.0, 0.9), (300.0, 150.0, 0.9)      # the left arm straight up: wrist above the shoulder
+    x1, y1, x2, y2, wr = wrist_crop(kp, (480, 640, 3))
+    assert wr == (300.0, 150.0) and x1 < 300 < x2 and y2 < 150 + 90 and y1 < 150          # the square sits on and beyond the wrist, up the forearm
+    assert wrist_crop([(0.0, 0.0, 0.0)] * 17, (480, 640, 3)) is None
+
+
+def test_the_vlm_reply_is_parsed_voted_and_turned_into_a_sentence_without_inventing():
+    from pose_extension.vlm import combine, parse, sentence
+    reply = '```json\n{"top_colour": "Black", "top_type": "t-shirt", "bottom_colour": null, "hair_colour": "black", "hair_style": "short", "glasses": "yes", "gender": "male", "age_estimate": "25-30"}\n```'
+    a = parse(reply)
+    assert a['top'] == 'black' and a['bottom'] == '' and a['glasses'] == 'yes' and a['gender'] == 'man' and a['age'] == 25
+    assert parse('I cannot tell.') == {} and parse('{broken') == {} and parse('{"gender": "robot", "age_estimate": 400}')['gender'] == ''
+    assert sentence(combine([a, dict(a, age=31)])) == 'a man of about 31 wearing a black t-shirt, with short black hair and glasses'
+    assert combine([a, dict(a, gender='woman')])['gender'] == ''                         # the looks disagree: no gender
+    assert sentence(combine([parse('{"gender": null, "top_colour": null}')])) == '' and combine([]) == {}
