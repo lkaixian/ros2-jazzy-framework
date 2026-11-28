@@ -28,6 +28,8 @@ class TtsNode(Node):
         self.engine = self.get_parameter('engine').value
         if self.engine not in ('espeak', 'piper', 'kokoro', 'mock'):
             raise ValueError(f'unknown engine {self.engine!r}')
+        self.kokoro = (backends.Kokoro(self.get_parameter('kokoro_model').value, self.get_parameter('kokoro_voices').value)
+                       if self.engine == 'kokoro' else None)      # loaded now: a missing model stops the node here, not at the first sentence
         self.q = queue.Queue(maxsize=self.get_parameter('max_queue').value)
         self.proc = None
         self.lock = threading.Lock()
@@ -83,6 +85,19 @@ class TtsNode(Node):
             return subprocess.Popen(backends.espeak_cmd(text, voice or p('voice').value,
                                                         p('rate').value),
                                     stderr=subprocess.PIPE)
+        if self.engine == 'kokoro':      # synthesised in-process, played by aplay; a thread feeds the pipe so tts/stop can still terminate aplay at once
+            pcm, rate = self.kokoro.synth(text, voice or p('voice').value, p('kokoro_speed').value, p('kokoro_lang').value)
+            proc = subprocess.Popen(backends.aplay_cmd(rate, p('audio_device').value), stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+            pipe, proc.stdin = proc.stdin, None
+
+            def feed():
+                try:
+                    pipe.write(pcm)
+                    pipe.close()
+                except (BrokenPipeError, ValueError):      # stopped while speaking
+                    pass
+            threading.Thread(target=feed, daemon=True).start()
+            return proc
         cmd = backends.piper_cmd(p('piper_model').value, p('piper_rate').value,
                                  p('audio_device').value)
         proc = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stderr=subprocess.PIPE)

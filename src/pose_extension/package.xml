@@ -13,6 +13,9 @@
   <exec_depend>object_detection_msgr</exec_depend>
   <exec_depend>face_recognition_msgr</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>audio_msgr</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
   <exec_depend>yolo11_common</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
   <exec_depend>python3-numpy</exec_depend>

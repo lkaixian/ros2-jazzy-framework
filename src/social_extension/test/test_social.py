@@ -32,3 +32,10 @@ def test_extract_handler_logic():
 
 def test_render_text_fills_person_and_detail():
     assert render_text('{person} is {detail}', 'alice', 'wearing glasses') == 'alice is wearing glasses'
+
+
+def test_pron_placeholder_says_he_or_she_and_they_like_when_unknown():
+    t = 'Hi, this is {person}. {pron} likes to drink {detail}.'
+    assert render_text(t, 'Alice', 'coke', 'she') == 'Hi, this is Alice. she likes to drink coke.'
+    assert render_text(t, 'Alice', 'coke', '') == 'Hi, this is Alice. they like to drink coke.'
+    assert render_text('{person} and {pron} agree', 'Bob', '', '') == 'Bob and they agree'

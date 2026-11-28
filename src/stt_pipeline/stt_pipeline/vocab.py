@@ -16,9 +16,30 @@ def place_phrases(path=''):
         return []
 
 
-def hint_prompt(phrases):
-    """A Whisper `initial_prompt`: the words it should expect, as a sentence it can continue."""
-    return f'Go to the {", ".join(phrases)}.' if phrases else ''
+def load_vocab(path=''):
+    """{'names': [...], 'drinks': [...], 'strict_names': bool} from the vocab YAML (the framework_bringup one when no path is given); empty if unreadable."""
+    empty = {'names': [], 'drinks': [], 'strict_names': False}
+    try:
+        if not path:
+            from ament_index_python.packages import get_package_share_directory
+            path = os.path.join(get_package_share_directory('framework_bringup'), 'param', 'vocab.yaml')
+        d = yaml.safe_load(open(path)) or {}
+        return {'names': [str(n) for n in d.get('names') or []], 'drinks': [str(n) for n in d.get('drinks') or []],
+                'strict_names': bool(d.get('strict_names', False))}
+    except Exception:  # noqa: BLE001 - hints are optional: no file, no hints
+        return empty
+
+
+def hint_prompt(phrases, names=(), drinks=()):
+    """A Whisper `initial_prompt`: the words it should expect, as sentences it can continue (places, then names and drinks)."""
+    parts = []
+    if phrases:
+        parts.append(f'Go to the {", ".join(phrases)}.')
+    if names:
+        parts.append(f'My name is {", ".join(n.capitalize() for n in names)}.')
+    if drinks:
+        parts.append(f'My favourite drink is {", ".join(drinks)}.')
+    return ' '.join(parts)
 
 
 def snap(text, phrases, cutoff=0.8):

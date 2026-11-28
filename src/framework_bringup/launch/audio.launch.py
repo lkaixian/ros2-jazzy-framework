@@ -4,7 +4,7 @@ from bt_common.launch_utils import (declare_overrides, declare_params_dir, flag,
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 
-ARGS = ('audio_source', 'audio_device', 'audio_file', 'stt_engine', 'stt_model', 'wake_word',
+ARGS = ('audio_source', 'audio_device', 'audio_file', 'stt_engine', 'stt_model', 'wake_word', 'start_phrase', 'start_spec',
         'tts_engine', 'tts_voice', 'piper_model', 'kokoro_model', 'kokoro_voices',
         'playback_device')
 F = 'audio.yaml'
@@ -22,7 +22,7 @@ def _nodes(context):
             n('stt_pipeline', 'stt_node', 'stt_node', F,
               {'stt_engine': 'engine', 'stt_model': 'model'}),
             n('stt_pipeline', 'transcript_to_task_node', 'transcript_to_task_node', F,
-              {'wake_word': 'wake_word'}),
+              {'wake_word': 'wake_word', 'start_phrase': 'start_phrase', 'start_spec': 'start_spec'}),
         ]
     if flag(context, 'enable_tts'):
         out.append(n('tts_pipeline', 'tts_node', 'tts_node', F,

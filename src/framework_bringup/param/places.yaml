@@ -4,9 +4,9 @@
 #   ros2 run tf2_ros tf2_echo map base
 # or use rviz "2D Goal Pose"). Names: letters, digits, underscore, hyphen. yaw in radians.
 places:
-  start: {x: 0.5, y: 0.5, yaw: 0.0}
+  start: {x: 0.56, y: -2.63, yaw: 1.52}
   left_room: {x: 3.0, y: 3.0, yaw: 0.0}
-  door: {x: 5.05, y: 2.9, yaw: 0.0}
+  door: {x: 1.61, y: -0.68, yaw: 0.25}
   right_room: {x: 9.5, y: 5.5, yaw: 1.57}
   far_corner: {x: 9.5, y: 0.5, yaw: 3.14}
 
@@ -16,7 +16,7 @@ places:
   bedroom: {x: 2.0, y: 6.5, yaw: 0.0}
   kitchen: {x: 8.5, y: 6.5, yaw: 3.14}
   office: {x: 2.0, y: 1.5, yaw: 0.0}
-  living_room: {x: 8.5, y: 1.5, yaw: 3.14}
+  living_room: {x: -0.54, y: -1.04, yaw: 3.07}
 # Locations ("(p)" = objects are placed there; the category it holds in brackets)
   bed: {x: 1.5, y: 7.0, yaw: 1.57}
   shelves: {x: 7.5, y: 7.2, yaw: 1.57}                # (p) food

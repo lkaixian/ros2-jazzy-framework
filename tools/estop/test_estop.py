@@ -36,3 +36,9 @@ def test_silence_and_garbage_are_a_stop():
     assert out[9][1]                                   # no data for > 0.5 s
     out = run([(k / 10, 'xyz') for k in range(50)])
     assert all(o[1] for o in out)                      # garbage never releases
+
+
+def test_a_restarted_mux_that_is_latched_for_the_estop_asks_for_a_fresh_reset():
+    from estop_node import mux_wants_reset
+    assert mux_wants_reset('latched: e-stop: no signal from the button reader') and mux_wants_reset('latched: e-stop pressed')
+    assert not mux_wants_reset('armed') and not mux_wants_reset('latched: bumper pressed')

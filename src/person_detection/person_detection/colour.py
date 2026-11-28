@@ -16,6 +16,14 @@ def torso_box(box, kx=None, ky=None, kc=None, min_conf=0.5):
     return x1 + 0.25 * w, y1 + 0.25 * h, x2 - 0.25 * w, y1 + 0.6 * h
 
 
+def legs_box(box, kx, ky, kc, min_conf=0.5):
+    """(x1, y1, x2, y2) of the legs (hips down to the lowest confident knee or ankle), or None when they are not in view."""
+    if kx is None or len(kx) < 17 or len(kc) < 17:
+        return None
+    from person_detection.parts import part_boxes
+    return part_boxes(box, kx, ky, kc, conf=min_conf).get('legs')
+
+
 def colour_name(h, s, v):
     """OpenCV HSV (h 0-179, s/v 0-255) -> a plain colour word."""
     if v < 50:
@@ -30,9 +38,9 @@ def colour_name(h, s, v):
     return 'red'
 
 
-def clothes_colour(frame, box, kx=None, ky=None, kc=None):
-    """The colour word of the torso region, '' if the region is too small to judge."""
-    x1, y1, x2, y2 = torso_box(box, kx, ky, kc)
+def clothes_colour(frame, box, kx=None, ky=None, kc=None, region=None):
+    """The colour word of the torso region (or of `region`, e.g. legs_box), '' if the region is too small to judge."""
+    x1, y1, x2, y2 = region or torso_box(box, kx, ky, kc)
     ih, iw = frame.shape[:2]
     x1, x2 = int(max(0, x1)), int(min(iw, x2))
     y1, y2 = int(max(0, y1)), int(min(ih, y2))

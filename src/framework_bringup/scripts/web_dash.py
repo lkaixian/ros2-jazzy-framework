@@ -95,7 +95,8 @@ class Live:
         node.create_subscription(String, 'bt/task', lambda m: self.tasks.append([time.strftime('%H:%M:%S'), m.data]), 10)
         node.create_subscription(String, 'llm/error', lambda m: self.errors.append([time.strftime('%H:%M:%S'), m.data]), 10)
         node.create_subscription(String, 'bt/status', lambda m: setattr(self, 'status', m.data), 10)
-        node.create_subscription(String, 'safety/stop_state', lambda m: setattr(self, 'stop_state', m.data), 10)
+        node.create_subscription(String, 'safety/stop_state', lambda m: setattr(self, 'stop_state', m.data), QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         node.create_subscription(String, 'robot/mode', lambda m: setattr(self, 'mode', m.data), 10)
         node.create_subscription(JointState, '/joint_states', self._joints, 10)
         node.create_subscription(String, 'arm/health', self._health, QoSProfile(

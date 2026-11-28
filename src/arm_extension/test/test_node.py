@@ -6,8 +6,9 @@ def test_node_module_imports_and_declares_every_catalog_node():
     import yaml
     from pathlib import Path
 
+    from ament_index_python.packages import get_package_share_directory
     import arm_extension.arm_extension_node as m
-    cfg = yaml.safe_load((Path(m.__file__).parents[1] / 'config' / 'arm_extension.yaml').read_text())
+    cfg = yaml.safe_load((Path(get_package_share_directory('arm_extension')) / 'config' / 'arm_extension.yaml').read_text())
     src = Path(m.__file__).read_text()
     assert all(f"'{n}'" in src for n in cfg['nodes'])
 

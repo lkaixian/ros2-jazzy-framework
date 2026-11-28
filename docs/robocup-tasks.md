@@ -25,6 +25,36 @@ Each is `framework.launch.py` with that task's switches (printed at start-up, `b
 wins (`enable_arm:=true`, `enable_navigation:=false`); `dry_run` stays true until you pass `dry_run:=false`. **The GAPS of each task are in the docstring at
 the top of its launch file** (and the score-sheet tables below for the two scored on the 2027 sheet). Arm launches need the arm driver first (`tools/arm/arm_up.sh`).
 
+## RoboCup@Home Education: three launch files, started by a spoken signal (2026-11-28)
+Tasks: Carry My Luggage, Find My Mates, Receptionist (rules: the Education PDF + sections 5.1 / 5.4 / 5.6 of the 2022 rulebook; the full analysis and the open work are in `notes/EDU_PLAN.md`).
+
+| Launch file | Macro it runs | Notes |
+|---|---|---|
+| `edu_luggage` | `luggage_round` | optional bag handover (arm), `follow_until_told`, bag given back on "thank you", bonus `return_home`; no faces |
+| `edu_mates` | `mates_round` (`mates_visit` x3, `mates_report`) | checkpoints `cp1..cp3` are places in `places.yaml`; asks name and age, remembers the look, reports at `start` |
+| `edu_reception` | `hric_round` | waits at the door for a person within 2.5 m (`DetectPerson max_distance`) or the bell |
+
+All three start the robot idle. **Only the spoken phrase "start the task" (or "start task") starts it**: `transcript_to_task_node` publishes the task spec on `bt/task_spec` (no LLM) and, while the
+start phrase is configured, no other speech becomes a task. The same phrase inside 30 s is ignored. `dry_run` stays true until `dry_run:=false`. Another host name or checkpoint: pass
+`start_spec:='{"goal":"edu reception task","steps":[{"macro":"hric_round","args":{"host":"John"}}]}'`; a goal containing take / bring / carry / pick / hand / open would be refused by the no-arm policy.
+Names, drinks and the Whisper hint prompt come from `param/vocab.yaml` (placeholders until the venue's lists are known; `strict_names: true` refuses names that are not on the list). `ExtractAnswer kind=age` reads an age.
+Checked: the macros validate and fit the 340-node limit (`hric_round` ~280, `mates_round` ~215; raised from 160 for the gaze, pointing, describing and follow-check steps: the limit bounds plan size, it is not a safety latch), the start gate through a launched node (ordinary speech and "stop the task" start nothing), `DetectPerson max_distance` in gtest.
+Later the same day: `PointedObject` (which bag), `trail=true` on the follower (`follow_sim_test` passes with and without it, `help_me_carry_sim_test` passes through the macro), `PeopleBook` in `pose_extension`
+(`FindPerson who=<name>`, `DescribeUnique`, `DescribeLocation`), `CheckBehind` (is the guest behind the robot: rear lidar), `FindFreeSeat out_radians` (turn to face the seat), macros `look_at_guest`, `describe_guest`.
+Built after that: looking at the person while they answer (a Parallel of the question and FollowTarget in meet_guest / mates_visit), "Excuse me, may I pass please?" when blocked by another person (FollowTarget), `RetraceTrail` (back along the walked path, no map; in luggage_round before return_home), a vision-language model for descriptions, stable ids on by default. Names and drinks come from `param/vocab.yaml` (Liam ... Isabella, Hot Chocolate ... Root Beer) as hints only: any other word is accepted as a name or a drink.
+Not built: depth obstacles on (needs the camera tilt measured), grasping a bag, joining the queue.
+Not checked: any of it on the robot, a real microphone, or the real STT hearing "start the task" over room noise.
+
+## Main rulebook (robocupmalaysia/at-home-2025 `at-home-robocup-my-2025.pdf`, section 3.1 Carry My Luggage and 3.3 Receptionist; 3.2 is GPSR, a different task)
+Score sheets (rulebook 2024 final, revision 2024-07-09): **Carry My Luggage** (5 min, max 1015): perceive the correct bag (on screen or SAY which) 15, pick it 100, follow to the car 300, four obstacles 50 each, bonus re-enter 100 and queue 300,
+dropping the bag -50, losing the operator -50 / -100 / -150 (asking them to come back) / -200 (touch), at most -250 in all. **Receptionist**: guide the guest to the others 2x15, look in the direction of navigation 2x50, introduce the new guest to
+every other guest AND the host 2x50, offer a free seat 2x100, look at the person talking 2x25, look at the person introduced to 2x50, social performance 50; bonus open the door 2x100, describe guest 1 to guest 2 **4x30 per correct attribute**
+(colour of clothes, colour of hair, gender, age); wrong name or drink -50, not recognising people 2x-200. The seat must be POINTED at.
+Built for it: the robot says which bag it will take with its side ("backpack on my left", `PointedObject out_place`); guests are asked their age and "man or woman" (`ExtractAnswer kind=age|gender`, optional, never a reason to fail) and
+`describe_guest` says colour of top and bottoms, hair, glasses, gender and age; a **couch or bench** is split into places by the people sitting on it (`free_spots`: the free end of a sofa is offered, "free part of the couch on my right", and
+the robot turns to that part, not to the middle of the couch). Seat detection limits: a coat or bag on a seat is not seen, and a person leaning on the back of a sofa may count as sitting on it.
+Not built: the robot FACES the seat while offering it; it does not point with the arm (the arm moves at 0.03 rad/s, a point would take a minute: ask the referees whether facing counts), opening the door, the queue.
+
 ## Help Me Carry and Receptionist: what is built, what is not (2026-11-26)
 Built (nodes tested in simulators with fake persons / scans / transcripts: `tools/integration/follow_test.py`, `phrase_test.py`; macros validated, never run on a robot):
 - `FollowTarget until_cancelled=true` keeps following after arriving; `lock=true` stays with the first person (track id); an obstacle that is not the person makes it turn toward the freer side (`ScanGuard.freer_side`, reactive, no detour planning); a person who vanishes is looked for where they were last seen (drive there, sweep toward the side they left on) and a renamed track id is matched again by clothes colour and position (`pid_extension/follow.py`); speed eases off toward anything ahead. Simulator: `follow_sim_test.py` (operator through a door, a person cutting in, search-off control) and `help_me_carry_sim_test.py` (the whole BT path: spec -> validator -> executor -> FollowTarget -> `return_home`).

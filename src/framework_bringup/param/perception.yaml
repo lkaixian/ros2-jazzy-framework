@@ -33,6 +33,14 @@ person_detection_node:
     publish_image: true
     frame_id: camera
     track: true
+    reid_model: auto        # stable person ids from appearance (OSNet ONNX): auto = models/reid/osnet_ain_x1_0.onnx, "" = off (then ids are the tracker's)
+    reid_sim: 0.64          # same-person score (network + colour); 0.70 split the same person on real crops, 0.64 is from a few minutes of footage: re-measure with tools/reid/compare.py
+    reid_keep_sec: 900.0
+    reid_confirm_frames: 5
+    blur_ratio: 0.6
+    colour_weight: 0.4
+    memory_topic: detections/reid_memory   # a picture of what it remembers ("" = off)
+    dump_dir: ""            # save one crop per second per person for tools/reid/compare.py
 
 face_recognition_node:
   ros__parameters:

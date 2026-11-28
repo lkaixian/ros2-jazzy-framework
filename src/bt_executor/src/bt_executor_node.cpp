@@ -87,6 +87,7 @@ public:
     declare_parameter("tick_hz", 20.0);
     declare_parameter("max_runtime_sec", 300.0);
     declare_parameter("perception_max_age_sec", 1.0);
+    declare_parameter("persons_topic", "persons");   // persons_ranged when DetectPerson max_distance is used: only that topic carries distance_m
     declare_parameter("mode_gate", false);       // refuse to start a run unless a fresh robot/mode says run_ok (fails closed)
     declare_parameter("mode_gate_max_age_sec", 3.0);
     declare_parameter("groot2", false);          // serve the running tree to Groot2 (Monitor tab, port groot2_port)
@@ -112,7 +113,7 @@ public:
         cache_->on_objects(*m, bt_executor::Clock::now());
       });
     per_sub_ = create_subscription<person_detection_msgr::msg::PersonArray>(
-      "persons", rclcpp::SensorDataQoS(),
+      get_parameter("persons_topic").as_string(), rclcpp::SensorDataQoS(),
       [this](person_detection_msgr::msg::PersonArray::ConstSharedPtr m) {
         cache_->on_persons(*m, bt_executor::Clock::now());
       });

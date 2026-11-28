@@ -14,8 +14,14 @@ import time
 import rclpy
 import serial
 from rclpy.node import Node
-from std_msgs.msg import Bool
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
+
+
+def mux_wants_reset(text):
+    """True when the mux says it is stopped for the e-stop ('latched: e-stop: no signal ...' or '... pressed'): the button node must then reset it again once the button reads released."""
+    return text.startswith('latched') and 'e-stop' in text
 
 
 class EstopState:
@@ -50,6 +56,10 @@ class EstopNode(Node):
         self.pub = self.create_publisher(Bool, 'estop', 10)
         self.reset = self.create_client(Trigger, 'safety_reset')
         self.pending = None
+        # the mux latches 'e-stop: no signal' when it starts before this node has spoken, and keeps the latch after we have already reset an earlier one:
+        # hear its (latched) state and ask for a reset again whenever it is stopped for the e-stop and the button reads released
+        self.create_subscription(String, 'safety/stop_state', self._on_mux, QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_timer(0.05, self._tick)
         self.create_timer(0.1, self._publish)
         self.stopped = True
@@ -60,7 +70,11 @@ class EstopNode(Node):
                 return
             self.retry = now + 1.0
             try:
-                self.ser = serial.Serial(self.port, 115200, timeout=0)
+                ser = serial.Serial(None, 115200, timeout=0)
+                ser.dtr = ser.rts = False        # on this board RTS is wired to the ESP32 EN pin: asserted = held in reset = silent = e-stop reads pressed
+                ser.port = self.port
+                ser.open()
+                self.ser = ser
                 self.get_logger().info(f'opened {self.port}')
             except (serial.SerialException, OSError):
                 return
@@ -68,12 +82,20 @@ class EstopNode(Node):
             self.buf += self.ser.read(256)
         except (serial.SerialException, OSError):
             self.get_logger().error('serial lost: e-stop reads as pressed')
+            try:
+                self.ser.close()
+            except Exception:  # noqa: BLE001
+                pass
             self.ser, self.buf = None, b''
             return
         *lines, self.buf = self.buf.split(b'\n')
         self.buf = self.buf[-16:]
         for ln in lines:
             self.state.feed(ln.strip().decode(errors='replace'), now)
+
+    def _on_mux(self, m):
+        if mux_wants_reset(m.data):
+            self.state.need_reset = True
 
     def _tick(self):
         now = time.monotonic()
@@ -103,13 +125,19 @@ def main():
     ap.add_argument('--port', required=True, help='use /dev/serial/by-id/..., not ttyUSB0 (numbers move)')
     args, ros = ap.parse_known_args()
     rclpy.init(args=ros)
-    node = EstopNode(args.port)
     try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
+        while rclpy.ok():           # never stays down: any crash restarts the watcher (the mux stops the robot meanwhile, it hears no signal)
+            node = EstopNode(args.port)
+            try:
+                rclpy.spin(node)
+            except KeyboardInterrupt:
+                break
+            except Exception as e:  # noqa: BLE001
+                print(f'estop_node crashed, restarting: {e!r}', flush=True)
+                time.sleep(0.5)
+            finally:
+                node.destroy_node()
     finally:
-        node.destroy_node()
         rclpy.try_shutdown()
 
 

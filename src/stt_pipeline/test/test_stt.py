@@ -82,3 +82,12 @@ def test_engine_errors_are_loud():
 
 def test_mock_engine():
     assert engines.create('mock').transcribe(tone(500), RATE)[0].startswith('[mock')
+
+
+def test_start_gate_needs_every_word_in_order_and_never_mistakes_stop_for_start():
+    from stt_pipeline.wake import StartGate
+    g = StartGate(['start the task', 'start task'])
+    assert g.heard('Okay robot, start the task now.') and g.heard('Start task') and g.heard('start the tasks')
+    assert not g.heard('stop the task') and not g.heard('start') and not g.heard('the task start') and not g.heard('')
+    assert not g.heard('do not start the other thing')                    # 'the task' is missing
+    assert not StartGate([]).heard('start the task')

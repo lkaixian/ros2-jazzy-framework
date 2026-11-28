@@ -57,4 +57,4 @@ def test_worked_examples_are_valid_plans(text, cat):
     for line in shown:
         steps = json.loads(line.split('->', 1)[1])
         xml = build_xml(json.dumps(expand({'goal': 'example', 'steps': steps}, lib)))
-        assert validate_xml(xml, cat, max_nodes=160) == [], line   # = pipeline.yaml bt_validator_node.max_nodes (hric_round is ~145 nodes)
+        assert validate_xml(xml, cat, max_nodes=340) == [], line   # = pipeline.yaml bt_validator_node.max_nodes (hric_round is ~210 nodes)

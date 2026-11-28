@@ -22,7 +22,7 @@ def preset(name):
 
 
 TASKS = ['robocup', 'gpsr', 'receptionist', 'help_me_carry', 'storing_groceries', 'clean_the_table', 'egpsr', 'restaurant',
-         'give_me_a_hand', 'inspection']
+         'give_me_a_hand', 'inspection', 'edu_luggage', 'edu_mates', 'edu_reception']
 
 
 def test_gpsr_reads_the_plan_aloud_and_has_no_face_or_arm():
@@ -60,3 +60,16 @@ def test_every_switch_is_declared_by_the_framework_launch_files(name):
 @pytest.mark.parametrize('name', TASKS)
 def test_each_launch_file_documents_its_gaps(name):
     assert name == 'robocup' or 'GAPS' in open(os.path.join(LAUNCH, name + '.launch.py')).read()
+
+
+def test_edu_tasks_start_only_on_the_spoken_signal_and_publish_a_valid_spec():
+    import json
+    for n, macro in (('edu_luggage', 'luggage_round'), ('edu_mates', 'mates_round'), ('edu_reception', 'hric_round')):
+        p = preset(n)
+        assert 'start the task' in p['start_phrase'] and p['enable_audio'] == 'true', n
+        spec = json.loads(p['start_spec'])
+        assert spec['steps'] == [{'macro': macro, 'args': {}}], n
+        assert not __import__('re').search(r'\b(take|bring|carry|pick|hand|open)\b', spec['goal']), 'a goal the no-arm policy would refuse'
+    # the luggage and reception plans name arm nodes (inside Fallbacks): the validator refuses a plan whose nodes no running extension advertises, so arm_extension must run (live: false keeps it dry)
+    assert preset('edu_luggage')['enable_arm'] == preset('edu_reception')['enable_arm'] == 'true'
+    assert preset('edu_mates')['enable_face'] == preset('edu_reception')['enable_face'] == 'true' and preset('edu_luggage')['enable_face'] == 'false'

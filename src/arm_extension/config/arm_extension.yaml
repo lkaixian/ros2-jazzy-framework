@@ -1,6 +1,7 @@
 extension: arm_extension
 nodes:
-  ArmPark: {category: Action, required: [], optional: [], description: "Fold the arm to its rest pose slowly along a checked route; refuses outside the taught free-space map"}
+  ArmPark: {category: Action, required: [], optional: [rate], description: "Fold the arm to its rest pose slowly along a checked route; refuses outside the taught free-space map; rate (rad/s of the furthest joint, up to point_rate_max 0.25) replaces the validated 0.03"}
+  ArmPoint: {category: Action, required: [], optional: [radians, who, rate, out_residual], description: "Point the gripper along a direction (radians left of the arm's forward, e.g. FindFreeSeat out_radians) at the nearest pose that is inside the taught joint range and on a checked route: it tries less turn, shorter reach, other heights and finger pitches and never uses a pose the checks refuse; fails (arm stays) when none works; rate defaults to point_rate 0.08 rad/s, raise it step by step on the real arm"}
   MoveArmToPose: {category: Action, required: [x, y, z], optional: [frame, speed, roll, pitch, yaw], description: "Move the gripper to a point in the arm base frame (metres); only pitch can be set, refuses outside the taught range"}
   OpenGripper: {category: Action, required: [], optional: [width], description: "Open the gripper to a finger gap in mm (default 60, max 72)"}
   CloseGripper: {category: Action, required: [], optional: [force], description: "Close the gripper; succeeds only if it stalled on an object"}

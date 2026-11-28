@@ -6,7 +6,7 @@ from audio_msgr.msg import AudioChunk, Transcript
 from rclpy.node import Node
 
 from stt_pipeline import engines
-from stt_pipeline.vocab import hint_prompt, place_phrases
+from stt_pipeline.vocab import hint_prompt, load_vocab, place_phrases
 
 
 class SttNode(Node):
@@ -16,10 +16,11 @@ class SttNode(Node):
         super().__init__('stt_node')
         for k, v in dict(engine='faster_whisper', model='base.en', language='',
                          device='cpu', compute_type='int8', min_confidence=0.0,
-                         hint_places=True).items():
+                         hint_places=True, hint_names=True).items():
             self.declare_parameter(k, v)
         p = lambda k: self.get_parameter(k).value  # noqa: E731
-        prompt = hint_prompt(place_phrases()) if p('hint_places') else ''     # place names bias Whisper towards them
+        v = load_vocab() if p('hint_names') else {'names': [], 'drinks': []}
+        prompt = hint_prompt(place_phrases() if p('hint_places') else [], v['names'], v['drinks'])     # place, name and drink words bias Whisper towards them
         # A missing/broken engine must stop the node, not silently degrade.
         self.engine = engines.create(p('engine'), model=p('model'), language=p('language'),
                                      device=p('device'), compute_type=p('compute_type'),

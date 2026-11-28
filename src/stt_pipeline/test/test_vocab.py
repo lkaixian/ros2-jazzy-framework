@@ -17,3 +17,13 @@ def test_exact_words_and_other_text_stay():
 def test_helpers():
     assert hint_prompt(['door', 'start']) == 'Go to the door, start.' and hint_prompt([]) == ''
     assert place_phrases('/nonexistent.yaml') == []
+
+
+def test_hint_prompt_adds_names_and_drinks_and_load_vocab_reads_the_yaml(tmp_path):
+    from stt_pipeline.vocab import hint_prompt, load_vocab
+    p = hint_prompt(['far corner'], ['jane', 'axel'], ['coke'])
+    assert 'far corner' in p and 'Jane, Axel' in p and 'coke' in p and hint_prompt([]) == ''
+    f = tmp_path / 'v.yaml'
+    f.write_text('names: [jane]\ndrinks: [milk]\nstrict_names: true\n')
+    assert load_vocab(str(f)) == {'names': ['jane'], 'drinks': ['milk'], 'strict_names': True}
+    assert load_vocab(str(tmp_path / 'missing.yaml'))['names'] == []

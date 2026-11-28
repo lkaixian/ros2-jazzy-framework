@@ -15,6 +15,6 @@ nodes:
   AlwaysFailure:        {category: Action, mode: sync}
   Sleep:                {category: Action, required: [msec], description: "Wait msec milliseconds"}
   DetectObject:         {category: Condition, required: [label], optional: [min_conf, out_bbox], description: "True while the camera sees an object with this label (use only the listed labels); out_bbox receives x_min,y_min,x_max,y_max"}
-  DetectPerson:         {category: Condition, optional: [min_conf, out_track_id], description: "True while a person is visible"}
+  DetectPerson:         {category: Condition, optional: [min_conf, max_distance, out_track_id], description: "True while a person is visible; max_distance (metres) = only a person whose depth range is known and at most that far (e.g. a guest standing in front of the robot, not the host across the room)"}
   RecognizeFace:        {category: Condition, optional: [identity, min_similarity], description: "True while a known face (or the named identity) is recognised"}
   ExtractFaceFeature:   {category: Condition, optional: [min_conf, out_identity, out_similarity], description: "True once a face feature was extracted; out_identity receives the recognised name or unknown"}

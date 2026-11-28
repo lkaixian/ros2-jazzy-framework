@@ -121,6 +121,24 @@ TEST(Registry, NothingReceivedMeansFailure)
   EXPECT_EQ(run(tree("<RecognizeFace/>"), cache), BT::NodeStatus::FAILURE);
 }
 
+TEST(Registry, DetectPersonMaxDistanceNeedsAKnownRangeWithinIt)
+{
+  auto cache = std::make_shared<PerceptionCache>();
+  person_detection_msgr::msg::PersonArray a;
+  person_detection_msgr::msg::Person p;
+  p.confidence = 0.9f; p.distance_m = 0.0f;                    // depth unknown
+  a.persons.push_back(p);
+  cache->on_persons(a, Clock::now());
+  EXPECT_EQ(run(tree("<DetectPerson/>"), cache), BT::NodeStatus::SUCCESS);                     // any person
+  EXPECT_EQ(run(tree(R"(<DetectPerson max_distance="2"/>)"), cache), BT::NodeStatus::FAILURE);  // range unknown: not "in front of me"
+  a.persons[0].distance_m = 1.5f;
+  cache->on_persons(a, Clock::now());
+  EXPECT_EQ(run(tree(R"(<DetectPerson max_distance="2"/>)"), cache), BT::NodeStatus::SUCCESS);
+  a.persons[0].distance_m = 4.0f;                                                              // the host across the room
+  cache->on_persons(a, Clock::now());
+  EXPECT_EQ(run(tree(R"(<DetectPerson max_distance="2"/>)"), cache), BT::NodeStatus::FAILURE);
+}
+
 TEST(Registry, RecognizeFaceIdentityAndSimilarity)
 {
   auto cache = std::make_shared<PerceptionCache>();

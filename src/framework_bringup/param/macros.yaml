@@ -32,6 +32,18 @@ whitelist:
   - acknowledge_person
   - meet_guest
   - register_person
+  - greet_or_register
+  - look_at_guest
+  - park_arm
+  - introduce_new_guest
+  - introduce_pair
+  - enroll_host
+  - describe_guest
+  - luggage_round
+  - mates_round
+  - mates_visit
+  - mates_report
+  - describe_features
   - introduce_guest
   - patrol_laps
   - wait_for_doorbell
@@ -325,9 +337,28 @@ macros:
     params: {place: {required: true}}
     example_args: {place: door}
     steps:
-      - {macro: say, args: {text: "Please follow me"}}
+      - {macro: say, args: {text: "Please follow me, I'll take you to the others."}}
+      - group: Fallback          # wait up to 8 s until the lidar sees someone close behind (the guest), then go anyway
+        steps:
+          - group: Fallback
+            retry: 8
+            steps:
+              - {node: CheckBehind}
+              - group: Sequence
+                steps:
+                  - {node: Sleep, ports: {msec: "1000"}}
+                  - {node: AlwaysFailure}
+          - {node: AlwaysSuccess}
       - {macro: go_to_place, args: {place: "${place}"}}
-      - {macro: say, args: {text: "We have arrived"}}
+      - group: Fallback          # arrived: is the guest still behind? if not, call them and wait a few seconds
+        steps:
+          - {node: CheckBehind}
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "Over here, please. Let me wait for you."}}
+              - {node: Sleep, ports: {msec: "4000"}}
+              - {node: AlwaysSuccess}
+      - {macro: say, args: {text: "Here we are."}}
 
   escort_person_to:
     description: "Find a person and guide them to a named place"
@@ -361,14 +392,14 @@ macros:
   ask_and_repeat:
     description: "Ask a question out loud, listen for one answer (10 s) and say it back; fails if nobody answers"
     params: {question: {required: true}}
-    example_args: {question: "What is your name?"}
+    example_args: {question: "Hi! What's your name?"}
     steps:
       - {macro: say, args: {text: "${question}"}}
       - {node: WaitForTranscript, ports: {out_text: "{answer}"}}
       - {node: Speak, ports: {text: "I heard {person}", person: "{answer}"}}
 
   meet_guest:
-    description: "Ask a guest their name and favourite drink, remember both under a slot (guest1, guest2...) and enrol the face; retries each question twice"
+    description: "At the door: ask the guest's name, say it back and welcome them, ask the favourite drink, say it back, and enrol the face; retries each question twice (slot = guest1, guest2 ...)"
     params: {slot: {default: guest1}}
     example_args: {slot: guest1}
     steps:
@@ -377,21 +408,45 @@ macros:
         steps:
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "Hello, what is your name?"}}
-              - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+              - {node: Speak, ports: {text: "Hi there! What's your name?"}}
+              - group: Parallel          # look at the person while they answer: the base turns to them; the answer ends it, and only both ending badly fails it
+                success_count: 1
+                failure_count: 2
+                steps:
+                  - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+                  - group: Sequence          # never succeeds: only the answer ends the Parallel (a dry-run FollowTarget returns at once and must not cut the listening short)
+                    steps:
+                      - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
+                      - {node: AlwaysFailure}
               - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
-          - {node: Speak, ports: {text: "Sorry, please say only your name"}}
-      - {node: Speak, ports: {text: "Nice to meet you {person}", person: "{${slot}_name}"}}
+          - group: Sequence          # the apology must FAIL: a Fallback that succeeds on it never retries the question
+            steps:
+              - {node: Speak, ports: {text: "Sorry, I didn't catch that. Could you tell me your name again?"}}
+              - {node: AlwaysFailure}
+      - {node: Speak, ports: {text: "Nice to meet you, {person}. Welcome!", person: "{${slot}_name}"}}
       - group: Fallback
         retry: 2
         steps:
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "What is your favourite drink?"}}
-              - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+              - {node: Speak, ports: {text: "And what's your favourite drink?"}}
+              - group: Parallel          # look at the person while they answer: the base turns to them; the answer ends it, and only both ending badly fails it
+                success_count: 1
+                failure_count: 2
+                steps:
+                  - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+                  - group: Sequence          # never succeeds: only the answer ends the Parallel (a dry-run FollowTarget returns at once and must not cut the listening short)
+                    steps:
+                      - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
+                      - {node: AlwaysFailure}
               - {node: ExtractAnswer, ports: {kind: drink, text: "{${slot}_heard}", out_value: "{${slot}_drink}"}}
-          - {node: Speak, ports: {text: "Sorry, please say only the drink"}}
+          - group: Sequence          # the apology must FAIL: a Fallback that succeeds on it never retries the question
+            steps:
+              - {node: Speak, ports: {text: "Sorry, could you say your favourite drink again?"}}
+              - {node: AlwaysFailure}
+      - {node: Speak, ports: {text: "Got it, {detail}. Good choice!", detail: "{${slot}_drink}"}}
       - {node: EnrollFace, ports: {person: "{${slot}_name}"}}
+
 
   register_person:
     description: "Ask the person in front of the camera who they are, repeat the name back and ask for a yes before enrolling their face under it, then welcome them (stays where it is; the person must face the camera); up to three tries; fails if no confirmed name or no face"
@@ -419,7 +474,269 @@ macros:
             steps:
               - {node: Sleep, ports: {msec: "1000"}}
               - {node: AlwaysFailure}
-      - {node: Speak, ports: {text: "Hi {person}, welcome!", person: "{reg_name}"}}
+      - {node: Speak, ports: {text: "Nice to meet you, {person}. Welcome!", person: "{reg_name}"}}
+
+  greet_or_register:
+    description: "Find a person, make sure their face is in view (the camera is low: it backs away slowly until the face shows), then: a known face is greeted by name, a new face is asked its name (confirmed with a yes, enrolled, then welcomed by name)"
+    steps:
+      - {macro: find_person}
+      - {macro: look_at_person}
+      - group: Fallback          # a face in view; else back away until one is (fails if none after that)
+        steps:
+          - {node: ExtractFaceFeature}
+          - group: Sequence
+            steps:
+              - {node: BackUpForFace}
+              - {node: Sleep, ports: {msec: "500"}}
+              - {node: ExtractFaceFeature}
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "I cannot see your face"}}
+              - {node: AlwaysFailure}
+      - group: Fallback
+        steps:
+          - group: Sequence       # a face the gallery knows
+            steps:
+              - {node: RecognizeFace}
+              - {node: ExtractFaceFeature, ports: {out_identity: "{greet_name}"}}
+              - {node: Speak, ports: {text: "Hello {person}, good to see you again", person: "{greet_name}"}}
+          - {macro: register_person}
+
+
+  describe_features:
+    description: "Find a person, face them (backing away until the face shows) and say what is visible: the colour of their top and bottoms, then glasses, hair colour, hat, earrings. Colours and face attributes only; each is left out when not certain"
+    steps:
+      - {macro: find_person}
+      - {macro: look_at_person}
+      - group: Fallback          # best effort: a face in view makes the face attributes possible
+        steps:
+          - {node: ExtractFaceFeature}
+          - group: Sequence
+            steps:
+              - {node: BackUpForFace}
+              - {node: Sleep, ports: {msec: "500"}}
+          - {node: AlwaysSuccess}
+      - {node: DescribePerson, ports: {out_text: "{look}"}}
+      - {node: Speak, ports: {text: "I see {person}", person: "{look}"}}
+      - group: Fallback
+        steps:
+          - {node: DescribeAttributes, ports: {out_text: "{face_look}"}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "They are {detail}.", detail: "{face_look}", skip_if_unknown: "true"}}
+
+
+  mates_visit:
+    description: "Find My Mates, one checkpoint: go there, say it is scanning, find a person, walk up to them, ask their name and age, back away until the face shows and remember how they look (glasses, hair, else clothes colours); fails if nobody is there"
+    params: {place: {required: true}, slot: {required: true}}
+    example_args: {place: coffee_table, slot: guest1}
+    steps:
+      - {macro: go_to_place, args: {place: "${place}"}}
+      - {node: Speak, ports: {text: "I'm looking around for people here."}}
+      - group: Fallback          # a person at the checkpoint: ahead, else a quarter turn each side (find_person would use more nodes than this budget allows)
+        steps:
+          - {node: DetectPerson}
+          - group: Sequence
+            steps:
+              - {node: RotateBy, ports: {radians: "1.2"}}
+              - {node: DetectPerson}
+          - group: Sequence
+            steps:
+              - {node: RotateBy, ports: {radians: "-2.4"}}
+              - {node: DetectPerson}
+      - {macro: approach_person, args: {distance: "1.0"}}
+      - {node: Speak, ports: {text: "Hello! Let me have a good look at you."}}
+      - group: Fallback
+        retry: 2
+        steps:
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "Hi! What's your name?"}}
+              - group: Parallel          # look at the person while they answer: the base turns to them; the answer ends it, and only both ending badly fails it
+                success_count: 1
+                failure_count: 2
+                steps:
+                  - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+                  - group: Sequence          # never succeeds: only the answer ends the Parallel (a dry-run FollowTarget returns at once and must not cut the listening short)
+                    steps:
+                      - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
+                      - {node: AlwaysFailure}
+              - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
+          - group: Sequence          # the apology must FAIL: a Fallback that succeeds on it never retries the question
+            steps:
+              - {node: Speak, ports: {text: "Sorry, I didn't catch that. Could you tell me your name again?"}}
+              - {node: AlwaysFailure}
+      - {node: Speak, ports: {text: "Nice to meet you, {person}.", person: "{${slot}_name}"}}
+      - group: Fallback          # the age is a bonus detail: one try, then carry on without it
+        steps:
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "And how old are you, if you don't mind?"}}
+              - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
+              - {node: ExtractAnswer, ports: {kind: age, text: "{${slot}_heard}", out_value: "{${slot}_age}"}}
+          - {node: AlwaysSuccess}
+      - group: Fallback          # the camera is low: a face needs distance; best effort
+        steps:
+          - {node: ExtractFaceFeature}
+          - group: Sequence
+            steps:
+              - {node: BackUpForFace}
+              - {node: Sleep, ports: {msec: "500"}}
+          - {node: AlwaysSuccess}
+      - {macro: note_look, args: {slot: "${slot}"}}
+      - group: Fallback          # man or woman from the face (and the age if the guest did not say it): said in the report
+        steps:
+          - {node: DescribeWithVLM, ports: {out_gender: "{${slot}_gender}", out_text: "{${slot}_vlm}"}}
+          - {node: EstimateGender, ports: {out_value: "{${slot}_gender}"}}
+          - {node: AlwaysSuccess}
+      - group: Fallback          # the stable id of this guest (to describe them later against everyone seen) and where they are
+        steps:
+          - {node: DescribeUnique, ports: {out_track_id: "{${slot}_id}", out_text: "{${slot}_look}"}}
+          - {node: AlwaysSuccess}
+      - group: Fallback
+        steps:
+          - {node: DescribeLocation, ports: {out_text: "{${slot}_where}"}}
+          - {node: AlwaysSuccess}
+      - group: Fallback          # remembering the face lets the Receptionist and later rounds know them; never a reason to fail
+        steps:
+          - {node: EnrollFace, ports: {person: "{${slot}_name}"}}
+          - {node: AlwaysSuccess}
+
+
+  mates_report:
+    description: "Find My Mates: say what was found about one guest (name, where, how they look, age); says nothing about a guest that was not found. slot = the guest slot, where = a place phrase like 'near the coffee table'"
+    params: {slot: {required: true}, where: {required: true}}
+    example_args: {slot: guest1, where: near the coffee table}
+    steps:
+      - group: Fallback          # now that every guest has been seen, pick the features that tell THIS guest apart from the others
+        steps:
+          - {node: DescribeUnique, ports: {track_id: "{${slot}_id}", min_features: "3", out_text: "{${slot}_look}"}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "I found {person} ${where}.", person: "{${slot}_name}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "Guest {person} was {detail}.", person: "{${slot}_name}", detail: "{${slot}_where}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "Just so you know, {person} is {detail}.", person: "{${slot}_name}", detail: "{${slot}_look}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "I'd say {person} is a {detail}.", person: "{${slot}_name}", detail: "{${slot}_gender}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "And {person} is about {detail} years old.", person: "{${slot}_name}", detail: "{${slot}_age}", skip_if_unknown: "true"}}
+
+
+  mates_round:
+    description: "RoboCup Education Find My Mates, started by the spoken start signal (do not use for anything else): visit up to three checkpoints (each: find a person, walk up, ask name and age, remember how they look), then go back to the operator (place start) and report every guest found with where and how they look. A checkpoint without a person is skipped, never retried"
+    params: {cp1: {default: coffee_table}, cp1_words: {default: "near the coffee table"}, cp2: {default: dining_table}, cp2_words: {default: "near the dining table"}, cp3: {default: shelves}, cp3_words: {default: "near the shelves"}}
+    example_args: {cp1: coffee_table, cp1_words: near the coffee table}
+    steps:
+      - {macro: say, args: {text: "Okay, I'm going to look for your friends now."}}
+      - group: Fallback
+        steps:
+          - {macro: mates_visit, args: {place: "${cp1}", slot: guest1}}
+          - {macro: say, args: {text: "There's nobody here."}}
+      - group: Fallback
+        steps:
+          - {macro: mates_visit, args: {place: "${cp2}", slot: guest2}}
+          - {macro: say, args: {text: "There's nobody here."}}
+      - group: Fallback
+        steps:
+          - {macro: mates_visit, args: {place: "${cp3}", slot: guest3}}
+          - {macro: say, args: {text: "There's nobody here."}}
+      - {macro: go_to_place, args: {place: start}}
+      - {macro: say, args: {text: "I'm back. Here's what I found."}}
+      - {macro: mates_report, args: {slot: guest1, where: "${cp1_words}"}}
+      - {macro: mates_report, args: {slot: guest2, where: "${cp2_words}"}}
+      - {macro: mates_report, args: {slot: guest3, where: "${cp3_words}"}}
+      - {macro: say, args: {text: "That's all I have. Thank you!"}}
+
+
+  luggage_round:
+    description: "Carry My Luggage, started by the spoken start signal (do not use for anything else): ask which bag, perceive the one the referee points at and say which, take the bag the operator hands over (skipped when the arm cannot), wait for the command follow me, follow the operator (obstacle avoiding, a lost operator is searched for) until THEY say stop / we are here or hold a hand up while standing still, give the bag back when they thank the robot, then try to drive back to the start place"
+    params: {distance: {default: "1.0"}}
+    example_args: {distance: "1.0"}
+    steps:
+      - {macro: say, args: {text: "Okay, let's get started. Which bag would you like me to carry? Please point at it."}}
+      - group: Fallback          # wait up to 15 s for a pointing arm that lines up with a bag, then carry on either way
+        steps:
+          - group: Fallback
+            retry: 10
+            steps:
+              - {node: PointedObject, ports: {out_place: "{bag_place}"}}
+              - group: Sequence
+                steps:
+                  - {node: Sleep, ports: {msec: "1500"}}
+                  - {node: AlwaysFailure}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Got it, I'll take the {person}. Could you hand me its handle?", person: "{bag_place}", skip_if_unknown: "true"}}
+      - group: Fallback          # skip rule: no arm or no handover -> follow without the bag
+        steps:
+          - group: Sequence
+            steps:
+              - {node: OpenGripper}
+              - {node: Speak, ports: {text: "Please put the handle in my gripper and say ready."}}
+              - {node: WaitForPhrase, ports: {words: "ready,done,take it", timeout_ms: "30000"}}
+              - {node: CloseGripper}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "I'm ready whenever you are. Just say follow me."}}
+      - group: Fallback          # only "follow me" starts the follow; after a minute and a half it starts anyway rather than stand there
+        steps:
+          - {node: WaitForPhrase, ports: {words: "follow me,follow me please,please follow me", timeout_ms: "90000"}}
+          - {node: AlwaysSuccess}
+      - {macro: follow_until_told, args: {distance: "${distance}", words: "stop,we are here,we have arrived,this is the car"}}
+      - group: Fallback          # give the bag back only after the operator has taken hold of it (they say thank you): letting go earlier is a drop
+        steps:
+          - group: Sequence
+            steps:
+              - {node: Speak, ports: {text: "Here's your bag. Please take it."}}
+              - {node: WaitForPhrase, ports: {words: "thank you,thanks,got it,i have it", timeout_ms: "20000"}}
+              - {node: OpenGripper}
+          - {node: AlwaysSuccess}
+      - {macro: say, args: {text: "You're welcome! I'll head back to the arena now."}}
+      - group: Fallback          # bonus: back along the path the operator walked (no map outside the arena), then Nav2 on the arena map to the start
+        steps:
+          - group: Sequence
+            steps:
+              - {node: RetraceTrail, ports: {speed: "0.2"}}
+              - group: Fallback
+                steps:
+                  - {macro: return_home}
+                  - {node: AlwaysSuccess}
+          - {macro: return_home}
+          - {node: AlwaysSuccess}
+
+
+  look_at_guest:
+    description: "Turn the base to look at a remembered guest by name (the person whose recognised face has that name); never fails. slot = the guest slot"
+    params: {slot: {default: guest1}}
+    example_args: {slot: guest1}
+    steps:
+      - group: Fallback
+        steps:
+          - group: Sequence
+            steps:
+              - {node: FindPerson, ports: {who: "{${slot}_name}", out_track_id: "{look_id}"}}
+              - {node: FollowTarget, ports: {track_id: "{look_id}", timeout_ms: "4000"}}
+          - {node: AlwaysSuccess}
+
+
+  describe_guest:
+    description: "Say how a remembered guest looks, to the person in front of the robot, looking at that guest while doing it: at least the colour of the top and bottoms, hair colour, glasses and sitting or standing, using only features nobody else in the room shares (the stored look of the guest when the guest is not in view). slot = the guest slot"
+    params: {slot: {default: guest1}}
+    example_args: {slot: guest1}
+    steps:
+      - group: Fallback
+        steps:
+          - group: Sequence
+            steps:
+              - {node: FindPerson, ports: {who: "{${slot}_name}", out_track_id: "{look_id}"}}
+              - group: Fallback
+                steps:
+                  - {node: FollowTarget, ports: {track_id: "{look_id}", timeout_ms: "4000"}}
+                  - {node: AlwaysSuccess}
+              - {node: DescribeUnique, ports: {track_id: "{look_id}", min_features: "4", out_text: "{${slot}_full}"}}
+              - group: Fallback          # point at the guest being described
+                steps:
+                  - {node: ArmPoint, ports: {who: "{${slot}_name}"}}
+                  - {node: AlwaysSuccess}
+              - {node: Speak, ports: {text: "Just so you know, {person} is {detail}.", person: "{${slot}_name}", detail: "{${slot}_full}", skip_if_unknown: "true"}}
+          - {macro: tell_look, args: {slot: "${slot}"}}
+      - {node: Speak, ports: {text: "I'd say {person} is a {detail}.", person: "{${slot}_name}", detail: "{${slot}_gender}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "And {person} is about {detail} years old.", person: "{${slot}_name}", detail: "{${slot}_age}", skip_if_unknown: "true"}}
+
 
   introduce_guest:
     description: "Say the name and favourite drink remembered for a slot (see meet_guest), e.g. to the host"
@@ -451,20 +768,28 @@ macros:
     steps:
       - group: Fallback
         steps:
-          - {node: FindFreeSeat, ports: {out_place: "{seat_where}"}}
+          - {node: FindFreeSeat, ports: {out_place: "{seat_where}", out_radians: "{seat_rad}"}}
           - group: Sequence
             steps:
               - {node: RotateBy, ports: {radians: "1.57"}}
-              - {node: FindFreeSeat, ports: {out_place: "{seat_where}"}}
+              - {node: FindFreeSeat, ports: {out_place: "{seat_where}", out_radians: "{seat_rad}"}}
           - group: Sequence
             steps:
               - {node: RotateBy, ports: {radians: "1.57"}}
-              - {node: FindFreeSeat, ports: {out_place: "{seat_where}"}}
+              - {node: FindFreeSeat, ports: {out_place: "{seat_where}", out_radians: "{seat_rad}"}}
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "I cannot see a free seat"}}
+              - {node: Speak, ports: {text: "Sorry, I can't see a free seat right now."}}
               - {node: AlwaysFailure}
-      - {node: Speak, ports: {text: "Please sit on the {person}", person: "{seat_where}"}}
+      - group: Fallback          # point at the seat with the arm (the rules say it must be pointed at); the base turns only for what the arm cannot reach, or the whole way without an arm
+        steps:
+          - group: Sequence
+            steps:
+              - {node: ArmPoint, ports: {radians: "{seat_rad}", out_residual: "{seat_res}"}}
+              - {node: RotateBy, ports: {radians: "{seat_res}"}}
+          - {node: RotateBy, ports: {radians: "{seat_rad}"}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Please take a seat. The {person} is free.", person: "{seat_where}"}}
 
   note_look:
     description: "Remember what is visible about the guest in front of the camera (glasses, hair colour, hat, earrings; else the colour of the top) under a slot, to tell it later; silent, and succeeds when nothing is certain"
@@ -497,42 +822,146 @@ macros:
       - {node: Speak, ports: {text: "Their favourite drink is {person}", person: "{${slot}_drink}"}}
 
   receive_guest:
-    description: "Wait for the doorbell, go to the door, welcome the guest, face them, ask their name and favourite drink and remember them (and how they look) under a slot (opening the door is NOT automated: a person must open it)"
+    description: "Go to the door and wait there for a guest to step up to the robot (a person within 2.5 m, up to 3 minutes; the doorbell is not listened for), welcome them, face them (backing away until the face shows), ask name and favourite drink (said back), remember how they look and, from the face, whether they are a man or a woman and about how old; slot = guest1, guest2 ..."
     params: {slot: {default: guest1}}
     example_args: {slot: guest1}
     steps:
-      - {macro: wait_for_doorbell}
       - {macro: go_to_place, args: {place: door}}
-      - {macro: say, args: {text: "Welcome, please come in"}}
+      - group: Fallback          # the door is open by default: the guest steps up to the robot (a person within 2.5 m). The doorbell detector is NOT used here: on the real robot it fired on
+        retry: 180               # voices every 30-70 s (344-533 Hz "tones"), so a person in front is the only trigger; macro wait_for_doorbell still exists for a closed door
+        steps:
+          - {node: DetectPerson, ports: {max_distance: "2.5"}}
+          - group: Sequence
+            steps:
+              - {node: Sleep, ports: {msec: "1000"}}
+              - {node: AlwaysFailure}
+      - {node: Speak, ports: {text: "Hello, welcome! Come on in."}}
       - group: Fallback
         steps:
-          - {macro: look_at_person}
+          - {node: DetectPerson}
+          - {node: AlwaysSuccess}
+      - group: Fallback          # the camera is low: a face needs distance; back away until it shows (best effort)
+        steps:
+          - {node: ExtractFaceFeature}
+          - group: Sequence
+            steps:
+              - {node: BackUpForFace}
+              - {node: Sleep, ports: {msec: "500"}}
           - {node: AlwaysSuccess}
       - {macro: meet_guest, args: {slot: "${slot}"}}
+      - group: Fallback          # he / she / they and the age for the introduction and the description (from a vision-language model, else the face model; says they when unsure)
+        steps:
+          - {node: DescribeWithVLM, ports: {out_gender: "{${slot}_gender}", out_pronoun: "{${slot}_pron}", out_age: "{${slot}_age}"}}
+          - {node: EstimateGender, ports: {out_value: "{${slot}_gender}", out_pronoun: "{${slot}_pron}", out_age: "{${slot}_age}"}}
+          - {node: AlwaysSuccess}
       - {macro: note_look, args: {slot: "${slot}"}}
 
-  hric_round:
-    description: "Use ALONE for the whole receptionist task (it already receives both guests, introduces and seats them; never add receive_guest or offer_seat around it): receive each one at the door, lead them to the living room, introduce them to the host and each other (name, drink, how the first guest looks) and offer a free seat. host = the host's name (default host), living_place = where the host and the seats are"
-    params: {host: {default: host}, living_place: {default: left_room}}
-    example_args: {host: John, living_place: left_room}
+
+  introduce_new_guest:
+    description: "A new guest has been led into the room: turn to the host and say 'Hi <host>, this is <guest>, he/she likes to drink <drink>' (he or she from the face), say hello to everyone else, then tell the guest who the host is and what the host likes to drink. slot = the guest slot; host, host_drink, host_pron (he / she) = the fixed host facts announced before the test"
+    params: {slot: {default: guest1}, host: {default: host}, host_drink: {default: water}, host_pron: {default: he}}
+    example_args: {slot: guest1, host: John, host_drink: milk, host_pron: he}
     steps:
+      - group: Fallback          # look at the host: the face the gallery knows under the host's name, else the nearest person
+        steps:
+          - group: Sequence
+            steps:
+              - {node: FindPerson, ports: {who: "${host}", out_track_id: "{host_id}"}}
+              - {node: FollowTarget, ports: {track_id: "{host_id}", timeout_ms: "4000"}}
+          - group: Sequence
+            steps:
+              - {node: DetectPerson}
+              - {node: FollowTarget, ports: {timeout_ms: "4000"}}
+          - {node: AlwaysSuccess}
+      - group: Fallback          # the arm points at the person being introduced (the guest), the base looks at the one spoken to (the host)
+        steps:
+          - {node: ArmPoint, ports: {who: "{${slot}_name}"}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Hi ${host}, I'd like you to meet {person}. {pron} likes to drink {detail}.", person: "{${slot}_name}", pron: "{${slot}_pron}", detail: "{${slot}_drink}"}}
+      - {node: Speak, ports: {text: "Everyone, this is {person}.", person: "{${slot}_name}"}}
+      - {macro: look_at_guest, args: {slot: "${slot}"}}
+      - group: Fallback          # now the host is the one introduced: point at them (found by their enrolled face, else the nearest person)
+        steps:
+          - {node: ArmPoint, ports: {who: "${host}"}}
+          - {node: ArmPoint, ports: {who: nearest}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "And {person}, this is ${host}. {pron} likes to drink {detail}.", person: "{${slot}_name}", pron: "${host_pron}", detail: "${host_drink}"}}
+
+
+  park_arm:
+    description: "Fold the arm back to its rest pose (before the base drives or the round ends); never fails (no arm = nothing to do). Slow on purpose: 0.08 rad/s"
+    steps:
+      - group: Fallback
+        steps:
+          - {node: ArmPark, ports: {rate: "0.08"}}
+          - {node: AlwaysSuccess}
+
+
+  introduce_pair:
+    description: "Two guests already in the room: introduce each to the other by name, he/she and favourite drink, looking at the one being addressed. a and b = their slots"
+    params: {a: {default: guest1}, b: {default: guest2}}
+    example_args: {a: guest1, b: guest2}
+    steps:
+      - {macro: look_at_guest, args: {slot: "${b}"}}
+      - group: Fallback          # point at the one being introduced
+        steps:
+          - {node: ArmPoint, ports: {who: "{${a}_name}"}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Hi {person}, I'd like you to meet {detail}.", person: "{${b}_name}", detail: "{${a}_name}"}}
+      - {node: Speak, ports: {text: "By the way, {pron} likes to drink {detail}.", pron: "{${a}_pron}", detail: "{${a}_drink}"}}
+      - {macro: look_at_guest, args: {slot: "${a}"}}
+      - group: Fallback
+        steps:
+          - {node: ArmPoint, ports: {who: "{${b}_name}"}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Hi {person}, I'd like you to meet {detail}.", person: "{${a}_name}", detail: "{${b}_name}"}}
+      - {node: Speak, ports: {text: "By the way, {pron} likes to drink {detail}.", pron: "{${b}_pron}", detail: "{${b}_drink}"}}
+
+
+  enroll_host:
+    description: "SETUP, before the test: the host sits in front of the camera and the face is stored under the host's name, so the robot can find and look at the host later (fixed name, fixed face). host = the name announced before the test"
+    params: {host: {required: true}}
+    example_args: {host: John}
+    steps:
+      - {node: Speak, ports: {text: "Host, please look at me so that I can remember your face."}}
+      - group: Fallback
+        retry: 5
+        steps:
+          - {node: EnrollFace, ports: {person: "${host}"}}
+          - group: Sequence
+            steps:
+              - {node: Sleep, ports: {msec: "1000"}}
+              - {node: AlwaysFailure}
+      - {node: Speak, ports: {text: "Thank you ${host}, I will remember you."}}
+
+
+  hric_round:
+    description: "Use ALONE for the whole receptionist task (it already receives both guests, introduces and seats them; never add receive_guest or offer_seat around it): at the door ask the guest's name and drink, say follow me and lead them into the living room, introduce them to the host (fixed name, face and drink) and everyone, introduce the host to them, offer a free seat and say which; the second guest is also introduced to the first and the other way round, and guest 1 is described to guest 2. host, host_drink, host_pron (he / she) = the host announced before the test, living_place = where the host and the seats are"
+    params: {host: {default: host}, host_drink: {default: water}, host_pron: {default: he}, living_place: {default: living_room}}
+    example_args: {host: John, host_drink: milk, host_pron: he, living_place: living_room}
+    steps:
+      - {node: Speak, ports: {text: "Okay, I'm ready. I'll wait here at the door for our first guest."}}
       - {macro: receive_guest, args: {slot: guest1}}
-      - {macro: escort_person_to, args: {place: "${living_place}"}}
-      - {macro: introduce_to, args: {slot: guest1, who: "${host}"}}
+      - {macro: guide_to, args: {place: "${living_place}"}}
+      - {macro: introduce_new_guest, args: {slot: guest1, host: "${host}", host_drink: "${host_drink}", host_pron: "${host_pron}"}}
       - {macro: offer_seat}
+      - {macro: park_arm}
       - {macro: receive_guest, args: {slot: guest2}}
-      - {macro: escort_person_to, args: {place: "${living_place}"}}
-      - {macro: introduce_to, args: {slot: guest2, who: "${host}"}}
-      - {node: Speak, ports: {text: "Hello {person}. This is {detail}.", person: "{guest1_name}", detail: "{guest2_name}"}}
-      - {macro: tell_look, args: {slot: guest1}}
+      - {macro: guide_to, args: {place: "${living_place}"}}
+      - {macro: introduce_new_guest, args: {slot: guest2, host: "${host}", host_drink: "${host_drink}", host_pron: "${host_pron}"}}
+      - {macro: introduce_pair, args: {a: guest1, b: guest2}}
+      - {macro: describe_guest, args: {slot: guest1}}
       - {macro: offer_seat}
+      - {macro: park_arm}
+      - {node: Speak, ports: {text: "That's everyone. Enjoy the party!"}}
+
 
   follow_until_told:
-    description: "Follow a person (obstacle avoiding, locked to the first person seen) and keep following until they say stop / we are here, then stop; a person who disappears is looked for where they were last seen, then if still lost it looks again (3 tries). distance = gap in metres (min 0.5)"
+    description: "Follow a person (obstacle avoiding, along the path they walked, locked to the first person seen) and keep following until THEY tell it to stop (the word stop / we are here, or a raised hand) while they stand still: a stop from anyone else or while they walk is ignored; a person who disappears is looked for where they were last seen, then if still lost it looks again (3 tries). distance = gap in metres (min 0.5)"
     params: {distance: {default: "1.0"}, words: {default: "stop,we are here,we have arrived"}}
     example_args: {distance: "1.0"}
     steps:
-      - {macro: say, args: {text: "I will follow you. Say stop when we have arrived."}}
+      - {macro: say, args: {text: "Okay, I'll follow you. Say stop when we get there."}}
       - group: Sequence
         retry: 3
         steps:
@@ -540,9 +969,10 @@ macros:
           - group: Parallel
             success_count: 1
             steps:
-              - {node: FollowTarget, ports: {approach: "true", distance: "${distance}", until_cancelled: "true", lock: "true", timeout_ms: "900000"}}
-              - {node: WaitForPhrase, ports: {words: "${words}", timeout_ms: "900000"}}
-      - {macro: say, args: {text: "Okay, I stop here."}}
+              - {node: FollowTarget, ports: {approach: "true", distance: "${distance}", until_cancelled: "true", lock: "true", trail: "true", timeout_ms: "900000"}}
+              - {node: WaitForStop, ports: {words: "${words}", timeout_ms: "900000"}}
+      - {macro: say, args: {text: "Okay, I'm stopping here."}}
+
 
   help_me_carry:
     description: "Help Me Carry: follow the operator until they say stop (obstacle avoiding), then drive back to the start place"

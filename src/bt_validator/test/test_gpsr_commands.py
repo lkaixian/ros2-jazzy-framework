@@ -50,7 +50,7 @@ def test_every_gold_plan_meets_its_expectation():
 def test_every_gold_plan_validates_against_the_real_catalog(cat):
     for i in ITEMS:
         xml = build_xml(json.dumps(ex(i['gold'])))
-        assert validate_xml(xml, cat, max_nodes=160) == [], i['command']
+        assert validate_xml(xml, cat, max_nodes=340) == [], i['command']
 
 
 def test_checker_rejects_wrong_plans():

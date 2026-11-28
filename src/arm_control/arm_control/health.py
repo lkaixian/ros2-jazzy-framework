@@ -4,7 +4,8 @@ A Dynamixel reboot clears a hardware-error flag but drops torque on EVERY servo 
 It is therefore allowed only when the arm is parked at its rest pose and still, never for overheating (the flag would come straight back),
 and at most MAX_REBOOTS times per WINDOW_SEC.
 """
-TEMP_WARN, TEMP_MAX, V_MIN = 50, 55, 11.0      # C, C, V: the gripper tool refuses above 50 C, aborts above 55 C and below 10.5 V
+TEMP_WARN, TEMP_MAX, V_MIN = 50, 55, 10.5      # C, C, V: refuse new motion above 50 C, abort above 55 C, refuse below 10.5 V (the gripper tool aborts at the same 10.5 V).
+#                                              # Was 11.0: a 12 V supply sagging to ~11 V under load made the gate refuse; 10.5 V is still above the servos' own 10 V operating minimum
 HW_BITS = {1: 'input voltage', 4: 'overheating', 8: 'encoder', 16: 'electrical shock', 32: 'overload'}
 REBOOTABLE = {16, 32}                          # overheating and voltage come back until the cause is fixed; an encoder fault needs a look
 MAX_REBOOTS, WINDOW_SEC = 2, 600.0
