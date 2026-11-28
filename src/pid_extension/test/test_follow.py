@@ -116,3 +116,52 @@ def test_trail_steers_to_a_crumb_ahead_not_straight_at_the_person_and_drops_crum
     t2.add((1, 0))
     t2.add((1.1, 0))                                                   # too close to the last crumb: not a new one
     assert len(t2.crumbs) == 1 and Trail().target((0, 0)) is None
+
+
+def walk(m, t, speed=1.0):
+    """Feed a person walking along +x at `speed` m/s, seen from the origin facing +x (lateral noise in the bearing)."""
+    x = 2.0 + speed * t
+    p = person(1, 320, x)
+    m.update(p, (0, 0, 0), t, HFOV, W)
+    return x
+
+
+def test_memory_filters_depth_jitter():
+    import random
+    rng, m, e_raw, e_f = random.Random(1), Memory(), [], []
+    for i in range(60):
+        t = i * 0.1
+        true = 2.0 + t
+        m.update(person(1, 320, true + rng.gauss(0, 0.08)), (0, 0, 0), t, HFOV, W)
+        if i > 20:
+            e_f.append(abs(m.pos[0] - true))
+            e_raw.append(0.08)
+    assert sum(e_f) / len(e_f) < 0.8 * sum(e_raw) / len(e_raw)
+
+
+def test_predict_extrapolates_through_a_gap_and_holds_after_two_seconds():
+    m = Memory()
+    assert m.predict(0.0) is None
+    for i in range(30):
+        walk(m, i * 0.1)
+    last = 2.0 + 2.9
+    assert m.predict(2.9 + 1.5)[0] == pytest.approx(last + 1.5, abs=0.25)
+    assert m.predict(2.9 + 10.0)[0] == pytest.approx(last + 2.0, abs=0.3)
+
+
+def test_reid_matches_a_person_who_walked_on_while_hidden_only_with_the_prediction():
+    m = Memory()
+    for i in range(30):
+        walk(m, i * 0.1)
+    back = person(7, 320, 2.0 + 2.9 + 1.4)                              # 1.4 s later, 1.4 m further along (> reid_radius from the last sighting)
+    assert select([back], m, (0, 0, 0), HFOV, W, lock=True) is None      # stale position: too far
+    assert select([back], m, (0, 0, 0), HFOV, W, lock=True, now=2.9 + 1.4).track_id == 7
+
+
+def test_an_outlier_does_not_move_the_position():
+    m = Memory()
+    for i in range(30):
+        walk(m, i * 0.1)
+    before = m.pos
+    m.update(person(1, 320, 8.0), (0, 0, 0), 3.0, HFOV, W)               # 3 m jump in 0.1 s: someone else, or a glitch
+    assert m.pos == before

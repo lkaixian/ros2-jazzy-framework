@@ -7,6 +7,7 @@ seen (drive there, then sweep), not routed to. Upgrade to Nav2 goals at the last
 import math
 
 import numpy as np
+from bt_common.kalman import Kalman2D
 
 
 def wrap(a):
@@ -42,6 +43,7 @@ class Memory:
         self.world_bearing = None  # heading from the robot to them when last seen, rad (always known once seen)
         self.rel_bearing = 0.0     # the same relative to the robot's heading then: which side they left on
         self.seen_t = None
+        self.kf = None             # Kalman2D of the person's odom position, made on the first ranged sighting
         self.emb = None            # unit appearance vector of the followed person (running mean), when the detector gives one
 
     def update(self, person, pose, now, hfov_deg, width):
@@ -57,12 +59,21 @@ class Memory:
             self.emb = m / (np.linalg.norm(m) + 1e-9)
         self.rel_bearing, self.world_bearing, self.seen_t = b, wrap(pose[2] + b), now
         if person.distance_m > 0:
-            self.pos = (pose[0] + person.distance_m * math.cos(self.world_bearing),
-                        pose[1] + person.distance_m * math.sin(self.world_bearing))
+            raw = (pose[0] + person.distance_m * math.cos(self.world_bearing), pose[1] + person.distance_m * math.sin(self.world_bearing))
+            sigma = 0.03 + 0.03 * person.distance_m                  # depth noise grows with range
+            if self.kf is None:
+                self.kf = Kalman2D(raw, now)
+            elif not self.kf.update(raw, now, sigma):
+                return ex, b                                         # an outlier leaves pos where it was
+            self.pos = self.kf.position()
         return ex, b
 
+    def predict(self, now):
+        """(x, y) where the person is now: extrapolated at most 2 s past the last accepted sighting, then held. None without a filter."""
+        return None if self.kf is None else self.kf.position(now)
 
-def select(persons, mem, pose, hfov_deg, width, tid=None, lock=False, reid_radius=1.2, reid_bearing=0.5, reid_sim=0.7, model=None):
+
+def select(persons, mem, pose, hfov_deg, width, tid=None, lock=False, reid_radius=1.2, reid_bearing=0.5, reid_sim=0.7, model=None, now=None):
     """The person to follow, or None.
 
     tid given or locked (mem.track_id): that track id. If it is absent (the tracker gave the same person a new id after an
@@ -78,6 +89,7 @@ def select(persons, mem, pose, hfov_deg, width, tid=None, lock=False, reid_radiu
         if q.track_id == want:
             return q
     best, best_d = None, None
+    ref = (mem.predict(now) if now is not None else None) or mem.pos      # where they should be by now, not where they were
     if model is not None:
         model.begin()
     for q in persons:
@@ -97,8 +109,8 @@ def select(persons, mem, pose, hfov_deg, width, tid=None, lock=False, reid_radiu
             continue
         ex = ((q.x_min + q.x_max) / 2.0 - width / 2.0) / (width / 2.0)
         wb = wrap(pose[2] + bearing_from_image(ex, hfov_deg))
-        if mem.pos is not None and q.distance_m > 0:
-            d = math.hypot(pose[0] + q.distance_m * math.cos(wb) - mem.pos[0], pose[1] + q.distance_m * math.sin(wb) - mem.pos[1])
+        if ref is not None and q.distance_m > 0:
+            d = math.hypot(pose[0] + q.distance_m * math.cos(wb) - ref[0], pose[1] + q.distance_m * math.sin(wb) - ref[1])
             ok = d <= reid_radius
         elif mem.world_bearing is not None:
             d = abs(wrap(wb - mem.world_bearing))

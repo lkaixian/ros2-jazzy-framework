@@ -121,7 +121,7 @@ class PidExtension(ExtensionExecutor):
         if m is None or time.monotonic() - self.persons_t > self.get_parameter('stale_sec').value:
             return None, None
         return select(m.persons, mem, self._pose() or (0.0, 0.0, 0.0), self.get_parameter('hfov_deg').value, max(1, m.image_width),
-                      track_id, lock, self.get_parameter('reid_radius').value, reid_sim=self.get_parameter('reid_sim').value, model=model), m
+                      track_id, lock, self.get_parameter('reid_radius').value, reid_sim=self.get_parameter('reid_sim').value, model=model, now=time.monotonic()), m
 
     def _check_behind(self, ports, ctl):
         """Is something at least min_distance and at most max_distance (m) behind the robot? The lidar faces backwards on this robot, so a guest
@@ -225,6 +225,8 @@ class PidExtension(ExtensionExecutor):
                             return False, 'target lost'
                         self._cmd(0.0, 0.0)
                     else:
+                        if now - mem.seen_t < 2.0 and mem.kf is not None:
+                            mem.pos = mem.predict(now)           # drive toward where they are by now, not where they were last seen
                         v, w, phase = lost.step(mem, pose, now, can_drive=self.guard.blocked(1.0) is None,
                                                 can_turn=self.guard.too_close(par('turn_clearance').value) is None)
                         if phase == 'fail':
