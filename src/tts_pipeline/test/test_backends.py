@@ -56,3 +56,22 @@ def test_piper_launch_can_be_communicated_with(monkeypatch):
         node.destroy_node()
     finally:
         rclpy.shutdown()
+
+
+def test_the_kokoro_engine_speaks_through_aplay_and_never_falls_into_the_piper_branch(monkeypatch):
+    """Regression: engine kokoro used to reach piper_cmd and fail with 'piper_model parameter is empty' on every sentence."""
+    import io
+    import subprocess
+    from types import SimpleNamespace as N
+    from tts_pipeline.tts_node import TtsNode
+    params = {'voice': 'af_heart', 'kokoro_speed': 1.0, 'kokoro_lang': 'en-us', 'audio_device': '', 'piper_model': ''}
+    popen = []
+
+    class FakeProc:
+        def __init__(self, cmd, **kw):
+            popen.append(cmd)
+            self.stdin = io.BytesIO()
+    monkeypatch.setattr(subprocess, 'Popen', FakeProc)
+    node = N(engine='kokoro', kokoro=N(synth=lambda text, voice, speed, lang: (b'\x00\x01' * 10, 24000)), get_parameter=lambda k: N(value=params[k]))
+    proc = TtsNode._launch(node, 'Hello', '')
+    assert popen and popen[0][0] == 'aplay' and '24000' in popen[0] and proc.stdin is None
