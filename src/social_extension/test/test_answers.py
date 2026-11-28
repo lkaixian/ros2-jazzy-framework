@@ -88,3 +88,12 @@ def test_the_default_vocabulary_has_the_listed_names_and_drinks_and_keeps_any_ot
     v = load_vocab(os.path.join(os.path.dirname(__file__), '..', '..', 'framework_bringup', 'param', 'vocab.yaml'))
     assert 'liam' in v['names'] and 'isabella' in v['names'] and len(v['names']) == 15 and 'root beer' in v['drinks'] and len(v['drinks']) == 10
     assert v['snap_names'] is False and v['strict_names'] is False
+
+
+def test_the_drink_is_the_drink_not_the_verb_phrase_round_it():
+    from social_extension.answers import extract_drink
+    assert extract_drink('I like to drink milk.') == 'milk' and extract_drink('I would like to have a cup of tea please') == 'cup of tea'
+    assert extract_drink('my favourite drink is root beer') == 'root beer'
+    drinks = ['milk', 'root beer', 'tea', 'sparkling water', 'water']
+    assert extract_drink('I like to drink milk.', drinks) == 'milk' and extract_drink('um sparkling water please', drinks) == 'sparkling water'
+    assert extract_drink('I really love kombucha', drinks) == 'really love kombucha' or extract_drink('I really love kombucha', drinks) == 'kombucha'

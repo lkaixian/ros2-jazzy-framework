@@ -418,7 +418,10 @@ macros:
                       - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
                       - {node: AlwaysFailure}
               - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
-          - {node: Speak, ports: {text: "Sorry, please say only your name"}}
+          - group: Sequence          # the apology must FAIL: a Fallback that succeeds on it never retries the question
+            steps:
+              - {node: Speak, ports: {text: "Sorry, please say only your name"}}
+              - {node: AlwaysFailure}
       - {node: Speak, ports: {text: "Hi {person}, welcome!", person: "{${slot}_name}"}}
       - group: Fallback
         retry: 2
@@ -436,7 +439,10 @@ macros:
                       - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
                       - {node: AlwaysFailure}
               - {node: ExtractAnswer, ports: {kind: drink, text: "{${slot}_heard}", out_value: "{${slot}_drink}"}}
-          - {node: Speak, ports: {text: "Sorry, please say only the drink"}}
+          - group: Sequence          # the apology must FAIL: a Fallback that succeeds on it never retries the question
+            steps:
+              - {node: Speak, ports: {text: "Sorry, please say only the drink"}}
+              - {node: AlwaysFailure}
       - {node: Speak, ports: {text: "Your favourite drink is {detail}.", detail: "{${slot}_drink}"}}
       - {node: EnrollFace, ports: {person: "{${slot}_name}"}}
 
@@ -554,7 +560,10 @@ macros:
                       - {node: FollowTarget, ports: {until_cancelled: "true", search: "false", timeout_ms: "12000"}}
                       - {node: AlwaysFailure}
               - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
-          - {node: Speak, ports: {text: "Sorry, please say only your name"}}
+          - group: Sequence          # the apology must FAIL: a Fallback that succeeds on it never retries the question
+            steps:
+              - {node: Speak, ports: {text: "Sorry, please say only your name"}}
+              - {node: AlwaysFailure}
       - {node: Speak, ports: {text: "Nice to meet you {person}", person: "{${slot}_name}"}}
       - group: Fallback          # the age is a bonus detail: one try, then carry on without it
         steps:

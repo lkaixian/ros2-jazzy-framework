@@ -5,7 +5,7 @@ _NAME = [r"\b(?:my name is|my name's|name is)\s+([a-z][a-z'-]*)", r"\bcall me\s+
          r"\bi am\s+([a-z][a-z'-]*)", r"\bi'?m\s+([a-z][a-z'-]*)", r"\bit(?:'?s| is)\s+([a-z][a-z'-]*)",
          r"\bthis is\s+([a-z][a-z'-]*)"]
 _DRINK = [r"\b(?:my )?favou?rite drink is\s+(.+)", r"\bi (?:would|'d) like\s+(.+)",
-          r"\bi (?:like|love|prefer|drink)\s+(.+)", r"\bi want\s+(.+)", r"\bbring me\s+(.+)"]
+          r"\bi (?:really |just |usually |always |also |would )?(?:like|love|prefer|drink)\s+(.+)", r"\bi want\s+(.+)", r"\bbring me\s+(.+)"]
 _FILLER = {'a', 'an', 'the', 'some', 'um', 'uh', 'please', 'hello', 'hi', 'hey', 'well', 'just', 'so', 'there',
            'you', 'thanks', 'thank', 'okay', 'ok', 'yes', 'yeah', 'sure'}
 
@@ -71,6 +71,10 @@ def extract_name(text, names=(), strict=False, snap=True):
 def extract_drink(text, drinks=(), snap=True):
     """'I like orange juice please.' -> 'orange juice'; '' if no drink phrase; a short bare phrase counts as the drink.
     With a `drinks` list a near miss is snapped to it ('orange juse' -> 'orange juice'); a phrase that is not on it is kept as heard."""
+    t = ' '.join(_clean(text).split())
+    for x in sorted((x.lower() for x in drinks), key=len, reverse=True):      # a listed drink named anywhere in the sentence wins ('i like to drink milk' -> milk)
+        if re.search(rf'\b{re.escape(x)}\b', t):
+            return x
     d = _extract_drink(text)
     return (snap_word(d, [x.lower() for x in drinks]) or d) if d and drinks and snap else d
 
@@ -81,13 +85,14 @@ def _extract_drink(text):
         m = re.search(pat, t)
         if m:
             words = [w for w in m.group(1).split() if w not in ('please', 'thanks', 'thank', 'you')]
-            while words and words[0] in _FILLER:
+            while words and (words[0] in _FILLER or words[0] in _LEAD):
                 words.pop(0)
             return ' '.join(words[:4])
     words = [w for w in t.split() if w not in _FILLER]
     return ' '.join(words) if 0 < len(words) <= 3 else ''
 
 
+_LEAD = {'to', 'drink', 'drinking', 'have', 'having', 'be', 'get', 'order', 'take'}     # 'i like to drink milk' -> milk, not 'to drink milk'
 _YES = {'yes', 'yeah', 'yep', 'yup', 'yea', 'sure', 'correct', 'right', 'ok', 'okay', 'affirmative', 'definitely'}
 _NO = {'no', 'nope', 'nah', 'wrong', 'incorrect', 'not', "don't", 'negative'}
 
