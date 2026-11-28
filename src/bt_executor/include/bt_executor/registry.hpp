@@ -32,8 +32,9 @@ public:
   /// bbox_out: "x_min,y_min,x_max,y_max"
   bool object(const std::string & label, double min_conf, double max_age_sec,
     Clock::time_point now, std::string * bbox_out) const;
+  /// max_distance_m > 0: only a person with a depth range (distance_m > 0) at most that far counts; 0 = any person.
   bool person(double min_conf, double max_age_sec, Clock::time_point now,
-    int * track_out) const;
+    int * track_out, double max_distance_m = 0.0) const;
   bool face(const std::string & identity, double min_similarity, double max_age_sec,
     Clock::time_point now) const;
   /// Largest face that has an embedding (a feature was extracted). Outputs may be null.

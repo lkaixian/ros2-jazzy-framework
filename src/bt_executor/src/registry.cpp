@@ -69,12 +69,14 @@ bool PerceptionCache::object(
 }
 
 bool PerceptionCache::person(
-  double min_conf, double max_age_sec, Clock::time_point now, int * track_out) const
+  double min_conf, double max_age_sec, Clock::time_point now, int * track_out, double max_distance_m) const
 {
   std::lock_guard<std::mutex> lk(mu_);
   if (!has_per_ || age(now, t_per_) > max_age_sec) {return false;}
   for (const auto & p : persons_.persons) {
-    if (p.confidence >= min_conf) {
+    if (p.confidence >= min_conf &&
+      (max_distance_m <= 0.0 || (p.distance_m > 0.0f && p.distance_m <= max_distance_m)))
+    {
       if (track_out) {*track_out = p.track_id;}
       return true;
     }
@@ -143,13 +145,15 @@ void register_perception(
   f.registerSimpleCondition(
     "DetectPerson", [cache, max_age](BT::TreeNode & n) {
       int tid = -1;
-      if (!cache->person(to_double(n, "min_conf", 0.5), max_age, Clock::now(), &tid)) {
+      if (!cache->person(to_double(n, "min_conf", 0.5), max_age, Clock::now(), &tid,
+        to_double(n, "max_distance", 0.0))) {
         return BT::NodeStatus::FAILURE;
       }
       if (port_in_xml(n, "out_track_id")) {n.setOutput("out_track_id", std::to_string(tid));}
       return BT::NodeStatus::SUCCESS;
     },
-    {BT::InputPort<std::string>("min_conf"), BT::OutputPort<std::string>("out_track_id")});
+    {BT::InputPort<std::string>("min_conf"), BT::InputPort<std::string>("max_distance"),
+      BT::OutputPort<std::string>("out_track_id")});
 
   f.registerSimpleCondition(
     "RecognizeFace", [cache, max_age](BT::TreeNode & n) {
