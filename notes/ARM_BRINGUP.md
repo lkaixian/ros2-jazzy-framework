@@ -76,3 +76,20 @@ Validate on the arm, in this order (each needs you at the arm, hand ready):
 3. `PickObject` with `live:=false` on a real detection (plans, checks, moves nothing): are the target point and the two poses sensible?
 4. Gripper on a real object, then `live:=true` with one slow pick.
 Known gaps: the OAK-D-Lite cannot measure depth much closer than ~20 cm, so the detection pose must stand far enough from the object (the pre-grasp stand-off is measured from the detection, not the camera); the arm stays at the pre-grasp pose while the base drives (no carry pose measured); `places` is empty (PlaceObject refuses until you add `name:x,y,z`); `object_width_mm` empty; workspace limits and `grasp_depth_offset_m` are estimates; servo reboot (`auto_reboot`) never tried on hardware and drops torque on ALL servos, so it is off by default and gated on the rest pose; the SLM needs retraining (catalog gained 6 nodes).
+
+## Hardware run sheet (planned for 2026-11-27; supersedes the shorter list above)
+Hand near the 12 V supply, arm parked at rest, nothing in the gripper. Dry run first; motion tools need `--go` plus a typed `go`. Source `env.sh`; set `CYCLONEDDS_URI=file://$PWD/tools/net/cyclonedds_local.xml` if the shell has a stale one.
+
+A. ROS driver STOPPED (these read the servos directly, arm moved by hand where noted)
+1. Touch test: `touch_test.py --make-marker`, print `~/arm_marker_4x4_id0.png` ~50 mm on stiff paper; `tools/arm/arm_eye.sh`; `touch_test.py`: `t` pinch the marker centre between the closed pads, `v` view it from 40-60 cm, 4+ poses, `s` save. Small error -> `verified: true` in `arm_hand_eye.yaml`.
+2. `gripper_tool.py status`: Goal Current must be well under 250 (a power cycle resets it to 1193 = max). Dry-run `close`; with a 30-50 mm soft object `close --go`: stall, width, peak current.
+3. `load_test.py` (dry) then `--go --k 2 --hold 4`: support under the gripper, OAK + cable mounted, arm at rest.
+
+B. ROS driver RUNNING
+4. `tools/arm/arm_up.sh` (parks on Ctrl+C), `tools/arm/arm_eye.sh`.
+5. Names exist? `/arm_controller/{follow_joint_trajectory,controller_state}`, `/gripper_controller/gripper_cmd`, `/dynamixel_hardware_interface/{dxl_state,get_dxl_data,reboot_dxl}`. A different name = change the matching param. Does the gripper controller honour `max_effort`?
+6. `ros2 run arm_extension arm_health_node`; `ros2 topic echo arm/health` -> `ok: true`.
+7. Dry pick: `arm_extension_node` with `live:=false`, arm at a detection pose >= 25-30 cm from a real object, `PickObject` goal on `arm_extension/execute` -> "DRY: <label> at [x,y,z] ... 3 legs checked". Check the point with a ruler. Nothing moves.
+8. Live pick only if 2, 5, 7 are good: `live:=true`, `bt_executor dry_run:=false`, one slow pick, hand ready; Ctrl+C / cancel must hold the arm.
+
+To supply: `places` (`name:x,y,z`, arm base frame), `object_width_mm`, check `workspace_min/max` and `grasp_depth_offset_m`, a safe carry pose. Bring back: the names from 5, the output of 7 and 8, any refusal message (it names the check that fired). Leave `auto_reboot` off; try `arm_health/reboot` only parked with a real servo error.
