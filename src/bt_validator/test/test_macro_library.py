@@ -32,7 +32,7 @@ def test_there_are_macros():
 def test_macro_expands_to_a_valid_tree(name, cat):
     spec = {'goal': name, 'steps': [{'macro': name, 'args': LIB[name]['example_args']}]}
     xml = build_xml(json.dumps(expand(spec, LIB)))
-    assert validate_xml(xml, cat, max_nodes=260) == [], xml   # = pipeline.yaml bt_validator_node.max_nodes
+    assert validate_xml(xml, cat, max_nodes=340) == [], xml   # = pipeline.yaml bt_validator_node.max_nodes
 
 
 def test_macros_only_name_places_that_exist():

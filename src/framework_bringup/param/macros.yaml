@@ -34,6 +34,7 @@ whitelist:
   - register_person
   - greet_or_register
   - look_at_guest
+  - park_arm
   - introduce_new_guest
   - introduce_pair
   - enroll_host
@@ -336,7 +337,7 @@ macros:
     params: {place: {required: true}}
     example_args: {place: door}
     steps:
-      - {macro: say, args: {text: "Please follow me"}}
+      - {macro: say, args: {text: "Please follow me, I'll take you to the others."}}
       - group: Fallback          # wait up to 8 s until the lidar sees someone close behind (the guest), then go anyway
         steps:
           - group: Fallback
@@ -354,10 +355,10 @@ macros:
           - {node: CheckBehind}
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "Please come to me"}}
+              - {node: Speak, ports: {text: "Over here, please. Let me wait for you."}}
               - {node: Sleep, ports: {msec: "4000"}}
               - {node: AlwaysSuccess}
-      - {macro: say, args: {text: "We have arrived"}}
+      - {macro: say, args: {text: "Here we are."}}
 
   escort_person_to:
     description: "Find a person and guide them to a named place"
@@ -391,7 +392,7 @@ macros:
   ask_and_repeat:
     description: "Ask a question out loud, listen for one answer (10 s) and say it back; fails if nobody answers"
     params: {question: {required: true}}
-    example_args: {question: "What is your name?"}
+    example_args: {question: "Hi! What's your name?"}
     steps:
       - {macro: say, args: {text: "${question}"}}
       - {node: WaitForTranscript, ports: {out_text: "{answer}"}}
@@ -407,7 +408,7 @@ macros:
         steps:
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "Hi, may I know what is your name?"}}
+              - {node: Speak, ports: {text: "Hi there! What's your name?"}}
               - group: Parallel          # look at the person while they answer: the base turns to them; the answer ends it, and only both ending badly fails it
                 success_count: 1
                 failure_count: 2
@@ -420,15 +421,15 @@ macros:
               - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
           - group: Sequence          # the apology must FAIL: a Fallback that succeeds on it never retries the question
             steps:
-              - {node: Speak, ports: {text: "Sorry, please say only your name"}}
+              - {node: Speak, ports: {text: "Sorry, I didn't catch that. Could you tell me your name again?"}}
               - {node: AlwaysFailure}
-      - {node: Speak, ports: {text: "Hi {person}, welcome!", person: "{${slot}_name}"}}
+      - {node: Speak, ports: {text: "Nice to meet you, {person}. Welcome!", person: "{${slot}_name}"}}
       - group: Fallback
         retry: 2
         steps:
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "What is your favourite drink?"}}
+              - {node: Speak, ports: {text: "And what's your favourite drink?"}}
               - group: Parallel          # look at the person while they answer: the base turns to them; the answer ends it, and only both ending badly fails it
                 success_count: 1
                 failure_count: 2
@@ -441,9 +442,9 @@ macros:
               - {node: ExtractAnswer, ports: {kind: drink, text: "{${slot}_heard}", out_value: "{${slot}_drink}"}}
           - group: Sequence          # the apology must FAIL: a Fallback that succeeds on it never retries the question
             steps:
-              - {node: Speak, ports: {text: "Sorry, please say only the drink"}}
+              - {node: Speak, ports: {text: "Sorry, could you say your favourite drink again?"}}
               - {node: AlwaysFailure}
-      - {node: Speak, ports: {text: "Your favourite drink is {detail}.", detail: "{${slot}_drink}"}}
+      - {node: Speak, ports: {text: "Got it, {detail}. Good choice!", detail: "{${slot}_drink}"}}
       - {node: EnrollFace, ports: {person: "{${slot}_name}"}}
 
 
@@ -473,7 +474,7 @@ macros:
             steps:
               - {node: Sleep, ports: {msec: "1000"}}
               - {node: AlwaysFailure}
-      - {node: Speak, ports: {text: "Hi {person}, welcome!", person: "{reg_name}"}}
+      - {node: Speak, ports: {text: "Nice to meet you, {person}. Welcome!", person: "{reg_name}"}}
 
   greet_or_register:
     description: "Find a person, make sure their face is in view (the camera is low: it backs away slowly until the face shows), then: a known face is greeted by name, a new face is asked its name (confirmed with a yes, enrolled, then welcomed by name)"
@@ -530,7 +531,7 @@ macros:
     example_args: {place: coffee_table, slot: guest1}
     steps:
       - {macro: go_to_place, args: {place: "${place}"}}
-      - {node: Speak, ports: {text: "I am scanning for people here"}}
+      - {node: Speak, ports: {text: "I'm looking around for people here."}}
       - group: Fallback          # a person at the checkpoint: ahead, else a quarter turn each side (find_person would use more nodes than this budget allows)
         steps:
           - {node: DetectPerson}
@@ -543,13 +544,13 @@ macros:
               - {node: RotateBy, ports: {radians: "-2.4"}}
               - {node: DetectPerson}
       - {macro: approach_person, args: {distance: "1.0"}}
-      - {node: Speak, ports: {text: "Hello, I am looking at your features"}}
+      - {node: Speak, ports: {text: "Hello! Let me have a good look at you."}}
       - group: Fallback
         retry: 2
         steps:
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "What is your name?"}}
+              - {node: Speak, ports: {text: "Hi! What's your name?"}}
               - group: Parallel          # look at the person while they answer: the base turns to them; the answer ends it, and only both ending badly fails it
                 success_count: 1
                 failure_count: 2
@@ -562,14 +563,14 @@ macros:
               - {node: ExtractAnswer, ports: {kind: name, text: "{${slot}_heard}", out_value: "{${slot}_name}"}}
           - group: Sequence          # the apology must FAIL: a Fallback that succeeds on it never retries the question
             steps:
-              - {node: Speak, ports: {text: "Sorry, please say only your name"}}
+              - {node: Speak, ports: {text: "Sorry, I didn't catch that. Could you tell me your name again?"}}
               - {node: AlwaysFailure}
-      - {node: Speak, ports: {text: "Nice to meet you {person}", person: "{${slot}_name}"}}
+      - {node: Speak, ports: {text: "Nice to meet you, {person}.", person: "{${slot}_name}"}}
       - group: Fallback          # the age is a bonus detail: one try, then carry on without it
         steps:
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "How old are you?"}}
+              - {node: Speak, ports: {text: "And how old are you, if you don't mind?"}}
               - {node: WaitForTranscript, ports: {out_text: "{${slot}_heard}"}}
               - {node: ExtractAnswer, ports: {kind: age, text: "{${slot}_heard}", out_value: "{${slot}_age}"}}
           - {node: AlwaysSuccess}
@@ -612,9 +613,9 @@ macros:
           - {node: AlwaysSuccess}
       - {node: Speak, ports: {text: "I found {person} ${where}.", person: "{${slot}_name}", skip_if_unknown: "true"}}
       - {node: Speak, ports: {text: "Guest {person} was {detail}.", person: "{${slot}_name}", detail: "{${slot}_where}", skip_if_unknown: "true"}}
-      - {node: Speak, ports: {text: "Guest {person} is {detail}.", person: "{${slot}_name}", detail: "{${slot}_look}", skip_if_unknown: "true"}}
-      - {node: Speak, ports: {text: "Guest {person} is a {detail}.", person: "{${slot}_name}", detail: "{${slot}_gender}", skip_if_unknown: "true"}}
-      - {node: Speak, ports: {text: "Guest {person} is {detail} years old.", person: "{${slot}_name}", detail: "{${slot}_age}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "Just so you know, {person} is {detail}.", person: "{${slot}_name}", detail: "{${slot}_look}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "I'd say {person} is a {detail}.", person: "{${slot}_name}", detail: "{${slot}_gender}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "And {person} is about {detail} years old.", person: "{${slot}_name}", detail: "{${slot}_age}", skip_if_unknown: "true"}}
 
 
   mates_round:
@@ -622,25 +623,25 @@ macros:
     params: {cp1: {default: coffee_table}, cp1_words: {default: "near the coffee table"}, cp2: {default: dining_table}, cp2_words: {default: "near the dining table"}, cp3: {default: shelves}, cp3_words: {default: "near the shelves"}}
     example_args: {cp1: coffee_table, cp1_words: near the coffee table}
     steps:
-      - {macro: say, args: {text: "Starting the task. I am finding your mates now."}}
+      - {macro: say, args: {text: "Okay, I'm going to look for your friends now."}}
       - group: Fallback
         steps:
           - {macro: mates_visit, args: {place: "${cp1}", slot: guest1}}
-          - {macro: say, args: {text: "I found nobody there"}}
+          - {macro: say, args: {text: "There's nobody here."}}
       - group: Fallback
         steps:
           - {macro: mates_visit, args: {place: "${cp2}", slot: guest2}}
-          - {macro: say, args: {text: "I found nobody there"}}
+          - {macro: say, args: {text: "There's nobody here."}}
       - group: Fallback
         steps:
           - {macro: mates_visit, args: {place: "${cp3}", slot: guest3}}
-          - {macro: say, args: {text: "I found nobody there"}}
+          - {macro: say, args: {text: "There's nobody here."}}
       - {macro: go_to_place, args: {place: start}}
-      - {macro: say, args: {text: "I am back. Here is my report."}}
+      - {macro: say, args: {text: "I'm back. Here's what I found."}}
       - {macro: mates_report, args: {slot: guest1, where: "${cp1_words}"}}
       - {macro: mates_report, args: {slot: guest2, where: "${cp2_words}"}}
       - {macro: mates_report, args: {slot: guest3, where: "${cp3_words}"}}
-      - {macro: say, args: {text: "That is all. Thank you."}}
+      - {macro: say, args: {text: "That's all I have. Thank you!"}}
 
 
   luggage_round:
@@ -648,7 +649,7 @@ macros:
     params: {distance: {default: "1.0"}}
     example_args: {distance: "1.0"}
     steps:
-      - {macro: say, args: {text: "Starting the task. Which bag should I carry? Please point at it."}}
+      - {macro: say, args: {text: "Okay, let's get started. Which bag would you like me to carry? Please point at it."}}
       - group: Fallback          # wait up to 15 s for a pointing arm that lines up with a bag, then carry on either way
         steps:
           - group: Fallback
@@ -660,17 +661,17 @@ macros:
                   - {node: Sleep, ports: {msec: "1500"}}
                   - {node: AlwaysFailure}
           - {node: AlwaysSuccess}
-      - {node: Speak, ports: {text: "I will take the {person}. Please hand me its handle.", person: "{bag_place}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "Got it, I'll take the {person}. Could you hand me its handle?", person: "{bag_place}", skip_if_unknown: "true"}}
       - group: Fallback          # skip rule: no arm or no handover -> follow without the bag
         steps:
           - group: Sequence
             steps:
               - {node: OpenGripper}
-              - {node: Speak, ports: {text: "Put the handle in my gripper and say ready."}}
+              - {node: Speak, ports: {text: "Please put the handle in my gripper and say ready."}}
               - {node: WaitForPhrase, ports: {words: "ready,done,take it", timeout_ms: "30000"}}
               - {node: CloseGripper}
           - {node: AlwaysSuccess}
-      - {node: Speak, ports: {text: "I am ready. Say follow me when you want me to start following you."}}
+      - {node: Speak, ports: {text: "I'm ready whenever you are. Just say follow me."}}
       - group: Fallback          # only "follow me" starts the follow; after a minute and a half it starts anyway rather than stand there
         steps:
           - {node: WaitForPhrase, ports: {words: "follow me,follow me please,please follow me", timeout_ms: "90000"}}
@@ -680,11 +681,11 @@ macros:
         steps:
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "Here is your bag. Please take it."}}
+              - {node: Speak, ports: {text: "Here's your bag. Please take it."}}
               - {node: WaitForPhrase, ports: {words: "thank you,thanks,got it,i have it", timeout_ms: "20000"}}
               - {node: OpenGripper}
           - {node: AlwaysSuccess}
-      - {macro: say, args: {text: "You are welcome. Going back to the arena."}}
+      - {macro: say, args: {text: "You're welcome! I'll head back to the arena now."}}
       - group: Fallback          # bonus: back along the path the operator walked (no map outside the arena), then Nav2 on the arena map to the start
         steps:
           - group: Sequence
@@ -727,10 +728,14 @@ macros:
                   - {node: FollowTarget, ports: {track_id: "{look_id}", timeout_ms: "4000"}}
                   - {node: AlwaysSuccess}
               - {node: DescribeUnique, ports: {track_id: "{look_id}", min_features: "4", out_text: "{${slot}_full}"}}
-              - {node: Speak, ports: {text: "Guest {person} is {detail}.", person: "{${slot}_name}", detail: "{${slot}_full}", skip_if_unknown: "true"}}
+              - group: Fallback          # point at the guest being described
+                steps:
+                  - {node: ArmPoint, ports: {who: "{${slot}_name}"}}
+                  - {node: AlwaysSuccess}
+              - {node: Speak, ports: {text: "Just so you know, {person} is {detail}.", person: "{${slot}_name}", detail: "{${slot}_full}", skip_if_unknown: "true"}}
           - {macro: tell_look, args: {slot: "${slot}"}}
-      - {node: Speak, ports: {text: "Guest {person} is a {detail}.", person: "{${slot}_name}", detail: "{${slot}_gender}", skip_if_unknown: "true"}}
-      - {node: Speak, ports: {text: "Guest {person} is {detail} years old.", person: "{${slot}_name}", detail: "{${slot}_age}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "I'd say {person} is a {detail}.", person: "{${slot}_name}", detail: "{${slot}_gender}", skip_if_unknown: "true"}}
+      - {node: Speak, ports: {text: "And {person} is about {detail} years old.", person: "{${slot}_name}", detail: "{${slot}_age}", skip_if_unknown: "true"}}
 
 
   introduce_guest:
@@ -774,21 +779,17 @@ macros:
               - {node: FindFreeSeat, ports: {out_place: "{seat_where}", out_radians: "{seat_rad}"}}
           - group: Sequence
             steps:
-              - {node: Speak, ports: {text: "I cannot see a free seat"}}
+              - {node: Speak, ports: {text: "Sorry, I can't see a free seat right now."}}
               - {node: AlwaysFailure}
-      - group: Fallback          # face the seat while offering it
+      - group: Fallback          # point at the seat with the arm (the rules say it must be pointed at); the base turns only for what the arm cannot reach, or the whole way without an arm
         steps:
+          - group: Sequence
+            steps:
+              - {node: ArmPoint, ports: {radians: "{seat_rad}", out_residual: "{seat_res}"}}
+              - {node: RotateBy, ports: {radians: "{seat_res}"}}
           - {node: RotateBy, ports: {radians: "{seat_rad}"}}
           - {node: AlwaysSuccess}
-      - group: Fallback          # and point at it with the arm (enable_arm; the rules say the seat must be pointed at): the nearest safe pose, not the validated 0.03 rad/s
-        steps:
-          - {node: ArmPoint}
-          - {node: AlwaysSuccess}
-      - {node: Speak, ports: {text: "Please sit on the {person}", person: "{seat_where}"}}
-      - group: Fallback
-        steps:
-          - {node: ArmPark, ports: {rate: "0.08"}}
-          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Please take a seat. The {person} is free.", person: "{seat_where}"}}
 
   note_look:
     description: "Remember what is visible about the guest in front of the camera (glasses, hair colour, hat, earrings; else the colour of the top) under a slot, to tell it later; silent, and succeeds when nothing is certain"
@@ -834,7 +835,7 @@ macros:
             steps:
               - {node: Sleep, ports: {msec: "1000"}}
               - {node: AlwaysFailure}
-      - {node: Speak, ports: {text: "Welcome, please come in"}}
+      - {node: Speak, ports: {text: "Hello, welcome! Come on in."}}
       - group: Fallback
         steps:
           - {node: DetectPerson}
@@ -872,10 +873,28 @@ macros:
               - {node: DetectPerson}
               - {node: FollowTarget, ports: {timeout_ms: "4000"}}
           - {node: AlwaysSuccess}
-      - {node: Speak, ports: {text: "Hi ${host}, this is {person}. {pron} likes to drink {detail}.", person: "{${slot}_name}", pron: "{${slot}_pron}", detail: "{${slot}_drink}"}}
-      - {node: Speak, ports: {text: "Hello everyone, this is {person}.", person: "{${slot}_name}"}}
+      - group: Fallback          # the arm points at the person being introduced (the guest), the base looks at the one spoken to (the host)
+        steps:
+          - {node: ArmPoint, ports: {who: "{${slot}_name}"}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Hi ${host}, I'd like you to meet {person}. {pron} likes to drink {detail}.", person: "{${slot}_name}", pron: "{${slot}_pron}", detail: "{${slot}_drink}"}}
+      - {node: Speak, ports: {text: "Everyone, this is {person}.", person: "{${slot}_name}"}}
       - {macro: look_at_guest, args: {slot: "${slot}"}}
-      - {node: Speak, ports: {text: "Hi {person}, this is ${host}. {pron} likes to drink {detail}.", person: "{${slot}_name}", pron: "${host_pron}", detail: "${host_drink}"}}
+      - group: Fallback          # now the host is the one introduced: point at them (found by their enrolled face, else the nearest person)
+        steps:
+          - {node: ArmPoint, ports: {who: "${host}"}}
+          - {node: ArmPoint, ports: {who: nearest}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "And {person}, this is ${host}. {pron} likes to drink {detail}.", person: "{${slot}_name}", pron: "${host_pron}", detail: "${host_drink}"}}
+
+
+  park_arm:
+    description: "Fold the arm back to its rest pose (before the base drives or the round ends); never fails (no arm = nothing to do). Slow on purpose: 0.08 rad/s"
+    steps:
+      - group: Fallback
+        steps:
+          - {node: ArmPark, ports: {rate: "0.08"}}
+          - {node: AlwaysSuccess}
 
 
   introduce_pair:
@@ -884,11 +903,19 @@ macros:
     example_args: {a: guest1, b: guest2}
     steps:
       - {macro: look_at_guest, args: {slot: "${b}"}}
-      - {node: Speak, ports: {text: "Hi {person}, I would like to introduce you to {detail}.", person: "{${b}_name}", detail: "{${a}_name}"}}
-      - {node: Speak, ports: {text: "Note that {pron} likes to drink {detail}.", pron: "{${a}_pron}", detail: "{${a}_drink}"}}
+      - group: Fallback          # point at the one being introduced
+        steps:
+          - {node: ArmPoint, ports: {who: "{${a}_name}"}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Hi {person}, I'd like you to meet {detail}.", person: "{${b}_name}", detail: "{${a}_name}"}}
+      - {node: Speak, ports: {text: "By the way, {pron} likes to drink {detail}.", pron: "{${a}_pron}", detail: "{${a}_drink}"}}
       - {macro: look_at_guest, args: {slot: "${a}"}}
-      - {node: Speak, ports: {text: "Hi {person}, I would like to introduce you to {detail}.", person: "{${a}_name}", detail: "{${b}_name}"}}
-      - {node: Speak, ports: {text: "Note that {pron} likes to drink {detail}.", pron: "{${b}_pron}", detail: "{${b}_drink}"}}
+      - group: Fallback
+        steps:
+          - {node: ArmPoint, ports: {who: "{${b}_name}"}}
+          - {node: AlwaysSuccess}
+      - {node: Speak, ports: {text: "Hi {person}, I'd like you to meet {detail}.", person: "{${a}_name}", detail: "{${b}_name}"}}
+      - {node: Speak, ports: {text: "By the way, {pron} likes to drink {detail}.", pron: "{${b}_pron}", detail: "{${b}_drink}"}}
 
 
   enroll_host:
@@ -913,18 +940,20 @@ macros:
     params: {host: {default: host}, host_drink: {default: water}, host_pron: {default: he}, living_place: {default: living_room}}
     example_args: {host: John, host_drink: milk, host_pron: he, living_place: living_room}
     steps:
-      - {node: Speak, ports: {text: "Starting the task. I am waiting for the first guest at the door."}}
+      - {node: Speak, ports: {text: "Okay, I'm ready. I'll wait here at the door for our first guest."}}
       - {macro: receive_guest, args: {slot: guest1}}
       - {macro: guide_to, args: {place: "${living_place}"}}
       - {macro: introduce_new_guest, args: {slot: guest1, host: "${host}", host_drink: "${host_drink}", host_pron: "${host_pron}"}}
       - {macro: offer_seat}
+      - {macro: park_arm}
       - {macro: receive_guest, args: {slot: guest2}}
       - {macro: guide_to, args: {place: "${living_place}"}}
       - {macro: introduce_new_guest, args: {slot: guest2, host: "${host}", host_drink: "${host_drink}", host_pron: "${host_pron}"}}
       - {macro: introduce_pair, args: {a: guest1, b: guest2}}
       - {macro: describe_guest, args: {slot: guest1}}
       - {macro: offer_seat}
-      - {node: Speak, ports: {text: "The task is finished. Thank you."}}
+      - {macro: park_arm}
+      - {node: Speak, ports: {text: "That's everyone. Enjoy the party!"}}
 
 
   follow_until_told:
@@ -932,7 +961,7 @@ macros:
     params: {distance: {default: "1.0"}, words: {default: "stop,we are here,we have arrived"}}
     example_args: {distance: "1.0"}
     steps:
-      - {macro: say, args: {text: "I will follow you. Say stop when we have arrived."}}
+      - {macro: say, args: {text: "Okay, I'll follow you. Say stop when we get there."}}
       - group: Sequence
         retry: 3
         steps:
@@ -942,7 +971,7 @@ macros:
             steps:
               - {node: FollowTarget, ports: {approach: "true", distance: "${distance}", until_cancelled: "true", lock: "true", trail: "true", timeout_ms: "900000"}}
               - {node: WaitForStop, ports: {words: "${words}", timeout_ms: "900000"}}
-      - {macro: say, args: {text: "Okay, I stop here."}}
+      - {macro: say, args: {text: "Okay, I'm stopping here."}}
 
 
   help_me_carry:
