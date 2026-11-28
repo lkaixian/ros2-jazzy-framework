@@ -70,7 +70,11 @@ class EstopNode(Node):
                 return
             self.retry = now + 1.0
             try:
-                self.ser = serial.Serial(self.port, 115200, timeout=0)
+                ser = serial.Serial(None, 115200, timeout=0)
+                ser.dtr = ser.rts = False        # on this board RTS is wired to the ESP32 EN pin: asserted = held in reset = silent = e-stop reads pressed
+                ser.port = self.port
+                ser.open()
+                self.ser = ser
                 self.get_logger().info(f'opened {self.port}')
             except (serial.SerialException, OSError):
                 return
